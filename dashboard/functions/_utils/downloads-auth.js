@@ -1,5 +1,5 @@
-const COOKIE_NAME = "homebase_downloads";
-const COOKIE_PATH = "/api/downloads";
+const COOKIE_NAME = "homebase_media";
+const COOKIE_PATH = "/api";
 const SESSION_SECONDS = 12 * 60 * 60;
 const REMEMBER_SECONDS = 30 * 24 * 60 * 60;
 
@@ -147,3 +147,4 @@ export async function readJsonBody(request, limit = 4096) {
   }
   return JSON.parse(new TextDecoder().decode(body));
 }
+
