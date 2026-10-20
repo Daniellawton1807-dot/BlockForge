@@ -38,8 +38,12 @@ export async function onRequest({ env, request }) {
     const response = await fetch(url, {
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(7000),
-      redirect: "error"
+      redirect: "manual"
     });
+
+    if (response.status >= 300 && response.status < 400) {
+      throw new Error("Glances " + path + " attempted to redirect; redirects are not followed.");
+    }
 
     if (!response.ok) {
       let blockedByBrowserSignature = false;
