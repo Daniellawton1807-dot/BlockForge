@@ -322,8 +322,8 @@ body {
 
 .featured-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 13px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .service-card, .app-card {
@@ -371,7 +371,7 @@ body {
 .launch { flex: none; padding: 7px 10px; border: 1px solid #354158; border-radius: 9px; color: #e3e8f5; font-size: 11px; text-decoration: none; white-space: nowrap; }
 .launch:hover { background: #252e45; }
 
-.apps-head { margin-top: 31px; }
+.apps-head { margin-top: 0; }
 
 .search {
   display: flex;
@@ -458,7 +458,16 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
 .downloads-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; color: #8796ae; font-size: 10px; }
 .download-logout { padding: 7px 10px; border-color: var(--line); background: #141d2d; color: #cbd5e5; font-weight: 600; }
 
-.downloads-section { margin: 0 0 31px; }
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr);
+  align-items: start;
+  gap: 18px;
+  margin: 0 0 31px;
+}
+.pipeline-section { min-width: 0; }
+.pipeline-section > .section-head { margin-top: 0; }
+.downloads-section { min-width: 0; margin: 0; }
 .downloads-head { display: flex; align-items: end; justify-content: space-between; gap: 14px; margin-bottom: 13px; }
 .downloads-head h3 { margin: 3px 0 0; font-size: 20px; letter-spacing: -.5px; }
 .download-summary { padding: 7px 10px; border: 1px solid var(--line); border-radius: 99px; color: #aab7cc; font-size: 10px; white-space: nowrap; }
@@ -494,13 +503,21 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
   .main { width: 100%; max-width: 1500px; padding: 27px clamp(20px, 3.5vw, 42px) 30px; }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .featured-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-grid { gap: 14px; }
+  .download-list { grid-template-columns: minmax(0, 1fr); }
   .app-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 900px) {
   .app-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-grid { gap: 12px; }
   .hero { padding: 25px 26px; }
   .hero h2 { font-size: clamp(26px, 4vw, 34px); }
+}
+
+@media (max-width: 760px) {
+  .workspace-grid { grid-template-columns: minmax(0, 1fr); }
+  .download-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 680px) {
@@ -560,12 +577,16 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
   .badge { padding: 6px 7px; font-size: 9px; }
   .hero { padding: 17px; }
   .hero-glyph { display: none; }
-  .metrics { grid-template-columns: minmax(0, 1fr); }
-  .metric { padding: 15px; }
+  .metrics { gap: 8px; }
+  .metric { padding: 12px; }
   .service-card, .app-card { padding: 13px; }
   .downloads-head h3 { font-size: 18px; }
   .download-card { padding: 13px; }
   .app-card .card-bottom { gap: 10px; }
+}
+
+@media (max-width: 360px) {
+  .metrics { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {
