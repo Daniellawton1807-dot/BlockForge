@@ -3,6 +3,7 @@
    Keep API keys and passwords out of this public static file. */
 window.HOMEBASE_CONFIG = {
   metricsEndpoint: "/api/metrics",
+  downloadsEndpoint: "/api/downloads",
   refreshIntervalMs: 10000,
   services: [
     {name:"Sonarr",desc:"TV series management",url:"https://sonarr.danielvault.uk",icon:"S1",tone:"purple",group:"media"},
