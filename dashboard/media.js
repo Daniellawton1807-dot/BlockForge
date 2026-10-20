@@ -26,6 +26,7 @@ let serviceFilter = "all";
 let interactiveRequestId = 0;
 let interactiveReleases = [];
 let activeReleaseContext = null;
+let pendingMediaDelete = null;
 
 function safeUrl(value) {
   try {
@@ -67,7 +68,10 @@ function showLogin(message) {
   authenticated = false;
   const detailDialog = $("libraryDetailDialog");
   const releaseDialog = $("interactiveReleaseDialog");
+  const deleteDialog = $("mediaDeleteConfirmDialog");
   if (releaseDialog?.open) releaseDialog.close();
+  if (deleteDialog?.open) deleteDialog.close();
+  pendingMediaDelete = null;
   if (detailDialog?.open) detailDialog.close();
   $("libraryDetailContent").innerHTML = "";
   $("interactiveReleaseContent").innerHTML = "";
@@ -456,7 +460,10 @@ function renderLibraryDetail(item, data) {
     const movieFile = files[0] || null;
     const moviePath = movieFile?.path || (movieFile?.relativePath && data.rootFolderPath ? data.rootFolderPath.replace(/\/+$/, "") + "/" + movieFile.relativePath : "");
     const movieDetails = movieFile ? { ...movieFile, path: moviePath } : null;
-    return common + facts + '<section class="library-detail-section"><div class="library-section-heading"><div><div class="kicker">MOVIE FILE</div><h3>File information</h3></div><span class="library-availability ' + (movieFile ? "is-available" : "is-missing") + '">' + (movieFile ? "On disk" : "Not downloaded") + '</span></div>' + detailFileInfo(movieDetails, "Storage path") + '</section><div class="library-detail-footer"><span id="libraryDetailStatus" role="status" aria-live="polite"></span><button class="media-secondary-button" type="button" data-library-detail-close>Close</button></div>';
+    const removeAction = movieFile
+      ? '<div class="library-remove-actions"><button type="button" class="media-danger-button" data-detail-action="removeMovie" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + Number(item.id) + '" data-file-path="' + esc(moviePath) + '">Remove movie and file</button><span>Removes the movie from Radarr and permanently deletes its file.</span></div>'
+      : "";
+    return common + facts + '<section class="library-detail-section"><div class="library-section-heading"><div><div class="kicker">MOVIE FILE</div><h3>File information</h3></div><span class="library-availability ' + (movieFile ? "is-available" : "is-missing") + '">' + (movieFile ? "On disk" : "Not downloaded") + '</span></div>' + detailFileInfo(movieDetails, "Storage path") + '</section>' + removeAction + '<div class="library-detail-footer"><span id="libraryDetailStatus" role="status" aria-live="polite"></span><button class="media-secondary-button" type="button" data-library-detail-close>Close</button></div>';
   }
   const seasons = Array.isArray(data.seasons) ? data.seasons.slice().sort((a,b)=>Number(a.seasonNumber)-Number(b.seasonNumber)) : [];
   const episodes = Array.isArray(data.episodes) ? data.episodes : [];
@@ -473,7 +480,16 @@ function renderLibraryDetail(item, data) {
       const code = "S" + String(Number(ep.seasonNumber)||0).padStart(2,"0") + "E" + String(Number(ep.episodeNumber)||0).padStart(2,"0");
       const fileBlock = ep.hasFile ? '<details class="library-episode-file"><summary>File information' + (ep.file?.quality ? ' · ' + esc(ep.file.quality) : '') + '</summary>' + detailFileInfo(ep.file, "Storage path") + '</details>' : '';
       const searchLabel = ep.hasFile ? "Search upgrades" : "Search";
-      const episodeActions = '<div class="library-episode-actions"><button type="button" class="media-secondary-button" data-detail-action="searchEpisode" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + Number(item.id) + '" data-episode-id="' + Number(ep.id) + '">' + searchLabel + '</button><button type="button" class="media-secondary-button interactive-search-button" data-interactive-search data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + Number(item.id) + '" data-episode-id="' + Number(ep.id) + '" data-episode-code="' + code + '" data-episode-title="' + esc(ep.title || "Episode " + ep.episodeNumber) + '" data-series-title="' + esc(title) + '">Interactive search</button></div>';
+      const episodeFileIds = ep.hasFile
+        ? [...new Set((Array.isArray(ep.file?.episodeIds) && ep.file.episodeIds.length ? ep.file.episodeIds : [ep.id]).map(Number))].filter(value => Number.isSafeInteger(value) && value > 0)
+        : [];
+      const sharedEpisodeNames = episodes.filter(other => episodeFileIds.includes(Number(other.id)) && Number(other.id) !== Number(ep.id))
+        .map(other => "S" + String(Number(other.seasonNumber) || 0).padStart(2, "0") + "E" + String(Number(other.episodeNumber) || 0).padStart(2, "0") + " — " + (other.title || "Episode " + other.episodeNumber))
+        .join(", ");
+      const removeEpisodeButton = ep.hasFile
+        ? '<button type="button" class="media-danger-button" data-detail-action="removeEpisode" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + Number(item.id) + '" data-episode-id="' + Number(ep.id) + '" data-episode-code="' + code + '" data-episode-title="' + esc(ep.title || "Episode " + ep.episodeNumber) + '" data-episode-file-episode-ids="' + episodeFileIds.join(",") + '" data-shared-episode-names="' + esc(sharedEpisodeNames) + '" data-file-path="' + esc(ep.file?.path || ep.file?.relativePath || "") + '">Remove file</button>'
+        : "";
+      const episodeActions = '<div class="library-episode-actions"><button type="button" class="media-secondary-button" data-detail-action="searchEpisode" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + Number(item.id) + '" data-episode-id="' + Number(ep.id) + '">' + searchLabel + '</button><button type="button" class="media-secondary-button interactive-search-button" data-interactive-search data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + Number(item.id) + '" data-episode-id="' + Number(ep.id) + '" data-episode-code="' + code + '" data-episode-title="' + esc(ep.title || "Episode " + ep.episodeNumber) + '" data-series-title="' + esc(title) + '">Interactive search</button>' + removeEpisodeButton + '</div>';
       return '<article class="library-episode"><div class="library-episode-head"><div><span class="library-episode-code">' + code + '</span><span class="library-availability ' + (ep.hasFile ? "is-available" : "is-missing") + '">' + (ep.hasFile ? "Downloaded" : "Missing") + '</span></div></div><h4>' + esc(ep.title || "Episode " + ep.episodeNumber) + '</h4><div class="library-episode-meta">' + (ep.airDate ? '<span>' + esc(formatMediaDate(ep.airDate)) + '</span>' : '') + (Number(ep.runtime) > 0 ? '<span>' + Number(ep.runtime) + ' min</span>' : '') + (ep.monitored ? '<span>Monitored</span>' : '<span>Not monitored</span>') + '</div>' + (ep.overview ? '<p>' + esc(ep.overview) + '</p>' : '') + episodeActions + fileBlock + '</article>';
     }).join("") : '<div class="media-empty">No episode information was returned for this season.</div>';
     return '<details class="library-season" data-season-number="' + number + '"' + (index === 0 ? " open" : "") + '><summary><span>' + esc(label) + '</span>' + badge + '<span class="library-season-chevron" aria-hidden="true">⌄</span></summary><div class="library-season-body"><div class="library-season-toolbar">' + seasonAction + '<span>' + missing.length + ' missing</span></div><div class="library-episodes">' + epHtml + '</div></div></details>';
@@ -508,16 +524,48 @@ async function openLibraryDetails(button) {
     content.innerHTML = '<div class="media-status is-error">' + esc(error.message || "Could not load media details.") + '</div><div class="library-detail-footer"><span></span><button class="media-secondary-button" type="button" data-library-detail-close>Close</button></div>';
   }
 }
-async function runLibraryDetailAction(button) {
+function openMediaDeleteConfirmation(button) {
   const action = button.dataset.detailAction;
+  if (!["removeEpisode", "removeMovie"].includes(action) || !authenticated) return;
+  const serviceKey = button.dataset.libraryKey;
+  const id = Number(button.dataset.libraryId);
+  const item = libraryItems.find(entry => entry.serviceKey === serviceKey && entry.id === id);
+  if (!item) return;
+  const isEpisode = action === "removeEpisode";
+  const episodeName = [button.dataset.episodeCode, button.dataset.episodeTitle].filter(Boolean).join(" · ");
+  const title = isEpisode ? episodeName : (item.title || "this movie");
+  const filePath = button.dataset.filePath || "";
+  const sharedNames = button.dataset.sharedEpisodeNames || "";
+  $("mediaDeleteConfirmTitle").textContent = isEpisode ? "Delete " + title + "?" : "Remove " + title + " and its file?";
+  $("mediaDeleteConfirmMessage").textContent = isEpisode
+    ? "This permanently deletes the episode file from storage. The episode record will remain in " + item.serviceName + "."
+    : "This removes the movie from Radarr and permanently deletes its movie file from storage. This cannot be undone.";
+  $("mediaDeleteConfirmPath").textContent = filePath;
+  $("mediaDeleteConfirmPath").hidden = !filePath;
+  $("mediaDeleteConfirmImpact").textContent = sharedNames
+    ? "This shared file also contains " + sharedNames + ". Those episodes will be deleted with the same file."
+    : "";
+  $("mediaDeleteConfirmImpact").hidden = !sharedNames;
+  $("mediaDeleteConfirmSubmit").textContent = isEpisode ? "Delete episode file" : "Remove movie and file";
+  pendingMediaDelete = button;
+  const dialog = $("mediaDeleteConfirmDialog");
+  if (!dialog.open) dialog.showModal();
+}
+async function runLibraryDetailAction(button, confirmedDelete = false) {
+  const action = button.dataset.detailAction;
+  if (["removeEpisode", "removeMovie"].includes(action) && !confirmedDelete) {
+    openMediaDeleteConfirmation(button);
+    return;
+  }
   const body = { serviceKey: button.dataset.libraryKey, id: Number(button.dataset.libraryId), action };
   if (action === "requestSeason") body.seasonNumber = Number(button.dataset.seasonNumber);
-  if (action === "requestEpisode" || action === "searchEpisode") body.episodeId = Number(button.dataset.episodeId);
+  if (action === "requestEpisode" || action === "searchEpisode" || action === "removeEpisode") body.episodeId = Number(button.dataset.episodeId);
+  if (action === "removeEpisode") body.episodeFileEpisodeIds = String(button.dataset.episodeFileEpisodeIds || "").split(",").map(Number).filter(value => Number.isSafeInteger(value) && value > 0);
   const item = libraryItems.find(entry => entry.serviceKey === body.serviceKey && entry.id === body.id);
   const status = $("libraryDetailStatus");
   button.disabled = true;
   const original = button.textContent;
-  button.textContent = action === "searchEpisode" ? "Queueing search…" : "Queueing…";
+  button.textContent = action === "searchEpisode" ? "Queueing search…" : action === "removeEpisode" || action === "removeMovie" ? "Removing…" : "Queueing…";
   if (status) status.textContent = "";
   try {
     const result = await readResponse(await fetch(endpoints.manage, {
@@ -532,7 +580,26 @@ async function runLibraryDetailAction(button) {
       showLogin("Your Homebase sign-in expired. Sign in again to continue.");
       return;
     }
-    if (!result.response.ok) throw new Error(result.data?.error || "Could not queue that search.");
+    if (!result.response.ok) throw new Error(result.data?.error || (action === "removeEpisode" || action === "removeMovie" ? "Could not remove that media file." : "Could not queue that search."));
+    if (action === "removeEpisode" || action === "removeMovie") {
+      button.textContent = "Removed ✓";
+      button.classList.add("is-complete");
+      await loadLibrary();
+      if (action === "removeMovie") {
+        const detailDialog = $("libraryDetailDialog");
+        if (detailDialog.open) detailDialog.close();
+        $("librarySummary").textContent = "Removed " + (item?.title || "movie") + " from Radarr and deleted its file.";
+        $("librarySummary").className = "media-status is-success";
+      } else if ($("libraryDetailDialog").open) {
+        const opener = [...$("libraryList").querySelectorAll("[data-library-details]")].find(control => control.dataset.libraryKey === body.serviceKey && Number(control.dataset.libraryId) === body.id);
+        if (opener) {
+          await openLibraryDetails(opener);
+          const refreshedStatus = $("libraryDetailStatus");
+          if (refreshedStatus) refreshedStatus.textContent = "Episode file deleted from storage.";
+        }
+      }
+      return;
+    }
     button.textContent = "Queued ✓";
     button.classList.add("is-complete");
     if (status) status.textContent = (action === "searchEpisode" ? "Episode search queued in " : "Search queued in ") + (item?.serviceName || "Sonarr") + ".";
@@ -540,7 +607,7 @@ async function runLibraryDetailAction(button) {
   } catch (error) {
     button.disabled = false;
     button.textContent = original;
-    if (status) status.textContent = error.message || "The search could not be queued.";
+    if (status) status.textContent = error.message || (action === "removeEpisode" || action === "removeMovie" ? "The media file could not be removed." : "The search could not be queued.");
   }
 }
 
@@ -762,6 +829,22 @@ $("libraryDetailDialog").addEventListener("click", event => {
   const action = event.target.closest("[data-detail-action]");
   if (action && !action.disabled) runLibraryDetailAction(action);
 });
+$("mediaDeleteConfirmDialog").addEventListener("click", event => {
+  const dialog = $("mediaDeleteConfirmDialog");
+  if (event.target === dialog || event.target.closest("[data-delete-cancel]")) {
+    pendingMediaDelete = null;
+    if (dialog.open) dialog.close();
+    return;
+  }
+  const confirm = event.target.closest("[data-delete-confirm]");
+  if (confirm && pendingMediaDelete) {
+    const button = pendingMediaDelete;
+    pendingMediaDelete = null;
+    if (dialog.open) dialog.close();
+    runLibraryDetailAction(button, true);
+  }
+});
+$("mediaDeleteConfirmDialog").addEventListener("cancel", () => { pendingMediaDelete = null; });
 $("interactiveReleaseDialog").addEventListener("click", event => {
   if (event.target === $("interactiveReleaseDialog") || event.target.closest("[data-release-close]")) { closeInteractiveSearch(); return; }
   const grab = event.target.closest("[data-grab-release]");
