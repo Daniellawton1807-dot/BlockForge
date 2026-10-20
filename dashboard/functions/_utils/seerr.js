@@ -22,7 +22,7 @@ function seerrBase(env) {
   if (root.protocol !== "https:" || root.username || root.password || root.search || root.hash) {
     throw new SeerrError("The Seerr service URL must be HTTPS and contain no credentials.", 503, "seerr_url_invalid");
   }
-  root.pathname = root.pathname.replace(/\/+$/, "");
+  root.pathname = root.pathname.replace(/\\/+$/, "");
   return root;
 }
 
@@ -31,7 +31,7 @@ export async function seerrCall(env, endpoint, options = {}) {
   if (!apiKey) throw new SeerrError("Set SEERR_API_KEY as a protected Cloudflare Pages secret.", 503, "seerr_setup_required");
 
   const root = seerrBase(env);
-  const route = String(endpoint || "").replace(/^\/+/, "");
+  const route = String(endpoint || "").replace(/^\\/+/, "");
   const url = new URL(root.pathname + "/api/v1/" + route, root.origin);
   let response;
   try {
@@ -59,6 +59,12 @@ export async function seerrCall(env, endpoint, options = {}) {
     if (response.status === 401 || response.status === 403) {
       throw new SeerrError("Seerr rejected its API key or the key lacks permission.", 502, "seerr_auth_failed");
     }
+    if (response.status === 530) {
+      const body = await response.text().catch(() => "");
+      const cloudflareCode = body.match(/\\bError(?:\\s+code)?\\s*[:#]?\\s*(1\\d{3})\\b/i)?.[1];
+      const suffix = cloudflareCode ? " (Cloudflare error " + cloudflareCode + ")" : "";
+      throw new SeerrError("Seerr returned HTTP 530" + suffix + ".", 502, "seerr_upstream_error");
+    }
     throw new SeerrError("Seerr returned HTTP " + response.status + ".", 502, "seerr_upstream_error");
   }
 
@@ -79,7 +85,7 @@ function listFrom(value) {
 function cleanPath(value) {
   if (typeof value !== "string") return "";
   const path = value.trim();
-  return path.length > 0 && path.length <= 500 && !/[\r\n\0]/.test(path) ? path : "";
+  return path.length > 0 && path.length <= 500 && !/[\\r\\n\\0]/.test(path) ? path : "";
 }
 
 async function testServer(env, type, server) {
