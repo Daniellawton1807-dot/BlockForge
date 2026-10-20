@@ -2,6 +2,15 @@ import { loginConfigured, validSession } from "../_utils/downloads-auth.js";
 const DEFAULT_QBITTORRENT_URL = "https://qb.danielvault.uk";
 const DEFAULT_SABNZBD_URL = "https://sab.danielvault.uk";
 const MAX_ITEMS_PER_SOURCE = 30;
+
+const json = (body, status = 200) => new Response(JSON.stringify(body), {
+  status,
+  headers: {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+    "x-content-type-options": "nosniff"
+  }
+});
 function serviceRoot(value, fallback) {
   const input = String(value || fallback).trim();
   const root = new URL(input);
