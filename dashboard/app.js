@@ -5,6 +5,7 @@ const defaults = {
   downloadsLoginEndpoint: "/api/downloads/login",
   downloadsLogoutEndpoint: "/api/downloads/logout",
   refreshIntervalMs: 10000,
+  downloadsRefreshIntervalMs: 3000,
   services: []
 };
 const config = Object.assign({}, defaults, window.HOMEBASE_CONFIG || {});
@@ -52,23 +53,27 @@ async function refreshMetrics(){
  }
 }
 
-function downloadCard(item){
+function downloadCard(item, updatedAt){
  const raw=Number(item.progress), progress=Number.isFinite(raw)?Math.max(0,Math.min(100,raw)):0;
  const status=String(item.status||"In queue");
  const hasEta=item.etaSeconds!==null&&item.etaSeconds!==undefined&&Number.isFinite(Number(item.etaSeconds));
- const eta=hasEta?formatEta(item.etaSeconds):(/queued/i.test(status)?"Pending":/paused/i.test(status)?"Paused":/stalled/i.test(status)?"Waiting":"Calculating");
+ const seconds=hasEta?Math.max(0,Math.floor(Number(item.etaSeconds))):null;
+ const eta=hasEta?formatEta(seconds):(/queued/i.test(status)?"Pending":/paused/i.test(status)?"Paused":/stalled/i.test(status)?"Waiting":"Calculating");
+ const etaLabel=hasEta?'<span class="download-eta" data-eta-seconds="'+seconds+'" data-eta-started="'+updatedAt+'">ETA '+esc(eta)+'</span>':'<span>ETA '+esc(eta)+'</span>';
  const title=String(item.name||"Untitled download");
- return '<article class="download-card"><div class="download-card-header"><span class="download-source">'+esc(item.source||"Downloader")+'</span><span class="download-state">'+esc(status)+'</span></div><h4 class="download-name" title="'+esc(title)+'">'+esc(title)+'</h4><div class="download-progress" role="progressbar" aria-label="'+esc(title)+' progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(progress)+'"><span style="width:'+progress+'%"></span></div><div class="download-facts"><span>'+esc(item.category||"Download")+'</span><strong>'+Math.round(progress)+'%</strong><span>ETA '+esc(eta)+'</span></div></article>';
+ return '<article class="download-card"><div class="download-card-header"><span class="download-source">'+esc(item.source||"Downloader")+'</span><span class="download-state">'+esc(status)+'</span></div><h4 class="download-name" title="'+esc(title)+'">'+esc(title)+'</h4><div class="download-progress" role="progressbar" aria-label="'+esc(title)+' progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(progress)+'"><span style="width:'+progress+'%"></span></div><div class="download-facts"><span>'+esc(item.category||"Download")+'</span><strong>'+Math.round(progress)+'%</strong>'+etaLabel+'</div></article>';
 }
 function formatEta(seconds){
- let value=Math.max(0,Math.floor(Number(seconds)));
+ const value=Math.max(0,Math.floor(Number(seconds)));
  if(!Number.isFinite(value))return "Calculating";
- if(value<5)return "Finishing";
- if(value<60)return "Under 1m";
- const minutes=Math.ceil(value/60), hours=Math.floor(minutes/60), days=Math.floor(hours/24);
- if(days)return days+"d "+(hours%24)+"h";
- if(hours)return hours+"h "+(minutes%60)+"m";
- return minutes+"m";
+ if(value<60)return value+"s";
+ const days=Math.floor(value/86400), hours=Math.floor(value%86400/3600), minutes=Math.floor(value%3600/60), remainder=value%60;
+ const parts=[];
+ if(days)parts.push(days+"d");
+ if(hours||days)parts.push(hours+"h");
+ if(minutes||hours||days)parts.push(String(minutes).padStart(2,"0")+"m");
+ parts.push(String(remainder).padStart(2,"0")+"s");
+ return parts.join(" ");
 }
 let downloadsAuthKnown=false;
 let downloadsUnlocked=false;
@@ -99,6 +104,7 @@ function showDownloadsMessage(message,summary){
 }
 function renderDownloads(data){
  showDownloadsUnlocked();
+ const updatedAt=Date.now();
  const list=$("downloadList"), label=$("downloadSummary");
  if(!list||!label)return;
  const items=Array.isArray(data.items)?data.items:[];
@@ -106,18 +112,21 @@ function renderDownloads(data){
  const warnings=sources.filter(source=>!source.connected).map(source=>esc(source.name)+": "+esc(source.message||"Unavailable"));
  label.textContent=items.length+" active "+(items.length===1?"download":"downloads");
  if(items.length){
-  list.innerHTML=items.map(downloadCard).join()+(warnings.length?'<div class="download-warning">'+warnings.join(" · ")+'</div>':"");
+  list.innerHTML=items.map(item=>downloadCard(item,updatedAt)).join()+(warnings.length?'<div class="download-warning">'+warnings.join(" · ")+'</div>':"");
  }else if(sources.length&&sources.every(source=>source.connected)){
   list.innerHTML='<div class="downloads-empty">No active downloads right now.</div>';
  }else{
   list.innerHTML='<div class="downloads-empty">Connect qBittorrent and SABnzbd in the protected Pages settings to view their queues.</div>'+(warnings.length?'<div class="download-warning">'+warnings.join(" · ")+'</div>':"");
  }
 }
+let downloadsFetchInFlight=false;
 async function refreshDownloads(force=false){
  if(!$("downloadList")||!$("downloadSummary"))return;
  if(downloadsAuthKnown&&!downloadsUnlocked&&!force)return;
  const endpoint=safeUrl(config.downloadsEndpoint);
  if(!endpoint){showDownloadsLogin("The downloads endpoint is not available.","Unavailable");return;}
+ if(downloadsFetchInFlight)return;
+ downloadsFetchInFlight=true;
  try{
   const res=await fetch(endpoint,{cache:"no-store",credentials:"same-origin"});
   const data=await res.json().catch(()=>null);
@@ -139,6 +148,8 @@ async function refreshDownloads(force=false){
  }catch{
   if(!downloadsUnlocked)showDownloadsLogin("Could not check the downloads sign-in. Try signing in again.","Unavailable");
   else showDownloadsMessage("The download queue is unavailable right now.","Unavailable");
+ }finally{
+  downloadsFetchInFlight=false;
  }
 }
 async function loginDownloads(event){
@@ -195,6 +206,14 @@ async function logoutDownloads(){
  }
 }
 function refreshAll(forceDownloads=false){refreshMetrics();refreshDownloads(forceDownloads);}
+function tickDownloadEtas(){
+ if(!downloadsUnlocked)return;
+ const now=Date.now();
+ document.querySelectorAll(".download-eta[data-eta-seconds]").forEach(node=>{
+  const seconds=Number(node.dataset.etaSeconds), started=Number(node.dataset.etaStarted);
+  if(Number.isFinite(seconds)&&Number.isFinite(started))node.textContent="ETA "+formatEta(Math.max(0,seconds-Math.floor((now-started)/1000)));
+ });
+}
 
 function formatBytes(n){if(!Number.isFinite(Number(n))||n<0)return "—";let v=Number(n),u=["B","KB","MB","GB","TB"],i=0;while(v>=1024&&i<u.length-1){v/=1024;i++;}return v.toFixed(i?1:0)+" "+u[i];}
 function formatUptime(n){n=Math.max(0,Math.floor(Number(n)||0));const d=Math.floor(n/86400),h=Math.floor(n%86400/3600),m=Math.floor(n%3600/60);return (d?d+"d ":"")+(h+"h "+m+"m");}
@@ -202,4 +221,9 @@ $("search").addEventListener("input",render);
 $("downloadLoginForm").addEventListener("submit",loginDownloads);
 $("downloadLogout").addEventListener("click",logoutDownloads);
 $("refresh").addEventListener("click",()=>{refreshAll(true);const b=$("refresh");b.textContent="✓";setTimeout(()=>b.textContent="↻",800);});
-render();refreshAll();if(Number(config.refreshIntervalMs)>=3000)setInterval(refreshAll,Math.min(Number(config.refreshIntervalMs),60000));
+render();refreshAll();
+const metricsRefreshInterval=Number(config.refreshIntervalMs);
+const downloadsRefreshInterval=Number(config.downloadsRefreshIntervalMs);
+if(metricsRefreshInterval>=3000)setInterval(refreshMetrics,Math.min(metricsRefreshInterval,60000));
+if(downloadsRefreshInterval>=2000)setInterval(refreshDownloads,Math.min(downloadsRefreshInterval,60000));
+setInterval(tickDownloadEtas,1000);
