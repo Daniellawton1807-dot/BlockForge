@@ -16,6 +16,8 @@ function card(s,featured=false){
 }
 function render(){
  const services=config.services;
+ const configuredCount=services.filter(s=>safeUrl(s.url)).length;
+ $("onlineValue").innerHTML=configuredCount+'<small> / configured</small>';
  $("featured").innerHTML=services.filter(s=>["Sonarr","Radarr","qBittorrent","SABnzbd","Prowlarr","Jellyfin"].includes(s.name)).map(s=>card(s,true)).join("");
  const q=($("search").value||"").trim().toLowerCase();
  const filtered=services.filter(s=>(s.name+" "+(s.desc||"")+" "+(s.group||"")).toLowerCase().includes(q));
