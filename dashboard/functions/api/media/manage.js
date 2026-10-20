@@ -46,10 +46,10 @@ export async function onRequest({ request, env }) {
       if (!file || Number(file.id) !== episodeFileId || Number(file.seriesId) !== id) return json({ code: "file_changed", error: "The episode file changed. Refresh the details and try again." }, 409);
       const fileIds = Array.isArray(file.episodeIds) && file.episodeIds.length
         ? file.episodeIds.map(Number)
-        : episodes.filter(entry => Number(entry.episodeFileId) === episodeFileId).map(entry => Number(entry.id));
+        : episodes.filter(entry => Number(entry.episodeFileId || entry.episodeFile?.id) === episodeFileId).map(entry => Number(entry.id));
       const actualIds = [...new Set(fileIds)].filter(value => Number.isSafeInteger(value) && value > 0).sort((a, b) => a - b);
       const actualEpisodes = episodes.filter(entry => actualIds.includes(Number(entry.id)));
-      if (!actualIds.includes(episodeId) || actualEpisodes.length !== actualIds.length || actualEpisodes.some(entry => Number(entry.seriesId) !== id || Number(entry.episodeFileId) !== episodeFileId)) {
+      if (!actualIds.includes(episodeId) || actualEpisodes.length !== actualIds.length || actualEpisodes.some(entry => Number(entry.seriesId) !== id || Number(entry.episodeFileId || entry.episodeFile?.id) !== episodeFileId)) {
         return json({ code: "file_changed", error: "Sonarr could not verify which episodes use this file. Refresh the details and try again." }, 409);
       }
       if (confirmedIds.length !== actualIds.length || confirmedIds.some((value, index) => value !== actualIds[index])) {
