@@ -178,19 +178,6 @@ async function loadSeerrTargets() {
     return true;
   }
 }
-function renderServiceLinks() {
-  const services = Array.isArray(config.services) ? config.services : [];
-  const items = services.filter(service => ["media", "downloads"].includes(service.group));
-  $("mediaApps").innerHTML = items.map(service => {
-    const url = safeUrl(service.url);
-    const tone = ["purple", "blue", "orange", "green"].includes(service.tone) ? service.tone : "purple";
-    const icon = esc(service.icon || String(service.name || "M").slice(0, 1));
-    const link = url
-      ? '<a class="launch" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">Open ↗</a>'
-      : '<span class="launch" title="This service has no URL configured">Set URL</span>';
-    return '<article class="service-card"><div class="app-icon ' + tone + '">' + icon + '</div><div class="service-info"><h4>' + esc(service.name || "Service") + '</h4><p>' + esc(service.desc || "Self-hosted service") + '</p></div>' + link + '</article>';
-  }).join("") || '<div class="media-empty">No media service shortcuts are configured.</div>';
-}
 function renderDownloads(data) {
   const items = Array.isArray(data.items) ? data.items : [];
   const sources = Array.isArray(data.sources) ? data.sources : [];
@@ -269,7 +256,6 @@ async function lockMedia() {
     targetMap = Object.create(null);
     lastSearchResults = [];
     $("mediaResults").innerHTML = '<div class="media-empty">Sign in to search for a title.</div>';
-    $("downloadSearch");
     showLogin("This device is signed out. Sign in to manage media.");
   } catch {
     $("downloadSummary").textContent = "Could not lock media";
