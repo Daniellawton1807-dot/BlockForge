@@ -78,7 +78,7 @@ function showDownloadsLogin(message,summary){
  if(form)form.hidden=false;
  if(panel)panel.hidden=true;
  const authMessage=$("downloadAuthMessage");
- if(authMessage)authMessage.textContent=message;
+ if(authMessage){authMessage.textContent=message;authMessage.hidden=false;}
  const label=$("downloadSummary");
  if(label)label.textContent=summary;
 }
@@ -88,7 +88,7 @@ function showDownloadsUnlocked(){
  if(form)form.hidden=true;
  if(panel)panel.hidden=false;
  const authMessage=$("downloadAuthMessage");
- if(authMessage)authMessage.textContent="";
+ if(authMessage){authMessage.textContent="";authMessage.hidden=true;}
 }
 function showDownloadsMessage(message,summary){
  if(!downloadsUnlocked){showDownloadsLogin(message,summary);return;}
