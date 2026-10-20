@@ -105,13 +105,13 @@ function serviceRoot(value, fallback) {
   if (root.protocol !== "https:" || root.username || root.password || root.search || root.hash) {
     throw new Error("Service URL must be HTTPS and cannot contain credentials.");
   }
-  root.pathname = root.pathname.replace(/\\/+$/, "") + "/";
+  root.pathname = root.pathname.replace(/\/+$/, "") + "/";
   return root;
 }
 
 function apiUrl(root, path) {
-  const prefix = root.pathname.replace(/\\/+$/, "");
-  return new URL(prefix + "/" + path.replace(/^\\/+/, ""), root.origin);
+  const prefix = root.pathname.replace(/\/+$/, "");
+  return new URL(prefix + "/" + path.replace(/^\/+/, ""), root.origin);
 }
 
 async function readJson(url, options = {}) {
@@ -142,7 +142,7 @@ function mediaType(category) {
 }
 
 function displayName(value) {
-  return String(value || "Untitled download").replace(/[\\r\\n\\t]+/g, " ").trim().slice(0, 300);
+  return String(value || "Untitled download").replace(/[\r\n\t]+/g, " ").trim().slice(0, 300);
 }
 
 function qbitState(value) {
@@ -181,9 +181,9 @@ async function qbitItems(env) {
   });
   if (login.status >= 300 && login.status < 400) throw new Error("qBittorrent redirected its login request.");
   const cookie = login.headers.get("set-cookie") || "";
-  const sid = cookie.match(/(?:^|[,;\\s])SID=([^;,\\s]+)/)?.[1];
+  const sid = cookie.match(/(?:^|[,;\s])SID=([^;,\s]+)/)?.[1];
   const loginText = await login.text().catch(() => "");
-  if (!login.ok || !sid || !/^Ok\\.?$/i.test(loginText.trim())) {
+  if (!login.ok || !sid || !/^Ok\.?$/i.test(loginText.trim())) {
     throw new Error("qBittorrent login failed; check the protected credentials.");
   }
 
@@ -212,7 +212,7 @@ async function qbitItems(env) {
 
 function sabEta(value, status) {
   const parts = String(value || "").trim().split(":");
-  if (parts.length < 2 || parts.some(part => !/^\\d+$/.test(part))) return null;
+  if (parts.length < 2 || parts.some(part => !/^\d+$/.test(part))) return null;
 
   const seconds = parts.reduce((total, part) => total * 60 + Number(part), 0);
   if (seconds === 0 && !/download/i.test(String(status || ""))) return null;
