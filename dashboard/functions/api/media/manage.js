@@ -14,13 +14,47 @@ export async function onRequest({ request, env }) {
   const service = arrService(body?.serviceKey);
   const id = Number(body?.id);
   const action = String(body?.action || "");
-  if (!service || !Number.isSafeInteger(id) || id <= 0 || !["monitor", "refresh", "search"].includes(action)) {
+  if (!service || !Number.isSafeInteger(id) || id <= 0 || !["monitor", "refresh", "search", "requestSeason", "requestEpisode"].includes(action)) {
     return json({ code: "invalid_request", error: "Select a valid library item and action." }, 400);
   }
   const status = arrServiceStatus(env, service);
   if (!status.configured) return json({ code: status.code, error: status.message }, 503);
 
   try {
+    if (action === "requestSeason" || action === "requestEpisode") {
+      if (service.type !== "tv") return json({ code: "invalid_request", error: "Episode requests are available for Sonarr series only." }, 400);
+      const seasonNumber = Number(body?.seasonNumber);
+      const episodeId = Number(body?.episodeId);
+      if (action === "requestSeason" && (!Number.isSafeInteger(seasonNumber) || seasonNumber < 0 || seasonNumber > 99)) return json({ code: "invalid_request", error: "Select a valid season." }, 400);
+      if (action === "requestEpisode" && (!Number.isSafeInteger(episodeId) || episodeId <= 0)) return json({ code: "invalid_request", error: "Select a valid episode." }, 400);
+
+      const series = await arrCall(env, service, "api/v3/series/" + id);
+      if (!series || Number(series.id) !== id) return json({ code: "not_found", error: "That series is no longer in the selected library." }, 404);
+      const allEpisodes = await arrCall(env, service, "api/v3/episode?seriesId=" + id);
+      if (!Array.isArray(allEpisodes)) return json({ code: "invalid_upstream_response", error: "Sonarr did not return the series episodes." }, 502);
+      const selected = action === "requestEpisode"
+        ? allEpisodes.filter(episode => Number(episode.id) === episodeId)
+        : allEpisodes.filter(episode => Number(episode.seasonNumber) === seasonNumber);
+      if (!selected.length) return json({ code: "not_found", error: "No matching episodes were found." }, 404);
+      if (selected.some(episode => Number(episode.seriesId) !== id)) return json({ code: "invalid_request", error: "One or more episodes do not belong to this series." }, 400);
+      const missing = selected.filter(episode => !episode.hasFile && Number.isSafeInteger(Number(episode.id)) && Number(episode.id) > 0);
+      if (!missing.length) return json({ code: "already_available", error: action === "requestEpisode" ? "That episode is already available in the library." : "All episodes in this season are already available." }, 409);
+      if (missing.length > 500) return json({ code: "too_many_episodes", error: "This season has too many missing episodes to request at once." }, 400);
+
+      await arrCall(env, service, "api/v3/episode/monitor", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ episodeIds: missing.map(episode => Number(episode.id)), monitored: true })
+      });
+      const command = { name: "EpisodeSearch", episodeIds: missing.map(episode => Number(episode.id)) };
+      const queued = await arrCall(env, service, "api/v3/command", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(command)
+      });
+      return json({ accepted: true, commandId: Number(queued?.id) || null, action, monitoredEpisodeCount: missing.length });
+    }
+
     const resource = service.type === "tv" ? "series" : "movie";
     if (action === "monitor") {
       const current = await arrCall(env, service, "api/v3/" + resource + "/" + id);
