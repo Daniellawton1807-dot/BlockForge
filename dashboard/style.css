@@ -442,6 +442,22 @@ footer > i { color: #9c8fff; font-style: normal; }
 footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align: right; }
 
 
+[hidden] { display: none !important; }
+.download-auth-message { max-width: 760px; margin: 0 0 12px; color: #aab7cc; font-size: 12px; }
+.download-login { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; max-width: 760px; padding: 18px; border: 1px solid var(--line); border-radius: 15px; background: linear-gradient(145deg, #151e2e, #111725); }
+.download-login > label:not(.remember-row) { display: grid; gap: 6px; color: #aebbd0; font-size: 11px; font-weight: 650; }
+.download-login input[type="text"], .download-login input[type="password"] { width: 100%; min-width: 0; padding: 10px 11px; border: 1px solid #354158; border-radius: 9px; outline: none; background: #0c1321; color: var(--text); font: inherit; }
+.download-login input:focus { border-color: #9386f4; box-shadow: 0 0 0 2px #9386f422; }
+.remember-row { display: flex; grid-column: 1 / -1; align-items: flex-start; gap: 9px; color: #d2d9e8; font-size: 12px; cursor: pointer; }
+.remember-row input { flex: none; width: 16px; height: 16px; margin: 1px 0 0; accent-color: #9487f6; }
+.remember-row span, .remember-row small { display: block; }
+.remember-row small { margin-top: 3px; color: #8492aa; font-size: 10px; font-weight: 400; }
+.download-login-button, .download-logout { width: fit-content; padding: 9px 13px; border: 1px solid #514a82; border-radius: 9px; background: #292545; color: #f1efff; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.download-login-button:hover, .download-logout:hover { background: #38315d; }
+.download-login-button:disabled, .download-logout:disabled { opacity: .6; cursor: wait; }
+.downloads-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; color: #8796ae; font-size: 10px; }
+.download-logout { padding: 7px 10px; border-color: var(--line); background: #141d2d; color: #cbd5e5; font-weight: 600; }
+
 .downloads-section { margin: 0 0 31px; }
 .downloads-head { display: flex; align-items: end; justify-content: space-between; gap: 14px; margin-bottom: 13px; }
 .downloads-head h3 { margin: 3px 0 0; font-size: 20px; letter-spacing: -.5px; }
