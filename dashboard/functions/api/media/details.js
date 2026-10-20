@@ -20,7 +20,8 @@ function fileDetails(file) {
       resolution: text(mediaInfo.resolution || "", 40),
       videoCodec: text(mediaInfo.videoCodec || "", 60),
       audioCodec: text(mediaInfo.audioCodec || "", 60)
-    }
+    },
+    episodeIds: Array.isArray(file.episodeIds) ? file.episodeIds.map(Number).filter(value => Number.isSafeInteger(value) && value > 0).slice(0, 100) : []
   };
 }
 export async function onRequest({ request, env }) {
@@ -77,6 +78,13 @@ export async function onRequest({ request, env }) {
         const seasonNumber = numeric(episode.seasonNumber);
         if (!seasonMap.has(seasonNumber)) seasonMap.set(seasonNumber, { seasonNumber, monitored: Boolean(episode.monitored), statistics: { episodeCount: 0, episodeFileCount: 0, totalEpisodeCount: 0 } });
         const hasFile = Boolean(episode.hasFile || episodeFile);
+        const normalizedFile = fileDetails(episodeFile);
+        if (normalizedFile) {
+          const relatedIds = normalizedFile.episodeIds.length
+            ? normalizedFile.episodeIds
+            : episodes.filter(candidate => Number(candidate.episodeFileId) === Number(episodeFile.id)).map(candidate => Number(candidate.id));
+          normalizedFile.episodeIds = [...new Set([...relatedIds, episodeId])].filter(value => Number.isSafeInteger(value) && value > 0).slice(0, 100);
+        }
         return {
           id: Number.isSafeInteger(episodeId) ? episodeId : 0,
           seriesId: Number(episode.seriesId) || id,
@@ -88,7 +96,7 @@ export async function onRequest({ request, env }) {
           runtime: numeric(episode.runtime),
           hasFile,
           monitored: Boolean(episode.monitored),
-          file: fileDetails(episodeFile)
+          file: normalizedFile
         };
       }).filter(episode => episode.id > 0).sort((a,b) => a.seasonNumber-b.seasonNumber || a.episodeNumber-b.episodeNumber);
       for (const season of seasonMap.values()) {
