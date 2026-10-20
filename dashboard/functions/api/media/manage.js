@@ -14,13 +14,63 @@ export async function onRequest({ request, env }) {
   const service = arrService(body?.serviceKey);
   const id = Number(body?.id);
   const action = String(body?.action || "");
-  if (!service || !Number.isSafeInteger(id) || id <= 0 || !["monitor", "refresh", "search", "requestSeason", "requestEpisode", "searchEpisode"].includes(action)) {
+  if (!service || !Number.isSafeInteger(id) || id <= 0 || !["monitor", "refresh", "search", "requestSeason", "requestEpisode", "searchEpisode", "removeEpisode", "removeMovie"].includes(action)) {
     return json({ code: "invalid_request", error: "Select a valid library item and action." }, 400);
   }
+  if (action === "removeEpisode" && service.type !== "tv") return json({ code: "invalid_request", error: "Episode files can only be removed from a Sonarr series." }, 400);
+  if (action === "removeMovie" && service.type !== "movie") return json({ code: "invalid_request", error: "Movie files can only be removed from Radarr." }, 400);
   const status = arrServiceStatus(env, service);
   if (!status.configured) return json({ code: status.code, error: status.message }, 503);
 
   try {
+    if (action === "removeEpisode") {
+      const episodeId = Number(body?.episodeId);
+      const confirmedIds = Array.isArray(body?.episodeFileEpisodeIds)
+        ? [...new Set(body.episodeFileEpisodeIds.map(Number))].filter(value => Number.isSafeInteger(value) && value > 0).sort((a, b) => a - b)
+        : [];
+      if (!Number.isSafeInteger(episodeId) || episodeId <= 0 || !confirmedIds.length || confirmedIds.length > 100) {
+        return json({ code: "invalid_request", error: "Select a valid downloaded episode file." }, 400);
+      }
+      const [series, episodes] = await Promise.all([
+        arrCall(env, service, "api/v3/series/" + id),
+        arrCall(env, service, "api/v3/episode?seriesId=" + id)
+      ]);
+      if (!series || Number(series.id) !== id) return json({ code: "not_found", error: "That series is no longer in the selected library." }, 404);
+      if (!Array.isArray(episodes)) return json({ code: "invalid_upstream_response", error: "Sonarr did not return the series episodes." }, 502);
+      const episode = episodes.find(entry => Number(entry.id) === episodeId);
+      if (!episode || Number(episode.seriesId) !== id) return json({ code: "not_found", error: "That episode is no longer in the selected series." }, 404);
+      if (!episode.hasFile) return json({ code: "file_not_found", error: "That episode no longer has a file on disk." }, 409);
+      const episodeFileId = Number(episode.episodeFileId || episode.episodeFile?.id);
+      if (!Number.isSafeInteger(episodeFileId) || episodeFileId <= 0) return json({ code: "file_not_found", error: "Sonarr could not identify the episode file to remove." }, 409);
+      const file = await arrCall(env, service, "api/v3/episodefile/" + episodeFileId);
+      if (!file || Number(file.id) !== episodeFileId || Number(file.seriesId) !== id) return json({ code: "file_changed", error: "The episode file changed. Refresh the details and try again." }, 409);
+      const fileIds = Array.isArray(file.episodeIds) && file.episodeIds.length
+        ? file.episodeIds.map(Number)
+        : episodes.filter(entry => Number(entry.episodeFileId) === episodeFileId).map(entry => Number(entry.id));
+      const actualIds = [...new Set(fileIds)].filter(value => Number.isSafeInteger(value) && value > 0).sort((a, b) => a - b);
+      const actualEpisodes = episodes.filter(entry => actualIds.includes(Number(entry.id)));
+      if (!actualIds.includes(episodeId) || actualEpisodes.length !== actualIds.length || actualEpisodes.some(entry => Number(entry.seriesId) !== id || Number(entry.episodeFileId) !== episodeFileId)) {
+        return json({ code: "file_changed", error: "Sonarr could not verify which episodes use this file. Refresh the details and try again." }, 409);
+      }
+      if (confirmedIds.length !== actualIds.length || confirmedIds.some((value, index) => value !== actualIds[index])) {
+        return json({ code: "file_changed", error: "The episodes stored in this file changed. Refresh the details and confirm again." }, 409);
+      }
+      await arrCall(env, service, "api/v3/episodefile/" + episodeFileId, { method: "DELETE" });
+      return json({ accepted: true, action, removedEpisodeIds: actualIds });
+    }
+
+    if (action === "removeMovie") {
+      const movie = await arrCall(env, service, "api/v3/movie/" + id);
+      if (!movie || Number(movie.id) !== id) return json({ code: "not_found", error: "That movie is no longer in the selected library." }, 404);
+      const movieFiles = await arrCall(env, service, "api/v3/moviefile?movieId=" + id);
+      const files = Array.isArray(movieFiles) ? movieFiles : [];
+      if (!files.length || !files.some(file => Number(file.movieId) === id && Number.isSafeInteger(Number(file.id)) && Number(file.id) > 0)) {
+        return json({ code: "file_not_found", error: "Radarr no longer reports a movie file on disk." }, 409);
+      }
+      await arrCall(env, service, "api/v3/movie/" + id + "?deleteFiles=true&addImportExclusion=false", { method: "DELETE" });
+      return json({ accepted: true, action, removedFileCount: files.length });
+    }
+
     if (action === "requestSeason" || action === "requestEpisode" || action === "searchEpisode") {
       if (service.type !== "tv") return json({ code: "invalid_request", error: "Episode requests are available for Sonarr series only." }, 400);
       const seasonNumber = Number(body?.seasonNumber);
