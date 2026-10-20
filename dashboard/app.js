@@ -23,11 +23,12 @@ function render(){
 }
 async function refreshMetrics(){
  const endpoint=safeUrl(config.metricsEndpoint);
- if(!endpoint){$("connectionLabel").textContent="Monitoring not connected";return;}
+ if(!endpoint){$("connectionLabel").textContent="Monitoring unavailable";return;}
  try{
   const res=await fetch(endpoint,{cache:"no-store",credentials:"same-origin"});
-  if(!res.ok)throw new Error("Metrics endpoint returned "+res.status);
-  const d=await res.json();
+  const d=await res.json().catch(()=>null);
+  if(!res.ok)throw new Error(d&&typeof d.error==="string"?d.error:"Metrics endpoint returned "+res.status);
+  if(!d||typeof d!=="object")throw new Error("Metrics endpoint returned invalid JSON");
   const set=(value,valueId,barId)=>{if(Number.isFinite(Number(value))&&Number(value)>=0&&Number(value)<=100){$(valueId).innerHTML=Math.round(Number(value))+'<small>%</small>';$ (barId).style.width=Number(value)+'%';}};
   set(d.cpuPercent,"cpuValue","cpuBar");set(d.memoryPercent,"ramValue","ramBar");set(d.diskPercent,"diskValue","diskBar");
   if(d.memoryUsedBytes!=null&&d.memoryTotalBytes>0)$("ramNote").textContent=formatBytes(d.memoryUsedBytes)+" / "+formatBytes(d.memoryTotalBytes);
@@ -36,10 +37,13 @@ async function refreshMetrics(){
   else $("cpuNote").textContent="Updated "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"});
   $("connectionLabel").textContent="Metrics connected";$("onlineNote").textContent="Live hardware metrics";
  }catch(e){
-  $("connectionLabel").textContent="Monitoring setup required";
-  $("cpuNote").textContent="Waiting for secure Glances connection";
-  $("ramNote").textContent="Metrics will appear after setup";
-  $("diskNote").textContent="Metrics will appear after setup";
+  $("cpuValue").innerHTML="—<small>%</small>";$("ramValue").innerHTML="—<small>%</small>";$("diskValue").innerHTML="—<small>%</small>";
+  $("cpuBar").style.width="0%";$("ramBar").style.width="0%";$("diskBar").style.width="0%";
+  $("connectionLabel").textContent="Glances unavailable";
+  $("onlineNote").textContent="Live metrics unavailable";
+  $("cpuNote").textContent=String(e&&e.message||"Glances metrics unavailable").slice(0,140);
+  $("ramNote").textContent="Waiting for Glances metrics";
+  $("diskNote").textContent="Waiting for Glances metrics";
  }
 }
 function formatBytes(n){if(!Number.isFinite(Number(n))||n<0)return "—";let v=Number(n),u=["B","KB","MB","GB","TB"],i=0;while(v>=1024&&i<u.length-1){v/=1024;i++;}return v.toFixed(i?1:0)+" "+u[i];}
