@@ -320,8 +320,28 @@ function renderAddDetails(item) {
   form.addEventListener("submit", addSelectedMedia);
 }
 function chooseSearchResult(button) {
-  const item = searchResults[Number(button.dataset.selectIndex)];
-  if (item && authenticated) renderAddDetails(item);
+  const index = Number(button.dataset.selectIndex);
+  const item = Number.isInteger(index) ? searchResults[index] : null;
+  if (!item) {
+    $("mediaSearchMessage").textContent = "This search result is no longer available. Search again, then select the title.";
+    $("mediaSearchMessage").className = "media-status is-error";
+    return;
+  }
+  if (!authenticated) {
+    $("mediaSearchMessage").textContent = "Your Homebase session has expired. Sign in again, then select the title.";
+    $("mediaSearchMessage").className = "media-status is-error";
+    showLogin("Your Homebase sign-in expired. Sign in again to add media.");
+    return;
+  }
+  renderAddDetails(item);
+  if ($("mediaDetail").hidden) {
+    $("mediaSearchMessage").textContent = "Could not open the destination form. Check that a connected Sonarr/Radarr instance supports this title type.";
+    $("mediaSearchMessage").className = "media-status is-error";
+  } else {
+    $("mediaSearchMessage").textContent = "Choose the Sonarr/Radarr instance, root folder and quality profile below.";
+    $("mediaSearchMessage").className = "media-status";
+    $("mediaDetail").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 async function searchMedia(event) {
   event.preventDefault();
