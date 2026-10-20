@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b1020">
+<title>Media — Homebase</title>
+<link rel="stylesheet" href="../style.css?v=homebase-media-1">
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <a class="brand" href="/"><span class="logo">H</span><span>homebase<small>PERSONAL HOMELAB</small></span></a>
+  <div class="nav-title">WORKSPACE</div>
+  <a class="nav" href="/"><span>◫</span> Overview</a>
+  <a class="nav active" href="/media/" aria-current="page"><span>▤</span> Media hub</a>
+  <a class="nav" href="/#apps"><span>▦</span> All applications</a>
+  <div class="side-bottom"><div class="server"><i></i><div><b>Media services</b><small id="seerrConnectionLabel">Checking Seerr…</small></div></div><p>Search, request, and track media from one place.</p></div>
+</aside>
+<main class="main media-main">
+  <header class="topbar">
+    <div><div class="kicker">YOUR MEDIA STACK</div><h1>Media hub</h1></div>
+    <div class="top-right"><span class="badge"><i></i> Homebase online</span><button id="mediaRefresh" class="icon-btn" title="Refresh media status" aria-label="Refresh media status">↻</button></div>
+  </header>
+  <section class="hero media-hero"><div><div class="kicker">REQUESTS, DOWNLOADS, LIBRARIES</div><h2>Your media, <em>in one place.</em></h2><p>Search Seerr, choose where new media belongs, and follow active downloads.</p></div><div class="hero-glyph">▶</div></section>
+
+  <section id="mediaAccess" class="media-access-panel" aria-labelledby="mediaAccessTitle">
+    <div><div class="kicker">PRIVATE MEDIA CONTROLS</div><h2 id="mediaAccessTitle">Sign in to manage your media</h2><p id="mediaAuthMessage" class="download-auth-message" aria-live="polite">Checking this device’s sign-in…</p></div>
+    <form id="downloadLoginForm" class="download-login" autocomplete="on">
+      <label>Username<input id="downloadUsername" name="username" type="text" autocomplete="username" maxlength="512" required></label>
+      <label>Password<input id="downloadPassword" name="password" type="password" autocomplete="current-password" maxlength="512" required></label>
+      <label class="remember-row"><input id="downloadRemember" type="checkbox"><span>Remember me on this device<small>Uses the same secure Homebase sign-in as the download queue.</small></span></label>
+      <button class="download-login-button" type="submit">Sign in</button>
+    </form>
+  </section>
+
+  <div class="media-workspace">
+    <section class="media-panel request-panel" aria-labelledby="requestTitle">
+      <div class="section-head media-panel-head"><div><div class="kicker">REQUEST FROM HOMEBASE</div><h3 id="requestTitle">Find a movie or show</h3></div><span class="section-tag">POWERED BY SEERR</span></div>
+      <p class="media-intro">Search the Seerr catalog, select a destination, then send the request.</p>
+      <form id="mediaSearchForm" class="media-search-form">
+        <label class="search media-search"><span>⌕</span><input id="mediaSearch" type="search" placeholder="Search movies and shows…" aria-label="Search movies and shows" minlength="2" maxlength="120" autocomplete="off"></label>
+        <button id="mediaSearchButton" class="media-primary-button" type="submit" disabled>Search</button>
+      </form>
+      <div id="seerrStatus" class="media-status" role="status" aria-live="polite">Checking Seerr configuration…</div>
+      <div class="media-destinations">
+        <label id="tvTargetWrap">TV destination<select id="tvTargetSelect" disabled><option value="">Choose a Sonarr instance…</option></select><small>Requests use the selected Sonarr instance’s configured profile and folder.</small></label>
+        <label id="movieTargetWrap">Movie destination<select id="movieTargetSelect" disabled><option value="">Choose a Radarr folder…</option></select><small>Each option shows its Radarr instance and root folder.</small></label>
+      </div>
+      <div id="mediaSearchMessage" class="media-status" role="status" aria-live="polite">Sign in to search and request media.</div>
+      <div id="mediaResults" class="media-results"><div class="media-empty">Search for a title to get started.</div></div>
+    </section>
+
+    <section id="downloads" class="media-panel downloads-section" aria-labelledby="downloadsTitle">
+      <div class="downloads-head"><div><div class="kicker">CURRENTLY IN PROGRESS</div><h3 id="downloadsTitle">Downloads</h3></div><div id="downloadSummary" class="download-summary" aria-live="polite">Checking sign-in…</div></div>
+      <p class="media-intro">Only active qBittorrent and SABnzbd downloads appear here. Progress refreshes every few seconds.</p>
+      <div id="downloadsPrivate" hidden>
+        <div class="downloads-toolbar"><span>Queue details are private to this signed-in device.</span><button id="downloadLogout" class="download-logout" type="button">Lock media</button></div>
+        <div id="downloadList" class="download-list" aria-live="polite"><div class="downloads-empty">Loading your download queue…</div></div>
+      </div>
+      <div id="downloadsLocked" class="media-empty">Sign in above to see your private download queue.</div>
+    </section>
+
+    <section class="media-panel media-services-panel" aria-labelledby="mediaServicesTitle">
+      <div class="section-head media-panel-head"><div><div class="kicker">YOUR MEDIA SERVICES</div><h3 id="mediaServicesTitle">Shortcuts</h3></div><a class="section-tag media-all-apps" href="/#apps">ALL APPLICATIONS ↗</a></div>
+      <div id="mediaApps" class="media-app-grid"></div>
+    </section>
+  </div>
+
+  <footer><span>HOMEBASE</span><i>•</i> Media hub <small>Requests are sent securely through the Homebase Pages Function to Seerr.</small></footer>
+</main>
+</div>
+<script src="../config.js?v=homebase-media-1"></script>
+<script src="../media.js?v=homebase-media-1"></script>
+</body>
+</html>
