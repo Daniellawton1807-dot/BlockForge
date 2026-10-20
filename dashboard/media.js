@@ -11,7 +11,8 @@ const endpoints = {
   add: "/api/media/add",
   library: "/api/media/library",
   manage: "/api/media/manage",
-  details: "/api/media/details"
+  details: "/api/media/details",
+  releases: "/api/media/releases"
 };
 let authenticated = false;
 let arrReady = false;
@@ -22,6 +23,9 @@ let searchResults = [];
 let libraryItems = [];
 let libraryLoaded = false;
 let serviceFilter = "all";
+let interactiveRequestId = 0;
+let interactiveReleases = [];
+let activeReleaseContext = null;
 
 function safeUrl(value) {
   try {
@@ -62,8 +66,13 @@ function downloadCard(item, updatedAt) {
 function showLogin(message) {
   authenticated = false;
   const detailDialog = $("libraryDetailDialog");
+  const releaseDialog = $("interactiveReleaseDialog");
+  if (releaseDialog?.open) releaseDialog.close();
   if (detailDialog?.open) detailDialog.close();
   $("libraryDetailContent").innerHTML = "";
+  $("interactiveReleaseContent").innerHTML = "";
+  interactiveReleases = [];
+  activeReleaseContext = null;
   $("mediaAccess").hidden = false;
   $("downloadLoginForm").hidden = false;
   $("mediaAuthMessage").textContent = message;
@@ -215,7 +224,11 @@ async function lockMedia() {
   try {
     const response = await fetch(endpoints.logout, { method: "POST", credentials: "same-origin", cache: "no-store" });
     if (!response.ok) throw new Error("Sign out failed.");
+    if ($("interactiveReleaseDialog").open) $("interactiveReleaseDialog").close();
     if ($("libraryDetailDialog").open) $("libraryDetailDialog").close();
+    $("interactiveReleaseContent").innerHTML = "";
+    interactiveReleases = [];
+    activeReleaseContext = null;
     $("libraryDetailContent").innerHTML = "";
     searchResults = [];
     libraryItems = [];
@@ -434,6 +447,9 @@ function renderLibraryDetail(item, data) {
   const status = data.status || item.status || (data.hasFile ? "Downloaded" : "In library");
   const summary = data.overview || "No summary available.";
   const common = '<div class="library-detail-hero"><div class="media-detail-art">' + poster + '</div><div class="library-detail-heading"><div class="media-result-meta"><span class="media-type-chip ' + (item.mediaType === "tv" ? "tv" : "movie") + '">' + mediaTypeName(item.mediaType) + '</span><span>' + esc(item.serviceName) + '</span>' + (data.year || item.year ? '<span>' + esc(data.year || item.year) + '</span>' : "") + '<span class="library-detail-state">' + esc(status) + '</span></div><h2>' + esc(title) + '</h2><p>' + esc(summary) + '</p></div></div>';
+  const titleActions = item.mediaType === "tv"
+    ? '<div class="library-detail-actions"><button type="button" class="media-secondary-button" data-detail-action="search" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + Number(item.id) + '">Search series</button><span>Queue a standard Sonarr search for this show.</span></div>'
+    : "";
   const facts = '<div class="library-detail-facts">' + (data.rootFolderPath ? '<div><small>Root folder</small><strong title="' + esc(data.rootFolderPath) + '">' + esc(data.rootFolderPath) + '</strong></div>' : '') + (data.sizeOnDisk > 0 ? '<div><small>Size on disk</small><strong>' + esc(formatBytes(data.sizeOnDisk)) + '</strong></div>' : '') + (data.network ? '<div><small>Network</small><strong>' + esc(data.network) + '</strong></div>' : '') + (item.mediaType === "tv" ? '<div><small>Episodes</small><strong>' + Number(data.episodeFileCount || 0) + ' / ' + Number(data.episodeCount || 0) + ' available</strong></div>' : '') + '</div>';
   if (item.mediaType !== "tv") {
     const files = Array.isArray(data.files) ? data.files : [];
@@ -456,12 +472,13 @@ function renderLibraryDetail(item, data) {
     const epHtml = seasonEpisodes.length ? seasonEpisodes.map(ep => {
       const code = "S" + String(Number(ep.seasonNumber)||0).padStart(2,"0") + "E" + String(Number(ep.episodeNumber)||0).padStart(2,"0");
       const fileBlock = ep.hasFile ? '<details class="library-episode-file"><summary>File information' + (ep.file?.quality ? ' · ' + esc(ep.file.quality) : '') + '</summary>' + detailFileInfo(ep.file, "Storage path") + '</details>' : '';
-      const action = !ep.hasFile ? '<button type="button" class="media-secondary-button" data-detail-action="requestEpisode" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + Number(item.id) + '" data-episode-id="' + Number(ep.id) + '">Request episode</button>' : '<span class="library-season-complete">On disk</span>';
-      return '<article class="library-episode"><div class="library-episode-head"><div><span class="library-episode-code">' + code + '</span><span class="library-availability ' + (ep.hasFile ? "is-available" : "is-missing") + '">' + (ep.hasFile ? "Downloaded" : "Missing") + '</span></div>' + action + '</div><h4>' + esc(ep.title || "Episode " + ep.episodeNumber) + '</h4><div class="library-episode-meta">' + (ep.airDate ? '<span>' + esc(formatMediaDate(ep.airDate)) + '</span>' : '') + (Number(ep.runtime) > 0 ? '<span>' + Number(ep.runtime) + ' min</span>' : '') + (ep.monitored ? '<span>Monitored</span>' : '<span>Not monitored</span>') + '</div>' + (ep.overview ? '<p>' + esc(ep.overview) + '</p>' : '') + fileBlock + '</article>';
+      const searchLabel = ep.hasFile ? "Search upgrades" : "Search";
+      const episodeActions = '<div class="library-episode-actions"><button type="button" class="media-secondary-button" data-detail-action="searchEpisode" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + Number(item.id) + '" data-episode-id="' + Number(ep.id) + '">' + searchLabel + '</button><button type="button" class="media-secondary-button interactive-search-button" data-interactive-search data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + Number(item.id) + '" data-episode-id="' + Number(ep.id) + '" data-episode-code="' + code + '" data-episode-title="' + esc(ep.title || "Episode " + ep.episodeNumber) + '" data-series-title="' + esc(title) + '">Interactive search</button></div>';
+      return '<article class="library-episode"><div class="library-episode-head"><div><span class="library-episode-code">' + code + '</span><span class="library-availability ' + (ep.hasFile ? "is-available" : "is-missing") + '">' + (ep.hasFile ? "Downloaded" : "Missing") + '</span></div></div><h4>' + esc(ep.title || "Episode " + ep.episodeNumber) + '</h4><div class="library-episode-meta">' + (ep.airDate ? '<span>' + esc(formatMediaDate(ep.airDate)) + '</span>' : '') + (Number(ep.runtime) > 0 ? '<span>' + Number(ep.runtime) + ' min</span>' : '') + (ep.monitored ? '<span>Monitored</span>' : '<span>Not monitored</span>') + '</div>' + (ep.overview ? '<p>' + esc(ep.overview) + '</p>' : '') + episodeActions + fileBlock + '</article>';
     }).join("") : '<div class="media-empty">No episode information was returned for this season.</div>';
     return '<details class="library-season" data-season-number="' + number + '"' + (index === 0 ? " open" : "") + '><summary><span>' + esc(label) + '</span>' + badge + '<span class="library-season-chevron" aria-hidden="true">⌄</span></summary><div class="library-season-body"><div class="library-season-toolbar">' + seasonAction + '<span>' + missing.length + ' missing</span></div><div class="library-episodes">' + epHtml + '</div></div></details>';
   }).join("");
-  return common + facts + '<section class="library-detail-section"><div class="library-section-heading"><div><div class="kicker">SEASONS &amp; EPISODES</div><h3>Episodes</h3></div><span class="library-season-count">' + seasons.length + ' seasons</span></div><div class="library-seasons">' + (seasonHtml || '<div class="media-empty">No season information was returned.</div>') + '</div></section><div class="library-detail-footer"><span id="libraryDetailStatus" role="status" aria-live="polite"></span><button class="media-secondary-button" type="button" data-library-detail-close>Close</button></div>';
+  return common + titleActions + facts + '<section class="library-detail-section"><div class="library-section-heading"><div><div class="kicker">SEASONS &amp; EPISODES</div><h3>Episodes</h3></div><span class="library-season-count">' + seasons.length + ' seasons</span></div><div class="library-seasons">' + (seasonHtml || '<div class="media-empty">No season information was returned.</div>') + '</div></section><div class="library-detail-footer"><span id="libraryDetailStatus" role="status" aria-live="polite"></span><button class="media-secondary-button" type="button" data-library-detail-close>Close</button></div>';
 }
 let libraryDetailRequestId = 0;
 async function openLibraryDetails(button) {
@@ -495,12 +512,12 @@ async function runLibraryDetailAction(button) {
   const action = button.dataset.detailAction;
   const body = { serviceKey: button.dataset.libraryKey, id: Number(button.dataset.libraryId), action };
   if (action === "requestSeason") body.seasonNumber = Number(button.dataset.seasonNumber);
-  if (action === "requestEpisode") body.episodeId = Number(button.dataset.episodeId);
+  if (action === "requestEpisode" || action === "searchEpisode") body.episodeId = Number(button.dataset.episodeId);
   const item = libraryItems.find(entry => entry.serviceKey === body.serviceKey && entry.id === body.id);
   const status = $("libraryDetailStatus");
   button.disabled = true;
   const original = button.textContent;
-  button.textContent = "Queueing…";
+  button.textContent = action === "searchEpisode" ? "Queueing search…" : "Queueing…";
   if (status) status.textContent = "";
   try {
     const result = await readResponse(await fetch(endpoints.manage, {
@@ -518,7 +535,7 @@ async function runLibraryDetailAction(button) {
     if (!result.response.ok) throw new Error(result.data?.error || "Could not queue that search.");
     button.textContent = "Queued ✓";
     button.classList.add("is-complete");
-    if (status) status.textContent = "Search queued in " + (item?.serviceName || "Sonarr") + ".";
+    if (status) status.textContent = (action === "searchEpisode" ? "Episode search queued in " : "Search queued in ") + (item?.serviceName || "Sonarr") + ".";
     await loadLibrary();
   } catch (error) {
     button.disabled = false;
@@ -527,6 +544,106 @@ async function runLibraryDetailAction(button) {
   }
 }
 
+function humanAge(value) {
+  if (!value) return "";
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return "";
+  const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
+  if (minutes < 60) return minutes + "m ago";
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return hours + "h ago";
+  return Math.floor(hours / 24) + "d ago";
+}
+function renderInteractiveRelease(release, index) {
+  const quality = release.quality ? '<span><small>Quality</small><strong>' + esc(release.quality) + '</strong></span>' : "";
+  const score = release.score !== null && release.score !== undefined && Number.isFinite(Number(release.score)) ? '<span><small>Custom format score</small><strong>' + esc(Number(release.score)) + '</strong></span>' : "";
+  const size = Number(release.size) > 0 ? '<span><small>Size</small><strong>' + esc(formatBytes(release.size)) + '</strong></span>' : "";
+  const source = '<span><small>Indexer</small><strong>' + esc(release.indexer || "Unknown indexer") + '</strong></span><span><small>Source</small><strong>' + esc(release.protocol || "Unknown") + '</strong></span>';
+  const languages = Array.isArray(release.languages) && release.languages.length ? '<span><small>Languages</small><strong>' + esc(release.languages.join(", ")) + '</strong></span>' : "";
+  const age = release.publishDate ? '<span><small>Published</small><strong>' + esc(humanAge(release.publishDate) || formatMediaDate(release.publishDate)) + '</strong></span>' : "";
+  const peers = release.protocol === "torrent" && (release.seeders !== null || release.leechers !== null) ? '<span><small>Seeders / leechers</small><strong>' + esc(release.seeders ?? "—") + ' / ' + esc(release.leechers ?? "—") + '</strong></span>' : "";
+  const status = release.rejected ? '<span class="release-decision is-rejected">Rejected</span>' : release.approved ? '<span class="release-decision is-approved">Approved</span>' : '<span class="release-decision">Review</span>';
+  const issues = Array.isArray(release.rejections) && release.rejections.length ? '<div class="release-issues"><strong>Potential issues</strong><ul>' + release.rejections.map(reason => '<li>' + esc(reason) + '</li>').join("") + '</ul></div>' : "";
+  const canGrab = Boolean(release.guid && Number(release.indexerId) > 0);
+  return '<article class="interactive-release-card"><div class="interactive-release-head"><span class="media-type-chip tv">' + esc(release.releaseType || "Episode release") + '</span>' + status + '</div><h3>' + esc(release.title || "Untitled release") + '</h3><div class="interactive-release-facts">' + quality + score + size + languages + source + age + peers + '</div>' + issues + '<div class="interactive-release-actions"><button type="button" class="media-primary-button" data-grab-release="' + index + '"' + (canGrab ? "" : " disabled") + '>Download this release</button></div></article>';
+}
+function closeInteractiveSearch() {
+  const dialog = $("interactiveReleaseDialog");
+  if (dialog.open) dialog.close();
+  $("interactiveReleaseContent").innerHTML = "";
+  $("interactiveReleaseStatus").textContent = "";
+  interactiveReleases = [];
+  activeReleaseContext = null;
+}
+async function openInteractiveSearch(button) {
+  if (!authenticated) return;
+  const context = {
+    serviceKey: button.dataset.libraryKey,
+    seriesId: Number(button.dataset.libraryId),
+    episodeId: Number(button.dataset.episodeId),
+    episodeCode: button.dataset.episodeCode || "Episode",
+    episodeTitle: button.dataset.episodeTitle || "Episode",
+    seriesTitle: button.dataset.seriesTitle || "Series"
+  };
+  if (!context.serviceKey || !Number.isSafeInteger(context.seriesId) || !Number.isSafeInteger(context.episodeId)) return;
+  const dialog = $("interactiveReleaseDialog");
+  const requestId = ++interactiveRequestId;
+  activeReleaseContext = context;
+  interactiveReleases = [];
+  $("interactiveReleaseTitle").textContent = context.episodeCode + " · " + context.episodeTitle;
+  $("interactiveReleaseSubtitle").textContent = context.seriesTitle + " · searching configured Sonarr indexers…";
+  $("interactiveReleaseContent").innerHTML = '<div class="media-empty">Searching for releases…</div>';
+  $("interactiveReleaseStatus").textContent = "";
+  if (!dialog.open) dialog.showModal();
+  try {
+    const query = new URLSearchParams({ serviceKey: context.serviceKey, seriesId: String(context.seriesId), episodeId: String(context.episodeId) });
+    const result = await readResponse(await fetch(endpoints.releases + "?" + query.toString(), { cache: "no-store", credentials: "same-origin" }));
+    if (requestId !== interactiveRequestId || !dialog.open) return;
+    if (result.response.status === 401) {
+      showLogin("Your Homebase sign-in expired. Sign in again to continue.");
+      return;
+    }
+    if (!result.response.ok) throw new Error(result.data?.error || "Interactive search failed.");
+    interactiveReleases = Array.isArray(result.data?.releases) ? result.data.releases : [];
+    const episode = result.data?.episode || {};
+    $("interactiveReleaseSubtitle").textContent = context.seriesTitle + " · " + (episode.code || context.episodeCode) + (episode.title ? " · " + episode.title : "");
+    $("interactiveReleaseContent").innerHTML = interactiveReleases.length
+      ? interactiveReleases.map(renderInteractiveRelease).join("")
+      : '<div class="media-empty">No releases were returned for this episode. Try the standard Search action or check the Sonarr indexer setup.</div>';
+  } catch (error) {
+    if (requestId !== interactiveRequestId || !dialog.open) return;
+    $("interactiveReleaseContent").innerHTML = '<div class="media-status is-error">' + esc(error.message || "Interactive search failed.") + '</div>';
+  }
+}
+async function grabInteractiveRelease(button) {
+  const index = Number(button.dataset.grabRelease);
+  const release = interactiveReleases[index];
+  const context = activeReleaseContext;
+  if (!release || !context || !authenticated || button.disabled) return;
+  button.disabled = true;
+  button.textContent = "Sending to Sonarr…";
+  $("interactiveReleaseStatus").textContent = "";
+  try {
+    const result = await readResponse(await fetch(endpoints.releases, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      cache: "no-store",
+      body: JSON.stringify({ serviceKey: context.serviceKey, seriesId: context.seriesId, episodeId: context.episodeId, guid: release.guid, indexerId: release.indexerId, title: release.title })
+    }));
+    if (result.response.status === 401) {
+      showLogin("Your Homebase sign-in expired. Sign in again to continue.");
+      return;
+    }
+    if (!result.response.ok) throw new Error(result.data?.error || "Sonarr could not grab this release.");
+    button.textContent = "Queued ✓";
+    $("interactiveReleaseStatus").textContent = result.data?.message || "Selected release sent to " + (serviceMap[context.serviceKey]?.name || "Sonarr") + ".";
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = "Download this release";
+    $("interactiveReleaseStatus").textContent = error.message || "Could not send this release to Sonarr.";
+  }
+}
 function renderLibrary() {
   const query = $("libraryFilter").value.trim().toLowerCase();
   const filtered = libraryItems.filter(item => (serviceFilter === "all" || item.serviceKey === serviceFilter)
@@ -540,7 +657,7 @@ function renderLibrary() {
     const poster = image ? '<img src="' + esc(image) + '" alt="" loading="lazy">' : '<span>' + (item.mediaType === "tv" ? "TV" : "M") + "</span>";
     const status = item.mediaType === "tv" ? item.episodeFileCount + " / " + item.episodeCount + " episodes" : esc(item.status || "Movie");
     const size = item.sizeOnDisk ? formatBytes(item.sizeOnDisk) : "No files on disk";
-    return '<article class="media-library-card"><div class="media-library-art">' + poster + '</div><div class="media-library-copy"><div class="media-result-meta"><span class="media-type-chip ' + (item.mediaType === "tv" ? "tv" : "movie") + '">' + mediaTypeName(item.mediaType) + '</span><span>' + esc(item.serviceName) + '</span>' + (item.year ? '<span>' + esc(item.year) + '</span>' : "") + '</div><h4>' + esc(item.title) + '</h4><p>' + esc(status) + ' · ' + esc(size) + '</p><p class="media-library-path" title="' + esc(item.rootFolderPath) + '">' + esc(item.rootFolderPath || "Root folder not reported") + '</p></div><div class="media-library-actions"><button type="button" class="media-secondary-button ' + (item.monitored ? "is-monitored" : "") + '" data-library-action="monitor" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + item.id + '" data-library-value="' + (!item.monitored) + '">' + (item.monitored ? "Monitored" : "Unmonitored") + '</button><button type="button" class="media-secondary-button" data-library-action="search" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + item.id + '">Search</button><button type="button" class="media-secondary-button" data-library-action="refresh" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + item.id + '">Refresh</button><button type="button" class="media-secondary-button" data-library-details data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + item.id + '">Details</button><span class="library-action-feedback" role="status" aria-live="polite"></span></div></article>';
+    return '<article class="media-library-card"><div class="media-library-art">' + poster + '</div><div class="media-library-copy"><div class="media-result-meta"><span class="media-type-chip ' + (item.mediaType === "tv" ? "tv" : "movie") + '">' + mediaTypeName(item.mediaType) + '</span><span>' + esc(item.serviceName) + '</span>' + (item.year ? '<span>' + esc(item.year) + '</span>' : "") + '</div><h4>' + esc(item.title) + '</h4><p>' + esc(status) + ' · ' + esc(size) + '</p><p class="media-library-path" title="' + esc(item.rootFolderPath) + '">' + esc(item.rootFolderPath || "Root folder not reported") + '</p></div><div class="media-library-actions"><button type="button" class="media-secondary-button ' + (item.monitored ? "is-monitored" : "") + '" data-library-action="monitor" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + item.id + '" data-library-value="' + (!item.monitored) + '">' + (item.monitored ? "Monitored" : "Unmonitored") + '</button>' + (item.mediaType === "movie" ? '<button type="button" class="media-secondary-button" data-library-action="search" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + item.id + '">Search</button>' : "") + '<button type="button" class="media-secondary-button" data-library-action="refresh" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + item.id + '">Refresh</button><button type="button" class="media-secondary-button" data-library-details data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + item.id + '">Details</button><span class="library-action-feedback" role="status" aria-live="polite"></span></div></article>';
   }).join("");
 }
 async function manageLibraryAction(button) {
@@ -635,9 +752,20 @@ $("libraryList").addEventListener("click", event => {
   if (button && !button.disabled) manageLibraryAction(button);
 });
 $("libraryDetailDialog").addEventListener("click", event => {
-  if (event.target === $("libraryDetailDialog") || event.target.closest("[data-library-detail-close]")) $("libraryDetailDialog").close();
+  if (event.target === $("libraryDetailDialog") || event.target.closest("[data-library-detail-close]")) {
+    if ($("interactiveReleaseDialog").open) closeInteractiveSearch();
+    $("libraryDetailDialog").close();
+    return;
+  }
+  const interactive = event.target.closest("[data-interactive-search]");
+  if (interactive && !interactive.disabled) { openInteractiveSearch(interactive); return; }
   const action = event.target.closest("[data-detail-action]");
   if (action && !action.disabled) runLibraryDetailAction(action);
+});
+$("interactiveReleaseDialog").addEventListener("click", event => {
+  if (event.target === $("interactiveReleaseDialog") || event.target.closest("[data-release-close]")) { closeInteractiveSearch(); return; }
+  const grab = event.target.closest("[data-grab-release]");
+  if (grab && !grab.disabled) grabInteractiveRelease(grab);
 });
 $("mediaRefresh").addEventListener("click", async () => {
   $("mediaRefresh").textContent = "…";

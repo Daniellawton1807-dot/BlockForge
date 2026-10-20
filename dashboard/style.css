@@ -992,3 +992,46 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
   .library-season-toolbar { align-items: flex-start; flex-direction: column; }
   .library-episode-head { flex-direction: column; }
 }
+
+/* Per-episode search and bounded interactive releases */
+.library-detail-actions { display: flex; align-items: center; gap: 10px; margin: 14px 0 2px; }
+.library-detail-actions > span { color: #8492a9; font-size: 10px; }
+.library-episode-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.library-episode-actions .media-secondary-button { min-height: 30px; padding: 6px 10px; }
+.interactive-search-button { border-color: #675d9d; color: #c1b7ff; }
+.interactive-release-dialog { width: min(760px, calc(100vw - 28px)); max-width: 760px; max-height: min(88dvh, 900px); padding: 0; overflow: hidden; border: 1px solid #46516b; border-radius: 18px; background: #0d1422; color: var(--text); box-shadow: 0 28px 100px #000b; }
+.interactive-release-dialog::backdrop { background: #050914c9; backdrop-filter: blur(9px); }
+.interactive-release-shell { display: flex; flex-direction: column; max-height: min(88dvh, 900px); }
+.interactive-release-dialog-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 17px; border-bottom: 1px solid #29364b; background: #111a29f5; }
+.interactive-release-dialog-head h2 { margin: 3px 0 0; font-size: 14px; }
+.interactive-release-body { display: flex; min-height: 0; flex-direction: column; padding: clamp(13px, 3vw, 22px); }
+.interactive-release-body > h3 { margin: 0 0 4px; font-size: 18px; }
+.interactive-release-body > p { margin: 0 0 12px; color: #91a0b8; font-size: 11px; }
+.interactive-release-list { display: grid; max-height: min(62dvh, 620px); gap: 10px; overflow-y: auto; padding: 2px 5px 4px 0; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.interactive-release-card { min-width: 0; padding: 14px; border: 1px solid #34425a; border-radius: 14px; background: #141d2d; }
+.interactive-release-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.release-decision { display: inline-flex; align-items: center; padding: 4px 9px; border: 1px solid #55617b; border-radius: 99px; color: #c1cbe0; font-size: 10px; font-weight: 700; }
+.release-decision.is-approved { border-color: #43b681; color: #68e0a7; }
+.release-decision.is-rejected { border-color: #bd5760; color: #ff8189; }
+.interactive-release-card h3 { margin: 10px 0; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.interactive-release-facts { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,130px),1fr)); gap: 8px; }
+.interactive-release-facts > span { min-width: 0; padding: 8px 9px; border: 1px solid #29364b; border-radius: 9px; background: #101827; }
+.interactive-release-facts small { display: block; margin-bottom: 4px; color: #8190a8; font-size: 9px; text-transform: uppercase; letter-spacing: .6px; }
+.interactive-release-facts strong { display: block; color: #dce4f1; font-size: 11px; overflow-wrap: anywhere; }
+.release-issues { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #4a3924; color: #f1b960; font-size: 11px; }
+.release-issues ul { margin: 6px 0 0; padding-left: 18px; }
+.release-issues li + li { margin-top: 3px; }
+.interactive-release-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+.interactive-release-status { min-height: 20px; margin-top: 8px; color: #7bd8ac; font-size: 11px; }
+@media (max-width: 600px) {
+  .interactive-release-dialog { width: calc(100vw - 16px); max-height: 91dvh; border-radius: 15px; }
+  .interactive-release-shell { max-height: 91dvh; }
+  .interactive-release-body { padding: 12px; }
+  .interactive-release-list { max-height: 62dvh; }
+  .library-detail-actions { align-items: flex-start; flex-direction: column; }
+}
+@media (max-width: 390px) {
+  .library-episode-actions { width: 100%; }
+  .library-episode-actions .media-secondary-button { flex: 1 1 auto; }
+  .interactive-release-card { padding: 11px; }
+}

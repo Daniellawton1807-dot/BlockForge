@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0b1020">
 <title>Media — Homebase</title>
-<link rel="stylesheet" href="../style.css?v=homebase-media-5">
+<link rel="stylesheet" href="../style.css?v=homebase-media-6">
 </head>
 <body>
 <div class="layout">
@@ -64,6 +64,20 @@
         <div id="libraryList" class="media-library-list"><div class="media-empty">Your library will appear here.</div></div>
       </div>
       <dialog id="libraryDetailDialog" class="library-detail-dialog" aria-labelledby="libraryDetailTitle"><div class="library-detail-dialog-head"><div><span class="kicker">LIBRARY DETAILS</span><h2 id="libraryDetailTitle">Media details</h2></div><button class="media-secondary-button" type="button" data-library-detail-close aria-label="Close details">Close</button></div><div id="libraryDetailContent" class="library-detail-content"></div></dialog>
+      <dialog id="interactiveReleaseDialog" class="interactive-release-dialog" aria-labelledby="interactiveReleaseHeading">
+        <div class="interactive-release-shell">
+          <header class="interactive-release-dialog-head">
+            <div><span class="kicker">SONARR RELEASES</span><h2 id="interactiveReleaseHeading">Interactive search</h2></div>
+            <button class="media-secondary-button" type="button" data-release-close aria-label="Close interactive search">Close</button>
+          </header>
+          <div class="interactive-release-body">
+            <h3 id="interactiveReleaseTitle">Episode releases</h3>
+            <p id="interactiveReleaseSubtitle">Searching configured Sonarr indexers…</p>
+            <div id="interactiveReleaseContent" class="interactive-release-list" aria-live="polite"></div>
+            <div id="interactiveReleaseStatus" class="interactive-release-status" role="status" aria-live="polite"></div>
+          </div>
+        </div>
+      </dialog>
     </section>
 
     <section id="downloads" class="media-panel downloads-section" aria-labelledby="downloadsTitle">
@@ -86,6 +100,6 @@
 </main>
 </div>
 <script src="../config.js?v=homebase-media-1"></script>
-<script src="../media.js?v=homebase-media-5"></script>
+<script src="../media.js?v=homebase-media-6"></script>
 </body>
 </html>
