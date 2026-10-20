@@ -105,7 +105,9 @@ async function qbitItems(env) {
   if (!Array.isArray(torrents)) throw new Error("qBittorrent returned an invalid queue.");
 
   return torrents
-    .filter(torrent => Number.isFinite(Number(torrent?.progress)) && Number(torrent.progress) < 1)
+    .filter(torrent => ["downloading", "forcedDL"].includes(torrent?.state)
+      && Number.isFinite(Number(torrent?.progress))
+      && Number(torrent.progress) < 1)
     .slice(0, MAX_ITEMS_PER_SOURCE)
     .map((torrent, index) => {
       const progress = Math.max(0, Math.min(100, Number(torrent.progress) * 100));
