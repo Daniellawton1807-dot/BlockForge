@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0b1020">
 <title>Media — Homebase</title>
-<link rel="stylesheet" href="../style.css?v=homebase-media-7">
+<link rel="stylesheet" href="../style.css?v=homebase-media-8">
 </head>
 <body>
 <div class="layout">
@@ -64,6 +64,19 @@
         <div id="libraryList" class="media-library-list"><div class="media-empty">Your library will appear here.</div></div>
       </div>
       <dialog id="libraryDetailDialog" class="library-detail-dialog" aria-labelledby="libraryDetailTitle"><div class="library-detail-dialog-head"><div><span class="kicker">LIBRARY DETAILS</span><h2 id="libraryDetailTitle">Media details</h2></div><button class="media-secondary-button" type="button" data-library-detail-close aria-label="Close details">Close</button></div><div id="libraryDetailContent" class="library-detail-content"></div></dialog>
+      <dialog id="mediaDeleteConfirmDialog" class="media-delete-confirm-dialog" aria-labelledby="mediaDeleteConfirmTitle">
+        <div class="media-delete-confirm-shell">
+          <span class="kicker">PERMANENT REMOVAL</span>
+          <h2 id="mediaDeleteConfirmTitle">Delete media file?</h2>
+          <p id="mediaDeleteConfirmMessage"></p>
+          <code id="mediaDeleteConfirmPath" class="media-delete-confirm-path" hidden></code>
+          <p id="mediaDeleteConfirmImpact" class="media-delete-confirm-impact" hidden></p>
+          <div class="media-delete-confirm-actions">
+            <button class="media-secondary-button" type="button" data-delete-cancel>Cancel</button>
+            <button id="mediaDeleteConfirmSubmit" class="media-danger-button" type="button" data-delete-confirm>Delete file</button>
+          </div>
+        </div>
+      </dialog>
       <dialog id="interactiveReleaseDialog" class="interactive-release-dialog" aria-labelledby="interactiveReleaseHeading">
         <div class="interactive-release-shell">
           <header class="interactive-release-dialog-head">
@@ -100,6 +113,6 @@
 </main>
 </div>
 <script src="../config.js?v=homebase-media-1"></script>
-<script src="../media.js?v=homebase-media-6"></script>
+<script src="../media.js?v=homebase-media-7"></script>
 </body>
 </html>
