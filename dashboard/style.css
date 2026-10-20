@@ -545,6 +545,8 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
   .section-head h3 { font-size: 18px; }
   .featured-grid, .app-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .download-list { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .download-login { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+  .downloads-toolbar { align-items: flex-start; }
   .downloads-head { align-items: flex-start; }
   .apps-head { align-items: stretch; flex-direction: column; margin-top: 27px; }
   .search { max-width: none; }
