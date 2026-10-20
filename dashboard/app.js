@@ -2,6 +2,8 @@
 const defaults = {
   metricsEndpoint: "/api/metrics",
   downloadsEndpoint: "/api/downloads",
+  downloadsLoginEndpoint: "/api/downloads/login",
+  downloadsLogoutEndpoint: "/api/downloads/logout",
   refreshIntervalMs: 10000,
   services: []
 };
@@ -68,13 +70,35 @@ function formatEta(seconds){
  if(hours)return hours+"h "+(minutes%60)+"m";
  return minutes+"m";
 }
+let downloadsAuthKnown=false;
+let downloadsUnlocked=false;
+function showDownloadsLogin(message,summary){
+ downloadsAuthKnown=true;downloadsUnlocked=false;
+ const form=$("downloadLoginForm"), panel=$("downloadsPrivate");
+ if(form)form.hidden=false;
+ if(panel)panel.hidden=true;
+ const authMessage=$("downloadAuthMessage");
+ if(authMessage)authMessage.textContent=message;
+ const label=$("downloadSummary");
+ if(label)label.textContent=summary;
+}
+function showDownloadsUnlocked(){
+ downloadsAuthKnown=true;downloadsUnlocked=true;
+ const form=$("downloadLoginForm"), panel=$("downloadsPrivate");
+ if(form)form.hidden=true;
+ if(panel)panel.hidden=false;
+ const authMessage=$("downloadAuthMessage");
+ if(authMessage)authMessage.textContent="";
+}
 function showDownloadsMessage(message,summary){
+ if(!downloadsUnlocked){showDownloadsLogin(message,summary);return;}
  const list=$("downloadList"), label=$("downloadSummary");
  if(!list||!label)return;
  label.textContent=summary;
  list.innerHTML='<div class="downloads-empty">'+esc(message)+'</div>';
 }
 function renderDownloads(data){
+ showDownloadsUnlocked();
  const list=$("downloadList"), label=$("downloadSummary");
  if(!list||!label)return;
  const items=Array.isArray(data.items)?data.items:[];
@@ -89,30 +113,93 @@ function renderDownloads(data){
   list.innerHTML='<div class="downloads-empty">Connect qBittorrent and SABnzbd in the protected Pages settings to view their queues.</div>'+(warnings.length?'<div class="download-warning">'+warnings.join(" · ")+'</div>':"");
  }
 }
-async function refreshDownloads(){
+async function refreshDownloads(force=false){
  if(!$("downloadList")||!$("downloadSummary"))return;
+ if(downloadsAuthKnown&&!downloadsUnlocked&&!force)return;
  const endpoint=safeUrl(config.downloadsEndpoint);
- if(!endpoint){showDownloadsMessage("Downloads are not configured yet.","Setup required");return;}
+ if(!endpoint){showDownloadsLogin("The downloads endpoint is not available.","Unavailable");return;}
  try{
   const res=await fetch(endpoint,{cache:"no-store",credentials:"same-origin"});
   const data=await res.json().catch(()=>null);
   if(!res.ok){
    const code=data&&data.code;
-   if(code==="secure_setup_required")showDownloadsMessage("Private downloads are locked until Cloudflare Access and protected downloader credentials are configured.","Secure setup required");
-   else if(code==="access_required"||code==="access_denied")showDownloadsMessage("Sign in through Cloudflare Access to view private download details.","Sign-in required");
-   else showDownloadsMessage("The download queue is unavailable right now.","Unavailable");
+   if(code==="login_setup_required"){
+    showDownloadsLogin("Set the encrypted Homebase downloads login secrets in Cloudflare Pages before signing in.","Setup required");
+   }else if(code==="login_required"){
+    showDownloadsLogin("Sign in to see your private download queue.","Sign-in required");
+   }else if(!downloadsUnlocked){
+    showDownloadsLogin("The downloads sign-in could not be checked. Enter your details to try again.","Unavailable");
+   }else{
+    showDownloadsMessage("The download queue is unavailable right now.","Unavailable");
+   }
    return;
   }
   if(!data||!Array.isArray(data.items)||!Array.isArray(data.sources))throw new Error("Invalid downloads response");
   renderDownloads(data);
  }catch{
-  showDownloadsMessage("The download queue is unavailable right now.","Unavailable");
+  if(!downloadsUnlocked)showDownloadsLogin("Could not check the downloads sign-in. Try signing in again.","Unavailable");
+  else showDownloadsMessage("The download queue is unavailable right now.","Unavailable");
  }
 }
-function refreshAll(){refreshMetrics();refreshDownloads();}
+async function loginDownloads(event){
+ event.preventDefault();
+ const form=$("downloadLoginForm"), button=form.querySelector("button[type=submit]");
+ const message=$("downloadAuthMessage");
+ button.disabled=true;
+ message.textContent="Signing in…";
+ try{
+  const endpoint=safeUrl(config.downloadsLoginEndpoint)||"/api/downloads/login";
+  const res=await fetch(endpoint,{
+   method:"POST",
+   headers:{"content-type":"application/json"},
+   credentials:"same-origin",
+   cache:"no-store",
+   body:JSON.stringify({
+    username:$("downloadUsername").value,
+    password:$("downloadPassword").value,
+    remember:$("downloadRemember").checked
+   })
+  });
+  const data=await res.json().catch(()=>null);
+  if(!res.ok){
+   if(data&&data.code==="login_setup_required")message.textContent="The Homebase login has not been configured in Cloudflare Pages yet.";
+   else if(res.status===401)message.textContent="Username or password is incorrect.";
+   else message.textContent="Could not sign in. Try again.";
+   return;
+  }
+  $("downloadPassword").value="";
+  downloadsAuthKnown=true;downloadsUnlocked=true;
+  showDownloadsUnlocked();
+  await refreshDownloads();
+ }catch{
+  message.textContent="Could not reach the sign-in service. Try again.";
+ }finally{
+  button.disabled=false;
+ }
+}
+async function logoutDownloads(){
+ const button=$("downloadLogout");
+ button.disabled=true;
+ try{
+  const endpoint=safeUrl(config.downloadsLogoutEndpoint)||"/api/downloads/logout";
+  const res=await fetch(endpoint,{method:"POST",credentials:"same-origin",cache:"no-store"});
+  if(!res.ok)throw new Error("Could not lock downloads.");
+  $("downloadUsername").value="";
+  $("downloadPassword").value="";
+  $("downloadRemember").checked=false;
+  showDownloadsLogin("This device is signed out. Sign in to view downloads.","Signed out");
+ }catch{
+  showDownloadsMessage("Could not sign out. Please try again.","Unavailable");
+ }finally{
+  button.disabled=false;
+ }
+}
+function refreshAll(forceDownloads=false){refreshMetrics();refreshDownloads(forceDownloads);}
 
 function formatBytes(n){if(!Number.isFinite(Number(n))||n<0)return "—";let v=Number(n),u=["B","KB","MB","GB","TB"],i=0;while(v>=1024&&i<u.length-1){v/=1024;i++;}return v.toFixed(i?1:0)+" "+u[i];}
 function formatUptime(n){n=Math.max(0,Math.floor(Number(n)||0));const d=Math.floor(n/86400),h=Math.floor(n%86400/3600),m=Math.floor(n%3600/60);return (d?d+"d ":"")+(h+"h "+m+"m");}
 $("search").addEventListener("input",render);
-$("refresh").addEventListener("click",()=>{refreshAll();const b=$("refresh");b.textContent="✓";setTimeout(()=>b.textContent="↻",800);});
+$("downloadLoginForm").addEventListener("submit",loginDownloads);
+$("downloadLogout").addEventListener("click",logoutDownloads);
+$("refresh").addEventListener("click",()=>{refreshAll(true);const b=$("refresh");b.textContent="✓";setTimeout(()=>b.textContent="↻",800);});
 render();refreshAll();if(Number(config.refreshIntervalMs)>=3000)setInterval(refreshAll,Math.min(Number(config.refreshIntervalMs),60000));
