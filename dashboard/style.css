@@ -864,6 +864,9 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
 }
 .media-secondary-button:hover:not(:disabled) { border-color: #786ddb; color: #e8e5ff; }
 .media-secondary-button:disabled { opacity: .5; cursor: wait; }
+.media-danger-button { min-height: 34px; padding: 8px 12px; border: 1px solid #a34452; border-radius: 9px; background: #4a202b; color: #ffb5bd; font: inherit; font-size: 10px; font-weight: 800; cursor: pointer; }
+.media-danger-button:hover:not(:disabled) { border-color: #e36b78; background: #612733; color: #fff0f1; }
+.media-danger-button:disabled { opacity: .55; cursor: wait; }
 .media-secondary-button.is-monitored { border-color: #2e715e; color: #7fe0bb; }
 .media-library-toolbar { display: flex; align-items: center; gap: 9px; margin: 9px 0; }
 .media-library-toolbar .media-search { max-width: 480px; flex: 1; }
@@ -895,7 +898,8 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
 .media-library-copy h4 { margin: 4px 0; font-size: 12px; overflow-wrap: anywhere; }
 .media-library-copy p { margin: 3px 0 0; color: #8593aa; font-size: 9px; }
 .media-library-copy .media-library-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.media-library-actions { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); align-items: center; gap: 5px; }
+.media-library-actions { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); align-items: center; gap: 5px; width: min(360px,100%); }
+.media-library-actions > button { min-width: 0; padding-inline: 5px; white-space: nowrap; }
 .library-action-feedback { grid-column: 1 / -1; min-height: 11px; color: #84ddb9; font-size: 8px; text-align: right; }
 .media-library-view[hidden], .media-add-view[hidden], .media-detail[hidden] { display: none !important; }
 @media (max-width: 680px) {
@@ -904,7 +908,7 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
   .media-library-list { height: min(54vh, 540px); max-height: min(54vh, 540px); }
   .media-library-card { grid-template-columns: 42px minmax(0,1fr); align-items: start; }
   .media-library-art { width: 42px; height: 59px; }
-  .media-library-actions { grid-column: 1 / -1; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .media-library-actions { grid-column: 1 / -1; grid-template-columns: repeat(2,minmax(0,1fr)); width: 100%; }
   .library-action-feedback { grid-column: 1 / -1; text-align: left; }
   .media-add-form { grid-template-columns: minmax(0,1fr); }
   .media-form-row { grid-template-columns: minmax(0,1fr); }
@@ -1012,6 +1016,18 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
   .library-episode-head { flex-direction: column; }
 }
 
+/* Confirmed media-file removal */
+.media-delete-confirm-dialog { width: min(480px,calc(100vw - 24px)); max-width: 480px; max-height: min(82dvh,620px); padding: 0; overflow: hidden; border: 1px solid #64404b; border-radius: 18px; background: #111725; color: var(--text); box-shadow: 0 28px 100px #000c; }
+.media-delete-confirm-dialog::backdrop { background: #050914de; backdrop-filter: blur(8px); }
+.media-delete-confirm-shell { padding: clamp(17px,4vw,24px); }
+.media-delete-confirm-shell h2 { margin: 6px 0 9px; font-size: 19px; line-height: 1.2; }
+.media-delete-confirm-shell > p { margin: 0 0 11px; color: #a4afc2; font-size: 11px; line-height: 1.55; }
+.media-delete-confirm-path { display: block; max-height: 4.5em; margin: 0 0 12px; overflow: auto; padding: 9px 10px; border: 1px solid #303c53; border-radius: 8px; background: #0b111d; color: #d1d8e5; font: 10px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap: anywhere; }
+.media-delete-confirm-impact { padding: 9px 10px; border: 1px solid #765a35; border-radius: 8px; background: #3f321f; color: #f2c17f !important; }
+.media-delete-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+@media (max-width: 600px) {
+  .media-delete-confirm-dialog { width: calc(100vw - 16px); border-radius: 15px; }
+}
 /* Per-episode search and bounded interactive releases */
 .library-detail-actions { display: flex; align-items: center; gap: 10px; margin: 14px 0 2px; }
 .library-detail-actions > span { color: #8492a9; font-size: 10px; }
