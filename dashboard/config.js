@@ -2,7 +2,7 @@
    The third Sonarr route was not visible in the supplied screenshot, so its URL is intentionally blank.
    Keep API keys and passwords out of this public static file. */
 window.HOMEBASE_CONFIG = {
-  metricsEndpoint: "",
+  metricsEndpoint: "/api/metrics",
   refreshIntervalMs: 10000,
   services: [
     {name:"Sonarr",desc:"TV series management",url:"https://sonarr.danielvault.uk",icon:"S1",tone:"purple",group:"media"},
