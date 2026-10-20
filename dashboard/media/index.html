@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0b1020">
 <title>Media — Homebase</title>
-<link rel="stylesheet" href="../style.css?v=homebase-media-1">
+<link rel="stylesheet" href="../style.css?v=homebase-media-3">
 </head>
 <body>
 <div class="layout">
@@ -15,14 +15,14 @@
   <a class="nav" href="/"><span>◫</span> Overview</a>
   <a class="nav active" href="/media/" aria-current="page"><span>▤</span> Media hub</a>
   <a class="nav" href="/#apps"><span>▦</span> All applications</a>
-  <div class="side-bottom"><div class="server"><i></i><div><b>Media services</b><small id="seerrConnectionLabel">Checking Seerr…</small></div></div><p>Search, request, and track media from one place.</p></div>
+  <div class="side-bottom"><div class="server"><i></i><div><b>Media services</b><small id="arrConnectionLabel">Checking Sonarr and Radarr…</small></div></div><p>Search, add, manage and track media from one place.</p></div>
 </aside>
 <main class="main media-main">
   <header class="topbar">
     <div><div class="kicker">YOUR MEDIA STACK</div><h1>Media hub</h1></div>
     <div class="top-right"><span class="badge"><i></i> Homebase online</span><button id="mediaRefresh" class="icon-btn" title="Refresh media status" aria-label="Refresh media status">↻</button></div>
   </header>
-  <section class="hero media-hero"><div><div class="kicker">REQUESTS, DOWNLOADS, LIBRARIES</div><h2>Your media, <em>in one place.</em></h2><p>Search Seerr, choose where new media belongs, and follow active downloads.</p></div><div class="hero-glyph">▶</div></section>
+  <section class="hero media-hero"><div><div class="kicker">REQUESTS, LIBRARIES, DOWNLOADS</div><h2>Your media, <em>in one place.</em></h2><p>Use Sonarr and Radarr directly, then follow active downloads here.</p></div><div class="hero-glyph">▶</div></section>
 
   <section id="mediaAccess" class="media-access-panel" aria-labelledby="mediaAccessTitle">
     <div><div class="kicker">PRIVATE MEDIA CONTROLS</div><h2 id="mediaAccessTitle">Sign in to manage your media</h2><p id="mediaAuthMessage" class="download-auth-message" aria-live="polite">Checking this device’s sign-in…</p></div>
@@ -36,19 +36,33 @@
 
   <div class="media-workspace">
     <section class="media-panel request-panel" aria-labelledby="requestTitle">
-      <div class="section-head media-panel-head"><div><div class="kicker">REQUEST FROM HOMEBASE</div><h3 id="requestTitle">Find a movie or show</h3></div><span class="section-tag">POWERED BY SEERR</span></div>
-      <p class="media-intro">Search the Seerr catalog, select a destination, then send the request.</p>
-      <form id="mediaSearchForm" class="media-search-form">
-        <label class="search media-search"><span>⌕</span><input id="mediaSearch" type="search" placeholder="Search movies and shows…" aria-label="Search movies and shows" minlength="2" maxlength="120" autocomplete="off"></label>
-        <button id="mediaSearchButton" class="media-primary-button" type="submit" disabled>Search</button>
-      </form>
-      <div id="seerrStatus" class="media-status" role="status" aria-live="polite">Checking Seerr configuration…</div>
-      <div class="media-destinations">
-        <label id="tvTargetWrap">TV destination<select id="tvTargetSelect" disabled><option value="">Choose a Sonarr instance…</option></select><small>Requests use the selected Sonarr instance’s configured profile and folder.</small></label>
-        <label id="movieTargetWrap">Movie destination<select id="movieTargetSelect" disabled><option value="">Choose a Radarr folder…</option></select><small>Each option shows its Radarr instance and root folder.</small></label>
+      <div class="section-head media-panel-head"><div><div class="kicker">DIRECT SONARR &amp; RADARR</div><h3 id="requestTitle">Search and manage media</h3></div><span class="section-tag">ARR API</span></div>
+      <p class="media-intro">Search for a movie or show. Choose its Sonarr or Radarr instance and destination before adding it.</p>
+      <div class="media-mode-tabs" role="tablist" aria-label="Media hub view">
+        <button id="mediaModeAdd" class="media-mode-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="mediaAddView">Add media</button>
+        <button id="mediaModeLibrary" class="media-mode-tab" type="button" role="tab" aria-selected="false" aria-controls="mediaLibraryView">My library</button>
       </div>
-      <div id="mediaSearchMessage" class="media-status" role="status" aria-live="polite">Sign in to search and request media.</div>
-      <div id="mediaResults" class="media-results"><div class="media-empty">Search for a title to get started.</div></div>
+      <div id="arrStatus" class="media-status" role="status" aria-live="polite">Checking Sonarr and Radarr configuration…</div>
+
+      <div id="mediaAddView" role="tabpanel" aria-labelledby="mediaModeAdd">
+        <form id="mediaSearchForm" class="media-search-form">
+          <label class="search media-search"><span>⌕</span><input id="mediaSearch" type="search" placeholder="Search movies and shows…" aria-label="Search movies and shows" minlength="2" maxlength="120" autocomplete="off"></label>
+          <button id="mediaSearchButton" class="media-primary-button" type="submit" disabled>Search</button>
+        </form>
+        <div id="mediaSearchMessage" class="media-status" role="status" aria-live="polite">Sign in to search your ARR instances.</div>
+        <div id="mediaResults" class="media-results"><div class="media-empty">Search for a title to get started.</div></div>
+        <section id="mediaDetail" class="media-detail" aria-live="polite" hidden></section>
+      </div>
+
+      <div id="mediaLibraryView" class="media-library-view" role="tabpanel" aria-labelledby="mediaModeLibrary" hidden>
+        <div class="media-library-toolbar">
+          <label class="search media-search"><span>⌕</span><input id="libraryFilter" type="search" placeholder="Filter your library…" aria-label="Filter your media library" autocomplete="off"></label>
+          <button id="libraryRefresh" class="media-secondary-button" type="button">Refresh library</button>
+        </div>
+        <div id="librarySummary" class="media-status" role="status" aria-live="polite">Open the library to load your Sonarr and Radarr items.</div>
+        <div id="libraryServiceFilters" class="library-service-filters" aria-label="Filter by service"></div>
+        <div id="libraryList" class="media-library-list"><div class="media-empty">Your library will appear here.</div></div>
+      </div>
     </section>
 
     <section id="downloads" class="media-panel downloads-section" aria-labelledby="downloadsTitle">
@@ -67,10 +81,10 @@
     </section>
   </div>
 
-  <footer><span>HOMEBASE</span><i>•</i> Media hub <small>Requests are sent securely through the Homebase Pages Function to Seerr.</small></footer>
+  <footer><span>HOMEBASE</span><i>•</i> Media hub <small>Media actions are sent through the authenticated Homebase Pages Function to the selected Sonarr or Radarr instance.</small></footer>
 </main>
 </div>
 <script src="../config.js?v=homebase-media-1"></script>
-<script src="../media.js?v=homebase-media-2"></script>
+<script src="../media.js?v=homebase-media-3"></script>
 </body>
 </html>

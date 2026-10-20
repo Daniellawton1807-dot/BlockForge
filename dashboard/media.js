@@ -1,4 +1,4 @@
-/* Homebase Media hub. Requests and queue details are proxied through authenticated Pages Functions. */
+/* Homebase Media hub. ARR credentials stay in protected Pages environment variables. */
 const config = window.HOMEBASE_CONFIG || {};
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -6,15 +6,21 @@ const endpoints = {
   queue: "/api/downloads",
   login: "/api/downloads/login",
   logout: "/api/downloads/logout",
-  seerrConfig: "/api/downloads/seerr/config",
-  search: "/api/downloads/seerr/search",
-  request: "/api/downloads/seerr/request"
+  arrConfig: "/api/media/config",
+  search: "/api/media/search",
+  add: "/api/media/add",
+  library: "/api/media/library",
+  manage: "/api/media/manage"
 };
 let authenticated = false;
-let seerrReady = false;
+let arrReady = false;
 let downloadsFetchInFlight = false;
-let targetMap = Object.create(null);
-let lastSearchResults = [];
+let libraryFetchInFlight = false;
+let serviceMap = Object.create(null);
+let searchResults = [];
+let libraryItems = [];
+let libraryLoaded = false;
+let serviceFilter = "all";
 
 function safeUrl(value) {
   try {
@@ -61,12 +67,11 @@ function showLogin(message) {
   $("downloadsLocked").hidden = false;
   $("downloadSummary").textContent = "Sign-in required";
   $("downloadList").innerHTML = "";
-  $("seerrConnectionLabel").textContent = "Sign in required";
+  $("arrConnectionLabel").textContent = "Sign in required";
   $("mediaSearchButton").disabled = true;
   $("mediaSearch").disabled = true;
-  $("tvTargetSelect").disabled = true;
-  $("movieTargetSelect").disabled = true;
-  $("mediaSearchMessage").textContent = "Sign in above to search and request media.";
+  $("arrStatus").textContent = "Sign in above to connect to your media services.";
+  $("mediaSearchMessage").textContent = "Sign in above to search and manage media.";
 }
 function showUnlocked() {
   authenticated = true;
@@ -75,81 +80,40 @@ function showUnlocked() {
   $("downloadsLocked").hidden = true;
   $("downloadSummary").textContent = "Loading queue…";
 }
-function setSeerrUnavailable(message) {
-  seerrReady = false;
-  $("seerrConnectionLabel").textContent = "Seerr unavailable";
-  $("seerrStatus").textContent = message;
-  $("seerrStatus").className = "media-status is-error";
-  $("mediaSearchButton").disabled = true;
-  $("mediaSearch").disabled = true;
-  $("tvTargetSelect").disabled = true;
-  $("movieTargetSelect").disabled = true;
-  $("mediaSearchMessage").textContent = message.includes("SEERR_API_KEY")
-    ? "Add the protected SEERR_API_KEY secret to enable search and requests."
-    : "Media requests are unavailable while Seerr is disconnected.";
-  $("mediaSearchMessage").className = "media-status is-error";
-}
-function populateTargets(data) {
-  targetMap = Object.create(null);
-  const sonarr = Array.isArray(data.sonarr) ? data.sonarr : [];
-  const radarr = Array.isArray(data.radarr) ? data.radarr : [];
-  const tvSelect = $("tvTargetSelect");
-  const movieSelect = $("movieTargetSelect");
-  tvSelect.innerHTML = '<option value="">Choose a Sonarr instance…</option>';
-  movieSelect.innerHTML = '<option value="">Choose a Radarr folder…</option>';
-
-  sonarr.forEach(server => {
-    const id = Number(server.id);
-    if (!Number.isSafeInteger(id)) return;
-    const key = "tv:" + id;
-    targetMap[key] = { type: "tv", id, activeDirectory: String(server.activeDirectory || server.rootFolders?.[0]?.path || "") };
-    const option = document.createElement("option");
-    option.value = key;
-    option.textContent = String(server.name || "Sonarr") + (server.is4k ? " · 4K" : "");
-    if (server.isDefault) option.selected = true;
-    tvSelect.appendChild(option);
-  });
-
-  radarr.forEach(server => {
-    const id = Number(server.id);
-    if (!Number.isSafeInteger(id)) return;
-    const name = String(server.name || "Radarr") + (server.is4k ? " · 4K" : "");
-    const folders = Array.isArray(server.rootFolders) ? server.rootFolders : [];
-    folders.forEach((folder, index) => {
-      const path = String(folder.path || "");
-      if (!path) return;
-      const key = "movie:" + id + ":" + index;
-      targetMap[key] = { type: "movie", id, rootFolder: path };
-      const option = document.createElement("option");
-      option.value = key;
-      option.textContent = name + " — " + path;
-      if (server.isDefault && path === server.activeDirectory) option.selected = true;
-      movieSelect.appendChild(option);
-    });
-  });
-
-  tvSelect.disabled = sonarr.length === 0;
-  movieSelect.disabled = movieSelect.options.length <= 1;
-  $("tvTargetWrap").classList.toggle("is-empty", sonarr.length === 0);
-  $("movieTargetWrap").classList.toggle("is-empty", movieSelect.options.length <= 1);
-  $("seerrStatus").textContent = sonarr.length + " Sonarr destination" + (sonarr.length === 1 ? "" : "s") + " · " + radarr.length + " Radarr instance" + (radarr.length === 1 ? "" : "s") + " ready.";
-  $("seerrStatus").className = "media-status is-success";
-  $("seerrConnectionLabel").textContent = "Connected";
-  seerrReady = true;
-  $("mediaSearchButton").disabled = false;
-  $("mediaSearch").disabled = false;
-  $("mediaSearchMessage").textContent = "Choose the destination for each type, then search.";
-  $("mediaSearchMessage").className = "media-status";
-}
 async function readResponse(response) {
   const data = await response.json().catch(() => null);
   return { response, data };
 }
-async function loadSeerrTargets() {
+function renderArrStatus(data) {
+  serviceMap = Object.create(null);
+  for (const service of Array.isArray(data.services) ? data.services : []) serviceMap[service.key] = service;
+  const services = Object.values(serviceMap);
+  const connected = services.filter(service => service.connected);
+  arrReady = connected.length > 0;
+  $("arrConnectionLabel").textContent = connected.length + " of " + services.length + " services connected";
+  if (arrReady) {
+    const details = services.filter(service => !service.connected).map(service => service.name + ": " + service.message).join(" ");
+    $("arrStatus").textContent = connected.length + " of " + services.length + " Sonarr/Radarr instances connected." + (details ? " " + details : "");
+    $("arrStatus").className = "media-status is-success";
+    $("mediaSearchButton").disabled = false;
+    $("mediaSearch").disabled = false;
+    $("mediaSearchMessage").textContent = "Search across the connected instances, then choose where to add a title.";
+    $("mediaSearchMessage").className = "media-status";
+  } else {
+    const missing = services.map(service => service.message).filter(Boolean);
+    $("arrStatus").textContent = missing.length ? missing.join(" ") : "No Sonarr or Radarr instances are connected.";
+    $("arrStatus").className = "media-status is-error";
+    $("mediaSearchButton").disabled = true;
+    $("mediaSearch").disabled = true;
+    $("mediaSearchMessage").textContent = "Configure the private VPC bindings and protected ARR API key secrets in Cloudflare Pages.";
+    $("mediaSearchMessage").className = "media-status is-error";
+  }
+}
+async function loadArrConfig() {
   try {
-    const result = await readResponse(await fetch(endpoints.seerrConfig, { cache: "no-store", credentials: "same-origin" }));
+    const result = await readResponse(await fetch(endpoints.arrConfig, { cache: "no-store", credentials: "same-origin" }));
     if (result.response.status === 401) {
-      showLogin("Sign in to use media requests and view downloads.");
+      showLogin("Sign in to search and manage your Sonarr/Radarr libraries.");
       return false;
     }
     if (result.data?.code === "login_setup_required") {
@@ -158,27 +122,21 @@ async function loadSeerrTargets() {
     }
     showUnlocked();
     if (!result.response.ok) {
-      if (result.data?.code === "seerr_setup_required") {
-        setSeerrUnavailable("Set SEERR_API_KEY as a Secret in Cloudflare Pages Production, then redeploy. Keep it out of GitHub.");
-        return true;
-      }
-      setSeerrUnavailable(result.data?.error || "Could not connect to Seerr. Check its URL and API key in Cloudflare Pages.");
+      $("arrConnectionLabel").textContent = "Configuration unavailable";
+      $("arrStatus").textContent = result.data?.error || "Could not load the Sonarr/Radarr configuration.";
+      $("arrStatus").className = "media-status is-error";
+      arrReady = false;
       return true;
     }
-    populateTargets(result.data || {});
-    if (Array.isArray(result.data?.radarr) && result.data.radarr.some(server => !server.rootFolderListAvailable)) {
-      $("seerrStatus").textContent += " Some Radarr roots use Seerr’s configured default because its root-folder lookup was unavailable.";
-    }
-    if (!Array.isArray(result.data?.sonarr) || !result.data.sonarr.length) {
-      $("tvTargetWrap").classList.add("is-empty");
-    }
-    if (!Array.isArray(result.data?.radarr) || !result.data.radarr.length) {
-      $("movieTargetWrap").classList.add("is-empty");
-    }
+    renderArrStatus(result.data || {});
+    if (libraryLoaded) await loadLibrary();
     return true;
   } catch {
     showUnlocked();
-    setSeerrUnavailable("Could not reach Seerr. Check its Cloudflare URL and API key configuration.");
+    $("arrConnectionLabel").textContent = "Services unavailable";
+    $("arrStatus").textContent = "Could not reach Homebase’s media connection. Check the Pages bindings and API keys.";
+    $("arrStatus").className = "media-status is-error";
+    arrReady = false;
     return true;
   }
 }
@@ -229,11 +187,7 @@ async function submitLogin(event) {
       headers: { "content-type": "application/json" },
       credentials: "same-origin",
       cache: "no-store",
-      body: JSON.stringify({
-        username: $("downloadUsername").value,
-        password: $("downloadPassword").value,
-        remember: $("downloadRemember").checked
-      })
+      body: JSON.stringify({ username: $("downloadUsername").value, password: $("downloadPassword").value, remember: $("downloadRemember").checked })
     }));
     if (!result.response.ok) {
       if (result.data?.code === "login_setup_required") $("mediaAuthMessage").textContent = "The Homebase sign-in is not configured in Cloudflare Pages.";
@@ -243,7 +197,7 @@ async function submitLogin(event) {
     }
     $("downloadPassword").value = "";
     showUnlocked();
-    await loadSeerrTargets();
+    await loadArrConfig();
     await refreshDownloads();
   } catch {
     $("mediaAuthMessage").textContent = "Could not reach the sign-in service. Try again.";
@@ -257,9 +211,12 @@ async function lockMedia() {
   try {
     const response = await fetch(endpoints.logout, { method: "POST", credentials: "same-origin", cache: "no-store" });
     if (!response.ok) throw new Error("Sign out failed.");
-    targetMap = Object.create(null);
-    lastSearchResults = [];
+    searchResults = [];
+    libraryItems = [];
+    libraryLoaded = false;
     $("mediaResults").innerHTML = '<div class="media-empty">Sign in to search for a title.</div>';
+    $("mediaDetail").hidden = true;
+    $("mediaLibraryView").hidden = true;
     showLogin("This device is signed out. Sign in to manage media.");
   } catch {
     $("downloadSummary").textContent = "Could not lock media";
@@ -267,34 +224,86 @@ async function lockMedia() {
     button.disabled = false;
   }
 }
-function mediaTypeName(type) {
-  return type === "tv" ? "TV show" : "Movie";
+function mediaTypeName(type) { return type === "tv" ? "TV show" : "Movie"; }
+function matchingLibrary(item) {
+  return libraryItems.filter(entry => entry.mediaType === item.mediaType && (item.mediaType === "tv"
+    ? (item.tvdbId && entry.tvdbId === item.tvdbId) || (!item.tvdbId && item.tmdbId && entry.tmdbId === item.tmdbId)
+    : entry.tmdbId === item.tmdbId));
 }
 function renderSearchResults(items) {
-  lastSearchResults = items;
+  searchResults = items;
+  $("mediaDetail").hidden = true;
   if (!items.length) {
     $("mediaResults").innerHTML = '<div class="media-empty">No movies or shows matched that search.</div>';
     return;
   }
   $("mediaResults").innerHTML = items.map((item, index) => {
     const type = item.mediaType === "tv" ? "tv" : "movie";
-    const rawDate = String(item.releaseDate || "");
-    const year = /^\d{4}/.test(rawDate) ? rawDate.slice(0, 4) : "";
-    const posterPath = typeof item.posterPath === "string" && /^\/[A-Za-z0-9_./-]+$/.test(item.posterPath) ? item.posterPath : "";
-    const poster = posterPath
-      ? '<img src="https://image.tmdb.org/t/p/w185' + esc(posterPath) + '" alt="" loading="lazy">'
-      : '<span>' + (type === "tv" ? "TV" : "M") + "</span>";
-    const targetSelect = type === "tv" ? $("tvTargetSelect") : $("movieTargetSelect");
-    const hasTarget = targetSelect.options.length > 1;
-    const label = type === "tv" ? "Request show" : "Request movie";
-    const actionLabel = hasTarget ? label : "Destination unavailable";
-    return '<article class="media-result"><div class="media-result-art">' + poster + '</div><div class="media-result-copy"><div class="media-result-meta"><span class="media-type-chip">' + mediaTypeName(type) + '</span>' + (year ? '<span>' + esc(year) + '</span>' : "") + '</div><h4>' + esc(item.title || "Untitled") + '</h4><p>' + esc(item.overview || "No summary available.") + '</p><div class="media-result-actions"><span class="media-destination-hint">' + (hasTarget ? "Destination selected above" : "Configure a destination in Seerr") + '</span><button class="media-primary-button request-button" data-request-index="' + index + '" type="button" ' + (hasTarget ? "" : "disabled") + '>' + actionLabel + '</button></div><div class="request-feedback" aria-live="polite"></div></div></article>';
+    const posterUrl = safeUrl(item.posterUrl || "");
+    const poster = posterUrl ? '<img src="' + esc(posterUrl) + '" alt="" loading="lazy">' : '<span>' + (type === "tv" ? "TV" : "M") + "</span>";
+    const matches = matchingLibrary(item);
+    const libraryText = matches.length ? '<span class="media-in-library">In ' + esc(matches.map(entry => entry.serviceName).join(", ")) + '</span>' : "";
+    const genres = Array.isArray(item.genres) ? item.genres.slice(0, 3).map(genre => '<span class="media-genre">' + esc(genre) + '</span>').join("") : "";
+    return '<article class="media-result"><div class="media-result-art">' + poster + '</div><div class="media-result-copy"><div class="media-result-meta"><span class="media-type-chip ' + type + '">' + mediaTypeName(type) + '</span>' + (item.year ? '<span>' + esc(item.year) + '</span>' : "") + libraryText + '</div><h4>' + esc(item.title || "Untitled") + '</h4><div class="media-genres">' + genres + '</div><p>' + esc(item.overview || "No summary available.") + '</p><div class="media-result-actions"><span class="media-destination-hint">' + (matches.length ? "Choose a destination to see whether it is already there." : "Choose an instance and destination.") + '</span><button class="media-primary-button request-button" data-select-index="' + index + '" type="button">Select</button></div></div></article>';
   }).join("");
+}
+function folderOptions(service, selectedPath) {
+  return (service?.rootFolders || []).map(folder => '<option value="' + esc(folder.path) + '" ' + (folder.path === selectedPath ? "selected" : "") + '>' + esc(folder.path) + (folder.freeSpace ? " · " + esc(formatBytes(folder.freeSpace)) + " free" : "") + '</option>').join("");
+}
+function profileOptions(service, selectedId) {
+  return (service?.qualityProfiles || []).map(profile => '<option value="' + profile.id + '" ' + (profile.id === selectedId ? "selected" : "") + '>' + esc(profile.name) + '</option>').join("");
+}
+function formatBytes(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "GB", "TB", "PB"];
+  let size = bytes;
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) { size /= 1024; index++; }
+  return size.toFixed(size >= 10 || index === 0 ? 0 : 1) + " " + units[index];
+}
+function selectableServices(item) {
+  return Object.values(serviceMap).filter(service => service.connected && service.type === item.mediaType);
+}
+function renderAddDetails(item) {
+  const services = selectableServices(item);
+  if (!services.length) {
+    $("mediaDetail").hidden = false;
+    $("mediaDetail").innerHTML = '<div class="media-detail-top"><h4>' + esc(item.title) + '</h4><button type="button" class="media-secondary-button" data-close-detail>Close</button></div><div class="media-status is-error">No connected ' + esc(item.mediaType === "tv" ? "Sonarr" : "Radarr") + ' destination is ready for this title.</div>';
+    return;
+  }
+  const matching = matchingLibrary(item);
+  const service = services[0];
+  const image = safeUrl(item.posterUrl || "");
+  const poster = image ? '<img src="' + esc(image) + '" alt="" loading="lazy">' : '<span>' + (item.mediaType === "tv" ? "TV" : "M") + "</span>";
+  const serviceOptions = services.map(server => '<option value="' + esc(server.key) + '">' + esc(server.name) + '</option>').join("");
+  const selectedPath = service.rootFolders?.[0]?.path || "";
+  const selectedProfile = service.qualityProfiles?.[0]?.id;
+  const existingText = matching.length ? '<div class="media-status is-success">Already in ' + esc(matching.map(entry => entry.serviceName).join(", ")) + '. You can still choose another instance if you want a separate copy.</div>' : "";
+  const typeSettings = item.mediaType === "tv"
+    ? '<div class="media-form-row"><label>Series type<select name="seriesType"><option value="standard">Standard</option><option value="daily">Daily</option><option value="anime">Anime</option></select></label><label>Monitor<select name="monitorType"><option value="all">All seasons</option><option value="future">Future seasons</option><option value="missing">Missing episodes</option><option value="none">None</option></select></label></div><label class="media-switch"><input type="checkbox" name="seasonFolder" checked><span>Use season folders</span></label>'
+    : "";
+  $("mediaDetail").innerHTML = '<div class="media-detail-top"><div><div class="kicker">' + (item.mediaType === "tv" ? "ADD SERIES" : "ADD MOVIE") + '</div><h4>' + esc(item.title) + (item.year ? ' <span>' + esc(item.year) + '</span>' : "") + '</h4></div><button type="button" class="media-secondary-button" data-close-detail>Close</button></div><div class="media-detail-summary"><div class="media-detail-art">' + poster + '</div><p>' + esc(item.overview || "No description available.") + '</p></div>' + existingText + '<form id="mediaAddForm" class="media-add-form"><input type="hidden" name="mediaType" value="' + esc(item.mediaType) + '"><input type="hidden" name="tmdbId" value="' + esc(item.tmdbId || "") + '"><input type="hidden" name="tvdbId" value="' + esc(item.tvdbId || "") + '"><label>ADD TO<select name="serviceKey" required>' + serviceOptions + '</select></label><label>Root folder<select name="rootFolderPath" required>' + folderOptions(service, selectedPath) + '</select></label><label>Quality profile<select name="qualityProfileId" required>' + profileOptions(service, selectedProfile) + '</select></label>' + typeSettings + '<label class="media-switch"><input type="checkbox" name="monitored" checked><span>Monitored</span></label><label class="media-switch"><input type="checkbox" name="searchOnAdd" checked><span>Search for missing ' + (item.mediaType === "tv" ? "episodes" : "movie") + ' after adding</span></label><div class="media-add-feedback" role="status" aria-live="polite"></div><button class="media-primary-button media-add-button" type="submit">Add to ' + esc(service.name) + '</button></form>';
+  $("mediaDetail").hidden = false;
+  const form = $("mediaAddForm");
+  form.addEventListener("change", event => {
+    if (event.target.name === "serviceKey") {
+      const nextService = serviceMap[event.target.value];
+      form.elements.rootFolderPath.innerHTML = folderOptions(nextService, nextService?.rootFolders?.[0]?.path || "");
+      form.elements.qualityProfileId.innerHTML = profileOptions(nextService, nextService?.qualityProfiles?.[0]?.id);
+      form.querySelector(".media-add-button").textContent = "Add to " + (nextService?.name || "service");
+    }
+  });
+  form.addEventListener("submit", addSelectedMedia);
+}
+function chooseSearchResult(button) {
+  const item = searchResults[Number(button.dataset.selectIndex)];
+  if (item && authenticated) renderAddDetails(item);
 }
 async function searchMedia(event) {
   event.preventDefault();
-  if (!authenticated || !seerrReady) {
-    $("mediaSearchMessage").textContent = "Seerr is not ready yet. Check the setup message above.";
+  if (!authenticated || !arrReady) {
+    $("mediaSearchMessage").textContent = "No connected Sonarr/Radarr destination is ready yet.";
     return;
   }
   const query = $("mediaSearch").value.trim();
@@ -303,63 +312,155 @@ async function searchMedia(event) {
     return;
   }
   $("mediaSearchButton").disabled = true;
-  $("mediaSearchMessage").textContent = "Searching Seerr…";
-  $("mediaResults").innerHTML = '<div class="media-empty">Searching…</div>';
+  $("mediaSearchMessage").textContent = "Searching Sonarr and Radarr…";
+  $("mediaResults").innerHTML = '<div class="media-empty">Searching connected media services…</div>';
+  $("mediaDetail").hidden = true;
   try {
     const result = await readResponse(await fetch(endpoints.search + "?q=" + encodeURIComponent(query), { cache: "no-store", credentials: "same-origin" }));
     if (result.response.status === 401) {
       showLogin("Your Homebase sign-in expired. Sign in again to continue.");
       return;
     }
-    if (!result.response.ok) throw new Error(result.data?.error || "Seerr search failed.");
+    if (!result.response.ok) throw new Error(result.data?.error || "Search failed.");
     renderSearchResults(Array.isArray(result.data?.results) ? result.data.results : []);
-    $("mediaSearchMessage").textContent = "Choose the Sonarr instance or Radarr root folder above, then submit a request.";
+    const offline = (result.data?.services || []).filter(service => !service.connected).map(service => service.name);
+    $("mediaSearchMessage").textContent = "Select a result to choose an instance and root folder." + (offline.length ? " Search also completed with " + offline.join(", ") + " unavailable." : "");
   } catch (error) {
     $("mediaResults").innerHTML = '<div class="media-empty">Search failed. ' + esc(error.message || "Try again.") + '</div>';
-    $("mediaSearchMessage").textContent = "Seerr search is unavailable.";
+    $("mediaSearchMessage").textContent = "Could not search the connected media services.";
   } finally {
-    $("mediaSearchButton").disabled = !seerrReady;
+    $("mediaSearchButton").disabled = !arrReady;
   }
 }
-async function requestMedia(button) {
-  const index = Number(button.dataset.requestIndex);
-  const item = lastSearchResults[index];
-  if (!item || !authenticated) return;
-  const type = item.mediaType === "tv" ? "tv" : "movie";
-  const targetSelect = type === "tv" ? $("tvTargetSelect") : $("movieTargetSelect");
-  const target = targetMap[targetSelect.value];
-  const feedback = button.closest(".media-result").querySelector(".request-feedback");
-  if (!target) {
-    feedback.textContent = "Choose a destination first.";
-    return;
-  }
+async function addSelectedMedia(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector(".media-add-button");
+  const feedback = form.querySelector(".media-add-feedback");
+  const values = new FormData(form);
+  const service = serviceMap[String(values.get("serviceKey"))];
+  const item = searchResults.find(result => String(result.tmdbId || "") === String(values.get("tmdbId") || "") && String(result.tvdbId || "") === String(values.get("tvdbId") || ""));
+  const body = {
+    mediaType: String(values.get("mediaType")),
+    serviceKey: String(values.get("serviceKey")),
+    tmdbId: Number(values.get("tmdbId")) || null,
+    tvdbId: Number(values.get("tvdbId")) || null,
+    rootFolderPath: String(values.get("rootFolderPath")),
+    qualityProfileId: Number(values.get("qualityProfileId")),
+    monitored: values.has("monitored"),
+    searchOnAdd: values.has("searchOnAdd"),
+    seasonFolder: values.has("seasonFolder"),
+    seriesType: String(values.get("seriesType") || "standard"),
+    monitorType: String(values.get("monitorType") || "all")
+  };
   button.disabled = true;
-  button.textContent = "Sending…";
+  button.textContent = "Adding…";
   feedback.textContent = "";
-  const body = { mediaType: type, mediaId: Number(item.id), targetId: target.id };
-  if (type === "movie") body.rootFolder = target.rootFolder;
-  if (item.tvdbId) body.tvdbId = Number(item.tvdbId);
   try {
-    const result = await readResponse(await fetch(endpoints.request, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "same-origin",
-      cache: "no-store",
-      body: JSON.stringify(body)
+    const result = await readResponse(await fetch(endpoints.add, {
+      method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", cache: "no-store", body: JSON.stringify(body)
     }));
     if (result.response.status === 401) {
       showLogin("Your Homebase sign-in expired. Sign in again to continue.");
       return;
     }
-    if (!result.response.ok) throw new Error(result.data?.error || "Seerr could not submit that request.");
-    button.textContent = "Requested";
+    if (!result.response.ok) throw new Error(result.data?.error || "Could not add media.");
+    button.textContent = "Added to " + (result.data?.item?.serviceName || service?.name || "library");
     button.classList.add("is-complete");
-    feedback.textContent = "Request submitted to Seerr.";
+    feedback.textContent = (result.data?.item?.title || item?.title || "Title") + " has been added to " + (result.data?.item?.serviceName || service?.name || "your library") + ".";
+    if (libraryLoaded) await loadLibrary();
   } catch (error) {
     button.disabled = false;
-    button.textContent = type === "tv" ? "Request show" : "Request movie";
-    feedback.textContent = error.message || "Request failed. Try again.";
+    button.textContent = "Add to " + (service?.name || "service");
+    feedback.textContent = error.message || "Add failed. Try again.";
   }
+}
+async function loadLibrary() {
+  if (!authenticated || libraryFetchInFlight) return;
+  libraryFetchInFlight = true;
+  $("librarySummary").textContent = "Loading your Sonarr and Radarr library…";
+  try {
+    const result = await readResponse(await fetch(endpoints.library, { cache: "no-store", credentials: "same-origin" }));
+    if (result.response.status === 401) {
+      showLogin("Your Homebase sign-in expired. Sign in again to continue.");
+      return;
+    }
+    if (!result.response.ok || !Array.isArray(result.data?.items)) throw new Error(result.data?.error || "Could not load the library.");
+    libraryItems = result.data.items;
+    libraryLoaded = true;
+    const serviceCount = (result.data.services || []).filter(service => service.connected).length;
+    const offline = (result.data.services || []).filter(service => !service.connected);
+    $("librarySummary").textContent = libraryItems.length + " titles across " + serviceCount + " connected instances." + (offline.length ? " " + offline.map(service => service.name + " unavailable").join(" · ") : "");
+    renderServiceFilters(result.data.services || []);
+    renderLibrary();
+  } catch (error) {
+    $("librarySummary").textContent = error.message || "Could not load your library.";
+    $("librarySummary").className = "media-status is-error";
+    $("libraryList").innerHTML = '<div class="media-empty">The library could not be loaded. Check the ARR connection status above.</div>';
+  } finally {
+    libraryFetchInFlight = false;
+  }
+}
+function renderServiceFilters(services) {
+  const active = services.filter(service => service.connected);
+  const options = [{ key: "all", name: "All" }, ...active.map(service => ({ key: service.key, name: service.name }))];
+  if (!options.some(option => option.key === serviceFilter)) serviceFilter = "all";
+  $("libraryServiceFilters").innerHTML = options.map(option => '<button class="library-filter-chip ' + (option.key === serviceFilter ? "is-active" : "") + '" type="button" data-service-filter="' + esc(option.key) + '" aria-pressed="' + (option.key === serviceFilter) + '">' + esc(option.name) + '</button>').join("");
+}
+function renderLibrary() {
+  const query = $("libraryFilter").value.trim().toLowerCase();
+  const filtered = libraryItems.filter(item => (serviceFilter === "all" || item.serviceKey === serviceFilter)
+    && (!query || (item.title + " " + item.year + " " + item.serviceName).toLowerCase().includes(query)));
+  if (!filtered.length) {
+    $("libraryList").innerHTML = '<div class="media-empty">' + (libraryItems.length ? "No titles match these filters." : "No titles are in the connected libraries yet.") + '</div>';
+    return;
+  }
+  $("libraryList").innerHTML = filtered.map(item => {
+    const image = safeUrl(item.posterUrl || "");
+    const poster = image ? '<img src="' + esc(image) + '" alt="" loading="lazy">' : '<span>' + (item.mediaType === "tv" ? "TV" : "M") + "</span>";
+    const status = item.mediaType === "tv" ? item.episodeFileCount + " / " + item.episodeCount + " episodes" : esc(item.status || "Movie");
+    const size = item.sizeOnDisk ? formatBytes(item.sizeOnDisk) : "No files on disk";
+    return '<article class="media-library-card"><div class="media-library-art">' + poster + '</div><div class="media-library-copy"><div class="media-result-meta"><span class="media-type-chip ' + (item.mediaType === "tv" ? "tv" : "movie") + '">' + mediaTypeName(item.mediaType) + '</span><span>' + esc(item.serviceName) + '</span>' + (item.year ? '<span>' + esc(item.year) + '</span>' : "") + '</div><h4>' + esc(item.title) + '</h4><p>' + esc(status) + ' · ' + esc(size) + '</p><p class="media-library-path" title="' + esc(item.rootFolderPath) + '">' + esc(item.rootFolderPath || "Root folder not reported") + '</p></div><div class="media-library-actions"><button type="button" class="media-secondary-button ' + (item.monitored ? "is-monitored" : "") + '" data-library-action="monitor" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + item.id + '" data-library-value="' + (!item.monitored) + '">' + (item.monitored ? "Monitored" : "Unmonitored") + '</button><button type="button" class="media-secondary-button" data-library-action="search" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + item.id + '">Search</button><button type="button" class="media-secondary-button" data-library-action="refresh" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + item.id + '">Refresh</button><span class="library-action-feedback" role="status" aria-live="polite"></span></div></article>';
+  }).join("");
+}
+async function manageLibraryAction(button) {
+  const action = button.dataset.libraryAction;
+  const key = button.dataset.libraryKey;
+  const id = Number(button.dataset.libraryId);
+  const item = libraryItems.find(entry => entry.serviceKey === key && entry.id === id);
+  if (!item || !authenticated) return;
+  const card = button.closest(".media-library-card");
+  const feedback = card.querySelector(".library-action-feedback");
+  const buttons = card.querySelectorAll("button");
+  buttons.forEach(control => { control.disabled = true; });
+  feedback.textContent = action === "monitor" ? "Updating…" : action === "search" ? "Queueing search…" : "Queueing refresh…";
+  try {
+    const result = await readResponse(await fetch(endpoints.manage, {
+      method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", cache: "no-store",
+      body: JSON.stringify({ serviceKey: key, id, action, value: button.dataset.libraryValue === "true" })
+    }));
+    if (result.response.status === 401) {
+      showLogin("Your Homebase sign-in expired. Sign in again to continue.");
+      return;
+    }
+    if (!result.response.ok) throw new Error(result.data?.error || "That media action failed.");
+    if (action === "monitor") item.monitored = Boolean(result.data?.monitored);
+    feedback.textContent = action === "monitor" ? (item.monitored ? "Monitoring enabled." : "Monitoring disabled.") : action === "search" ? "Search queued in " + item.serviceName + "." : "Refresh queued in " + item.serviceName + ".";
+    renderLibrary();
+  } catch (error) {
+    feedback.textContent = error.message || "Action failed.";
+    buttons.forEach(control => { control.disabled = false; });
+  }
+}
+function setMediaMode(mode) {
+  const library = mode === "library";
+  $("mediaAddView").hidden = library;
+  $("mediaLibraryView").hidden = !library;
+  $("mediaModeAdd").classList.toggle("is-active", !library);
+  $("mediaModeLibrary").classList.toggle("is-active", library);
+  $("mediaModeAdd").setAttribute("aria-selected", String(!library));
+  $("mediaModeLibrary").setAttribute("aria-selected", String(library));
+  if (library && !libraryLoaded) loadLibrary();
 }
 function renderServiceLinks() {
   const services = Array.isArray(config.services) ? config.services : [];
@@ -368,9 +469,7 @@ function renderServiceLinks() {
     const url = safeUrl(service.url);
     const tone = ["purple", "blue", "orange", "green"].includes(service.tone) ? service.tone : "purple";
     const icon = esc(service.icon || String(service.name || "M").slice(0, 1));
-    const link = url
-      ? '<a class="launch" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">Open ↗</a>'
-      : '<span class="launch" title="This service has no URL configured">Set URL</span>';
+    const link = url ? '<a class="launch" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">Open ↗</a>' : '<span class="launch" title="This service has no URL configured">Set URL</span>';
     return '<article class="service-card"><div class="app-icon ' + tone + '">' + icon + '</div><div class="service-info"><h4>' + esc(service.name || "Service") + '</h4><p>' + esc(service.desc || "Self-hosted service") + '</p></div>' + link + '</article>';
   }).join("") || '<div class="media-empty">No media service shortcuts are configured.</div>';
 }
@@ -380,26 +479,42 @@ function tickEtas() {
   document.querySelectorAll(".download-eta[data-eta-seconds]").forEach(node => {
     const seconds = Number(node.dataset.etaSeconds);
     const started = Number(node.dataset.etaStarted);
-    if (Number.isFinite(seconds) && Number.isFinite(started)) {
-      node.textContent = "ETA " + formatEta(Math.max(0, seconds - Math.floor((now - started) / 1000)));
-    }
+    if (Number.isFinite(seconds) && Number.isFinite(started)) node.textContent = "ETA " + formatEta(Math.max(0, seconds - Math.floor((now - started) / 1000)));
   });
 }
 async function initializeMedia() {
   renderServiceLinks();
-  await loadSeerrTargets();
+  await loadArrConfig();
   if (authenticated) await refreshDownloads();
 }
 $("downloadLoginForm").addEventListener("submit", submitLogin);
 $("downloadLogout").addEventListener("click", lockMedia);
 $("mediaSearchForm").addEventListener("submit", searchMedia);
 $("mediaResults").addEventListener("click", event => {
-  const button = event.target.closest("[data-request-index]");
-  if (button && !button.disabled) requestMedia(button);
+  const select = event.target.closest("[data-select-index]");
+  if (select) chooseSearchResult(select);
+});
+$("mediaDetail").addEventListener("click", event => {
+  if (event.target.closest("[data-close-detail]")) $("mediaDetail").hidden = true;
+});
+$("mediaModeAdd").addEventListener("click", () => setMediaMode("add"));
+$("mediaModeLibrary").addEventListener("click", () => setMediaMode("library"));
+$("libraryFilter").addEventListener("input", renderLibrary);
+$("libraryServiceFilters").addEventListener("click", event => {
+  const button = event.target.closest("[data-service-filter]");
+  if (!button) return;
+  serviceFilter = button.dataset.serviceFilter;
+  renderServiceFilters(Object.values(serviceMap));
+  renderLibrary();
+});
+$("libraryRefresh").addEventListener("click", loadLibrary);
+$("libraryList").addEventListener("click", event => {
+  const button = event.target.closest("[data-library-action]");
+  if (button && !button.disabled) manageLibraryAction(button);
 });
 $("mediaRefresh").addEventListener("click", async () => {
   $("mediaRefresh").textContent = "…";
-  await loadSeerrTargets();
+  await loadArrConfig();
   await refreshDownloads();
   $("mediaRefresh").textContent = "↻";
 });
