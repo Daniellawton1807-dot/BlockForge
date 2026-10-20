@@ -1,25 +1,20 @@
-# Private downloads panel setup
+# Homebase downloads setup
 
-The dashboard calls the same-origin `/api/downloads` Pages Function. The function validates a Cloudflare Access application JWT before it contacts either downloader. Download names, queue progress, and ETAs are not returned to unauthenticated visitors. The UI refreshes this panel on the dashboard's existing 10-second interval.
+The dashboard calls the same-origin `/api/downloads` Pages Function. A Homebase username and password protect the queue. A successful sign-in creates a signed, HttpOnly, Secure, SameSite=Strict cookie scoped to the downloads API. The optional “Remember me on this device” choice makes that cookie last 30 days; without it, the browser keeps a session cookie with a 12-hour signed expiry. The password itself is never saved in the browser, local storage, frontend JavaScript, or GitHub.
 
-## Cloudflare Access
+## Homebase sign-in secrets
 
-Create a self-hosted Access application for the exact path:
+In Cloudflare Pages, open the `homebase-dash-dashboard` project, then Settings > Variables and Secrets for the production environment. Add these as encrypted secrets:
 
-```
-dashboard.danielvault.uk/api/downloads*
-```
+- `HOMEBASE_DOWNLOADS_USERNAME`: the username you will enter in the dashboard form
+- `HOMEBASE_DOWNLOADS_PASSWORD`: the matching password
+- `HOMEBASE_DOWNLOADS_SESSION_SECRET`: a randomly generated secret with at least 32 bytes
 
-Add an Allow policy for only the account that should see the queue. The dashboard page can remain public; only this API path needs the Access policy. Copy the application's Audience (AUD) tag and note the team domain.
+Do not put any of these values in the repository or paste them into frontend settings. After saving them, trigger a production deployment so the Pages Functions receive the values. The sign-in form stays locked until all three values are present.
 
-Set these Pages production variables:
+## Downloader secrets
 
-- `CF_ACCESS_TEAM_DOMAIN`: your team domain, such as `your-team.cloudflareaccess.com`
-- `CF_ACCESS_AUD`: the Audience tag for the path-scoped Access application
-
-## Downloader variables
-
-Set these in Cloudflare Pages > Settings > Variables and Secrets for the production environment. Mark credentials and API keys as encrypted secrets.
+Add these in the same production environment. Mark credentials and API keys as encrypted secrets:
 
 - `QBITTORRENT_USERNAME` (secret)
 - `QBITTORRENT_PASSWORD` (secret)
@@ -27,4 +22,6 @@ Set these in Cloudflare Pages > Settings > Variables and Secrets for the product
 - `QBITTORRENT_BASE_URL` (optional; defaults to `https://qb.danielvault.uk`)
 - `SABNZBD_BASE_URL` (optional; defaults to `https://sab.danielvault.uk`)
 
-The secrets are used only by the Pages Function. They are not added to GitHub files or sent to browser JavaScript. Until Access and the downloader credentials are configured, the panel stays disabled and does not request queue data.
+The Pages Function uses those values server-side to read qBittorrent and SABnzbd. It returns sanitized queue names, progress percentages, and ETAs only after a valid Homebase sign-in. The dashboard refreshes the queue on its existing 10-second interval.
+
+Cloudflare Access is not used by this downloads login.
