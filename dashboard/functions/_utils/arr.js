@@ -1,8 +1,10 @@
+const ARR_BRIDGE_BINDING = "ARR_BRIDGE";
+
 const ARR_SERVICES = [
-  { key: "sonarr-daniel", name: "Sonarr", type: "tv", binding: "VPC_SONARR_DANIEL", apiKey: "SONARR_DANIEL_API_KEY", port: 8989 },
-  { key: "sonarr-mum", name: "Sonarr Mum", type: "tv", binding: "VPC_SONARR_MUM", apiKey: "SONARR_MUM_API_KEY", port: 8990 },
-  { key: "sonarr-extra", name: "Sonarr Extra", type: "tv", binding: "VPC_SONARR_EXTRA", apiKey: "SONARR_EXTRA_API_KEY", port: 8991 },
-  { key: "radarr", name: "Radarr", type: "movie", binding: "VPC_RADARR", apiKey: "RADARR_API_KEY", port: 7878 }
+  { key: "sonarr-daniel", name: "Sonarr", type: "tv", apiKey: "SONARR_DANIEL_API_KEY" },
+  { key: "sonarr-mum", name: "Sonarr Mum", type: "tv", apiKey: "SONARR_MUM_API_KEY" },
+  { key: "sonarr-extra", name: "Sonarr Extra", type: "tv", apiKey: "SONARR_EXTRA_API_KEY" },
+  { key: "radarr", name: "Radarr", type: "movie", apiKey: "RADARR_API_KEY" }
 ];
 
 export class ArrError extends Error {
@@ -19,10 +21,10 @@ export function arrService(key) {
 }
 
 export function arrServiceStatus(env, service) {
-  const binding = env[service.binding];
+  const bridge = env[ARR_BRIDGE_BINDING];
   const apiKey = String(env[service.apiKey] || "").trim();
-  if (!binding || typeof binding.fetch !== "function") {
-    return { key: service.key, name: service.name, type: service.type, configured: false, code: "binding_missing", message: "Private Pages binding " + service.binding + " is not configured." };
+  if (!bridge || typeof bridge.fetch !== "function") {
+    return { key: service.key, name: service.name, type: service.type, configured: false, code: "binding_missing", message: "Private ARR bridge binding " + ARR_BRIDGE_BINDING + " is not configured." };
   }
   if (!apiKey) {
     return { key: service.key, name: service.name, type: service.type, configured: false, code: "api_key_missing", message: "Protected Pages secret " + service.apiKey + " is not configured." };
@@ -38,24 +40,36 @@ export async function arrCall(env, service, path, options = {}) {
     throw new ArrError("invalid_upstream_path", "That media operation is not supported.", 400);
   }
 
+  const method = String(options.method || "GET").toUpperCase();
+  if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    throw new ArrError("invalid_upstream_method", "That media operation is not supported.", 400);
+  }
+
   const headers = new Headers(options.headers || {});
+  headers.set("X-Homebase-Service", service.key);
   headers.set("X-Api-Key", String(env[service.apiKey]));
   headers.set("Accept", "application/json");
-  const request = new Request("http://192.168.8.150:" + service.port + "/" + normalizedPath, {
-    method: options.method || "GET",
-    headers,
-    body: options.body
-  });
+
+  let request;
+  try {
+    request = new Request("https://homebase-arr-bridge/" + normalizedPath, {
+      method,
+      headers,
+      body: method === "GET" || method === "HEAD" ? undefined : options.body
+    });
+  } catch {
+    throw new ArrError("invalid_request", "That media operation could not be prepared.", 400);
+  }
 
   let response;
   try {
-    response = await env[service.binding].fetch(request);
+    response = await env[ARR_BRIDGE_BINDING].fetch(request);
   } catch {
     throw new ArrError("service_unavailable", service.name + " is not reachable from Homebase right now.");
   }
   if (!response.ok) {
     const code = response.status === 401 || response.status === 403 ? "arr_auth_failed" : "arr_request_failed";
-    throw new ArrError(code, service.name + " returned HTTP " + response.status + ". Check its API key and configuration.", response.status === 401 ? 502 : 502);
+    throw new ArrError(code, service.name + " returned HTTP " + response.status + ". Check its API key and configuration.", 502);
   }
   if (response.status === 204) return null;
   const contentType = response.headers.get("content-type") || "";

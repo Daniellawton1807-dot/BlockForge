@@ -1,0 +1,21 @@
+name = "homebase-arr-bridge"
+main = "src/index.js"
+compatibility_date = "2026-10-20"
+workers_dev = false
+preview_urls = false
+
+[[vpc_services]]
+binding = "VPC_SONARR_DANIEL"
+service_id = "01a15918-4999-7aa2-a1b3-0727f807e89a"
+
+[[vpc_services]]
+binding = "VPC_SONARR_MUM"
+service_id = "01a15918-96de-7e92-ae01-803984f7056c"
+
+[[vpc_services]]
+binding = "VPC_SONARR_EXTRA"
+service_id = "01a15918-e2d7-7d62-ab17-98cc8cadfbb7"
+
+[[vpc_services]]
+binding = "VPC_RADARR"
+service_id = "01a15919-2937-76b2-a245-3f1dfc725909"
