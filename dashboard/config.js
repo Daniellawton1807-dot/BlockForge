@@ -9,6 +9,7 @@ window.HOMEBASE_CONFIG = {
     {name:"Sonarr Mum",desc:"Second Sonarr instance",url:"https://sonarrmum.danielvault.uk",icon:"S2",tone:"purple",group:"media"},
     {name:"Sonarr 3",desc:"Third Sonarr instance — URL to be added",url:"",icon:"S3",tone:"purple",group:"media"},
     {name:"Radarr",desc:"Movie library management",url:"https://radarr.danielvault.uk",icon:"R",tone:"blue",group:"media"},
+    {name:"Prowlarr",desc:"Indexer management — URL to be added",url:"",icon:"P",tone:"orange",group:"media"},
     {name:"Seerr",desc:"Media requests",url:"https://seerr.danielvault.uk",icon:"O",tone:"purple",group:"media"},
     {name:"SABnzbd",desc:"Usenet downloads",url:"https://sab.danielvault.uk",icon:"S",tone:"orange",group:"downloads"},
     {name:"qBittorrent",desc:"Torrent downloads",url:"https://qb.danielvault.uk",icon:"qB",tone:"green",group:"downloads"},
