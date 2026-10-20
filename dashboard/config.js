@@ -6,8 +6,8 @@ window.HOMEBASE_CONFIG = {
   refreshIntervalMs: 10000,
   services: [
     {name:"Sonarr",desc:"TV series management",url:"https://sonarr.danielvault.uk",icon:"S1",tone:"purple",group:"media"},
-    {name:"Sonarr Mum",desc:"Second Sonarr instance",url:"https://sonarrmum.danielvault.uk",icon:"S2",tone:"purple",group:"media"},
-    {name:"Sonarr 3",desc:"Sonarr Extra",url:"http://192.168.8.150:8991",icon:"S3",tone:"purple",group:"media"},
+    {name:"Sonarr Mum",desc:"Mum Sonar instance",url:"https://sonarrmum.danielvault.uk",icon:"S2",tone:"purple",group:"media"},
+    {name:"Sonarr Extra",desc:"Sonarr Extra",url:"http://192.168.8.150:8991",icon:"S3",tone:"purple",group:"media"},
     {name:"Radarr",desc:"Movie library management",url:"https://radarr.danielvault.uk",icon:"R",tone:"blue",group:"media"},
     {name:"Prowlarr",desc:"Indexer management — URL to be added",url:"http://192.168.8.150:9696",icon:"P",tone:"orange",group:"media"},
     {name:"Seerr",desc:"Media requests",url:"https://seerr.danielvault.uk",icon:"O",tone:"purple",group:"media"},
