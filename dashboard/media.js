@@ -262,7 +262,7 @@ function profileOptions(service, selectedId) {
 function formatBytes(value) {
   const bytes = Number(value);
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-  const units = ["B", "KB", "GB", "TB", "PB"];
+  const units = ["B", "KB", "MB", "GB", "TB", "PB"];
   let size = bytes;
   let index = 0;
   while (size >= 1024 && index < units.length - 1) { size /= 1024; index++; }
