@@ -10,7 +10,7 @@ export async function onRequest({ request, env }) {
     return json({ code: "login_required", error: "Sign in to use media requests." }, 401);
   }
   if (!seerrConfigured(env)) {
-    return json({ code: "seerr_setup_required", error: "Set SEERR_API_KEY as a Secret in the Cloudflare Pages Production environment." }, 503);
+    return json({ code: "seerr_setup_required", error: "Set SEERR_API_KEY as a Secret in Cloudflare Pages Production." }, 503);
   }
 
   try {
