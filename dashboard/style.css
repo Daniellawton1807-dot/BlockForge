@@ -471,8 +471,8 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
 .downloads-head { display: flex; align-items: end; justify-content: space-between; gap: 14px; margin-bottom: 13px; }
 .downloads-head h3 { margin: 3px 0 0; font-size: 20px; letter-spacing: -.5px; }
 .download-summary { padding: 7px 10px; border: 1px solid var(--line); border-radius: 99px; color: #aab7cc; font-size: 10px; white-space: nowrap; }
-.download-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 12px; }
-.download-card { min-width: 0; padding: 15px 16px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(145deg, #151e2e, #111725); }
+.download-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 12px; max-width: 1200px; margin-inline: auto; }
+.download-card { width: 100%; max-width: 560px; min-width: 0; justify-self: center; padding: 15px 16px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(145deg, #151e2e, #111725); }
 .download-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .download-source { color: #a99aff; font-size: 10px; font-weight: 750; letter-spacing: .5px; }
 .download-state { max-width: 65%; overflow: hidden; color: #8d9bb3; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
