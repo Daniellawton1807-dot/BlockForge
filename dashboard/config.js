@@ -1,16 +1,19 @@
-/* Copy this object into config.js and replace each URL with your own LAN or secure access URL.
+/* Homebase service shortcuts. URLs use the existing Cloudflare Vault published applications.
+   The third Sonarr route was not visible in the supplied screenshot, so its URL is intentionally blank.
    Keep API keys and passwords out of this public static file. */
 window.HOMEBASE_CONFIG = {
-  metricsEndpoint: "", // e.g. a secured HTTPS endpoint served by a monitoring agent on your server
+  metricsEndpoint: "",
   refreshIntervalMs: 10000,
   services: [
-    {name:"Sonarr",desc:"TV series management",url:"",icon:"S",tone:"purple",group:"media"},
-    {name:"Radarr",desc:"Movie library management",url:"",icon:"R",tone:"blue",group:"media"},
-    {name:"Prowlarr",desc:"Indexer management",url:"",icon:"P",tone:"orange",group:"media"},
-    {name:"qBittorrent",desc:"Torrent downloads",url:"",icon:"qB",tone:"green",group:"downloads"},
-    {name:"SABnzbd",desc:"Usenet downloads",url:"",icon:"S",tone:"orange",group:"downloads"},
-    {name:"Jellyfin",desc:"Your media library",url:"",icon:"J",tone:"blue",group:"media"},
-    {name:"Overseerr",desc:"Media requests",url:"",icon:"O",tone:"purple",group:"media"},
-    {name:"CasaOS",desc:"Server app management",url:"",icon:"C",tone:"green",group:"system"}
+    {name:"Sonarr",desc:"TV series management",url:"https://sonarr.danielvault.uk",icon:"S1",tone:"purple",group:"media"},
+    {name:"Sonarr Mum",desc:"Second Sonarr instance",url:"https://sonarrmum.danielvault.uk",icon:"S2",tone:"purple",group:"media"},
+    {name:"Sonarr 3",desc:"Third Sonarr instance — URL to be added",url:"",icon:"S3",tone:"purple",group:"media"},
+    {name:"Radarr",desc:"Movie library management",url:"https://radarr.danielvault.uk",icon:"R",tone:"blue",group:"media"},
+    {name:"Seerr",desc:"Media requests",url:"https://seerr.danielvault.uk",icon:"O",tone:"purple",group:"media"},
+    {name:"SABnzbd",desc:"Usenet downloads",url:"https://sab.danielvault.uk",icon:"S",tone:"orange",group:"downloads"},
+    {name:"qBittorrent",desc:"Torrent downloads",url:"https://qb.danielvault.uk",icon:"qB",tone:"green",group:"downloads"},
+    {name:"Jellystat",desc:"Jellyfin statistics",url:"https://jellystat.danielvault.uk",icon:"J",tone:"blue",group:"media"},
+    {name:"Jellyfin",desc:"Your media library",url:"https://jellyfin.danielvault.uk",icon:"J",tone:"blue",group:"media"},
+    {name:"CasaOS",desc:"Server app management",url:"https://casa.danielvault.uk",icon:"C",tone:"green",group:"system"}
   ]
 };
