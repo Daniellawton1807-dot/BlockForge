@@ -21,10 +21,11 @@ export async function onRequest({ request, env }) {
     return json({ sonarr, radarr });
   } catch (error) {
     const code = error instanceof SeerrError ? error.code : "seerr_unavailable";
-    console.warn("[Homebase Seerr] Configuration request failed (" + code + ").");
+    const detail = error instanceof SeerrError ? error.message : "Could not load Seerr destinations.";
+    console.warn("[Homebase Seerr] Configuration request failed (" + code + "): " + detail);
     return json({
       code,
-      error: error instanceof SeerrError ? error.message : "Could not load Seerr destinations."
+      error: detail
     }, error instanceof SeerrError ? error.status : 502);
   }
 }
