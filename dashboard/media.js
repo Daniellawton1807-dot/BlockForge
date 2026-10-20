@@ -84,6 +84,10 @@ function setSeerrUnavailable(message) {
   $("mediaSearch").disabled = true;
   $("tvTargetSelect").disabled = true;
   $("movieTargetSelect").disabled = true;
+  $("mediaSearchMessage").textContent = message.includes("SEERR_API_KEY")
+    ? "Add the protected SEERR_API_KEY secret to enable search and requests."
+    : "Media requests are unavailable while Seerr is disconnected.";
+  $("mediaSearchMessage").className = "media-status is-error";
 }
 function populateTargets(data) {
   targetMap = Object.create(null);
@@ -155,7 +159,7 @@ async function loadSeerrTargets() {
     showUnlocked();
     if (!result.response.ok) {
       if (result.data?.code === "seerr_setup_required") {
-        setSeerrUnavailable("Add SEERR_API_KEY as a Secret in Cloudflare Pages → Pages project → Settings → Variables and Secrets (Production), then redeploy. Do not put the key in GitHub.");
+        setSeerrUnavailable("Set SEERR_API_KEY as a Secret in Cloudflare Pages Production, then redeploy. Keep it out of GitHub.");
         return true;
       }
       setSeerrUnavailable(result.data?.error || "Could not connect to Seerr. Check its URL and API key in Cloudflare Pages.");
