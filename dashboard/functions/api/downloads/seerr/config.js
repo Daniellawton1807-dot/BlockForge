@@ -20,8 +20,10 @@ export async function onRequest({ request, env }) {
     ]);
     return json({ sonarr, radarr });
   } catch (error) {
+    const code = error instanceof SeerrError ? error.code : "seerr_unavailable";
+    console.warn("[Homebase Seerr] Configuration request failed (" + code + ").");
     return json({
-      code: error instanceof SeerrError ? error.code : "seerr_unavailable",
+      code,
       error: error instanceof SeerrError ? error.message : "Could not load Seerr destinations."
     }, error instanceof SeerrError ? error.status : 502);
   }
