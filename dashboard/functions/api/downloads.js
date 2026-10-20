@@ -1,104 +1,7 @@
+import { loginConfigured, validSession } from "../_utils/downloads-auth.js";
 const DEFAULT_QBITTORRENT_URL = "https://qb.danielvault.uk";
 const DEFAULT_SABNZBD_URL = "https://sab.danielvault.uk";
 const MAX_ITEMS_PER_SOURCE = 30;
-let accessKeysCache = { issuer: "", expiresAt: 0, keys: [] };
-
-const json = (body, status = 200) => new Response(JSON.stringify(body), {
-  status,
-  headers: {
-    "content-type": "application/json; charset=utf-8",
-    "cache-control": "no-store",
-    "x-content-type-options": "nosniff"
-  }
-});
-
-function accessIssuer(value) {
-  const input = String(value || "").trim();
-  if (!input) return null;
-
-  try {
-    const url = new URL(input.includes("://") ? input : "https://" + input);
-    if (url.protocol !== "https:" || url.username || url.password
-      || (url.pathname !== "/" && url.pathname !== "") || url.search || url.hash) return null;
-    return url.origin;
-  } catch {
-    return null;
-  }
-}
-
-function decodeBase64Url(value) {
-  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
-  const binary = atob(padded);
-  return Uint8Array.from(binary, character => character.charCodeAt(0));
-}
-
-function decodeJwtJson(value) {
-  return JSON.parse(new TextDecoder().decode(decodeBase64Url(value)));
-}
-
-async function accessKeys(issuer) {
-  if (accessKeysCache.issuer === issuer && accessKeysCache.expiresAt > Date.now()) {
-    return accessKeysCache.keys;
-  }
-
-  const response = await fetch(issuer + "/cdn-cgi/access/certs", {
-    headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(5000),
-    redirect: "manual"
-  });
-  if (!response.ok || response.status >= 300) throw new Error("Unable to load Access signing keys.");
-
-  const document = await response.json();
-  if (!Array.isArray(document?.keys)) throw new Error("Invalid Access signing key response.");
-
-  accessKeysCache = {
-    issuer,
-    expiresAt: Date.now() + 5 * 60 * 1000,
-    keys: document.keys.filter(key => key?.kty === "RSA" && key?.kid && key?.n && key?.e)
-  };
-  return accessKeysCache.keys;
-}
-
-async function validAccessToken(token, issuer, audience) {
-  if (!token || token.length > 8192) return false;
-
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return false;
-
-    const header = decodeJwtJson(parts[0]);
-    const claims = decodeJwtJson(parts[1]);
-    if (header.alg !== "RS256" || !header.kid) return false;
-
-    const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-    const now = Math.floor(Date.now() / 1000);
-    if (claims.iss !== issuer || !aud.includes(audience)
-      || !Number.isFinite(Number(claims.exp)) || Number(claims.exp) <= now
-      || (claims.nbf != null && Number(claims.nbf) > now + 30)) return false;
-
-    const jwk = (await accessKeys(issuer)).find(key => key.kid === header.kid);
-    if (!jwk) return false;
-
-    const key = await crypto.subtle.importKey(
-      "jwk",
-      jwk,
-      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-      false,
-      ["verify"]
-    );
-    const signedContent = new TextEncoder().encode(parts[0] + "." + parts[1]);
-    return await crypto.subtle.verify(
-      "RSASSA-PKCS1-v1_5",
-      key,
-      decodeBase64Url(parts[2]),
-      signedContent
-    );
-  } catch {
-    return false;
-  }
-}
-
 function serviceRoot(value, fallback) {
   const input = String(value || fallback).trim();
   const root = new URL(input);
@@ -250,27 +153,18 @@ async function sabItems(env) {
 export async function onRequest({ env, request }) {
   if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
 
-  const issuer = accessIssuer(env.CF_ACCESS_TEAM_DOMAIN);
-  const audience = String(env.CF_ACCESS_AUD || "").trim();
-  if (!issuer || !audience) {
+  if (!loginConfigured(env)) {
     return json({
-      code: "secure_setup_required",
-      error: "Downloads are disabled until Cloudflare Access is configured."
+      code: "login_setup_required",
+      error: "Dashboard downloads login has not been configured."
     }, 503);
   }
 
-  const token = request.headers.get("Cf-Access-Jwt-Assertion");
-  if (!token) {
+  if (!await validSession(request, env)) {
     return json({
-      code: "access_required",
-      error: "Sign in through Cloudflare Access to view downloads."
+      code: "login_required",
+      error: "Sign in to view download details."
     }, 401);
-  }
-  if (!await validAccessToken(token, issuer, audience)) {
-    return json({
-      code: "access_denied",
-      error: "Cloudflare Access could not verify this request."
-    }, 403);
   }
 
   const results = await Promise.allSettled([qbitItems(env), sabItems(env)]);
