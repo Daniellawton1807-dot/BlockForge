@@ -538,7 +538,7 @@ function openMediaDeleteConfirmation(button) {
   const sharedNames = button.dataset.sharedEpisodeNames || "";
   $("mediaDeleteConfirmTitle").textContent = isEpisode ? "Delete " + title + "?" : "Remove " + title + " and its file?";
   $("mediaDeleteConfirmMessage").textContent = isEpisode
-    ? "This permanently deletes the episode file from storage. The episode record will remain in " + item.serviceName + "."
+    ? "This permanently deletes the episode file for " + item.title + " from storage. The episode record will remain in " + item.serviceName + "."
     : "This removes the movie from Radarr and permanently deletes its movie file from storage. This cannot be undone.";
   $("mediaDeleteConfirmPath").textContent = filePath;
   $("mediaDeleteConfirmPath").hidden = !filePath;
