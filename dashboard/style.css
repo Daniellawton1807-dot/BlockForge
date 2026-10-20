@@ -460,7 +460,7 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
 
 .workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 18px;
   margin: 0 0 31px;
