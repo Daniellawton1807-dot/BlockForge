@@ -872,11 +872,16 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
 .library-filter-chip.is-active { border-color: #7469c9; background: #252344; color: #e2deff; }
 .media-library-list {
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  height: min(62vh, 680px);
+  min-height: 0;
   max-height: min(62vh, 680px);
   gap: 8px;
   overflow-y: auto;
   padding: 1px 7px 1px 1px;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   scrollbar-color: #465471 #111a29;
   scrollbar-width: thin;
 }
@@ -896,7 +901,7 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
 @media (max-width: 680px) {
   .media-library-toolbar { align-items: stretch; flex-direction: column; }
   .media-library-toolbar .media-search { max-width: none; }
-  .media-library-list { max-height: min(54vh, 540px); }
+  .media-library-list { height: min(54vh, 540px); max-height: min(54vh, 540px); }
   .media-library-card { grid-template-columns: 42px minmax(0,1fr); align-items: start; }
   .media-library-art { width: 42px; height: 59px; }
   .media-library-actions { grid-column: 1 / -1; grid-template-columns: repeat(2,minmax(0,1fr)); }
