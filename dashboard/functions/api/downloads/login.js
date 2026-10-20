@@ -3,7 +3,7 @@ import { json, loginConfigured, readJsonBody, secretMatches, sessionCookie, vali
 export async function onRequest({ request, env }) {
   if (request.method !== "POST") return json({ code: "method_not_allowed", error: "Method not allowed." }, 405, { allow: "POST" });
   if (!validRequestOrigin(request)) return json({ code: "invalid_origin", error: "Request origin could not be verified." }, 403);
-  if (!/^application\\/json(?:;|$)/i.test(request.headers.get("content-type") || "")) {
+  if (!/^application\/json(?:;|$)/i.test(request.headers.get("content-type") || "")) {
     return json({ code: "invalid_content_type", error: "Expected a JSON request." }, 415);
   }
   if (!loginConfigured(env)) {
