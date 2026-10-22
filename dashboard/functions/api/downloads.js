@@ -113,6 +113,7 @@ async function qbitItems(env) {
       const eta = Number(torrent.eta);
       return {
         id: "qbittorrent-" + index,
+        torrentHash: String(torrent.hash || ""),
         source: "qBittorrent",
         name: displayName(torrent.name),
         category: mediaType(torrent.category),
@@ -152,6 +153,7 @@ async function sabItems(env) {
     .slice(0, MAX_ITEMS_PER_SOURCE)
     .map((slot, index) => ({
       id: "sabnzbd-" + index,
+      nzoId: String(slot.nzo_id || ""),
       source: "SABnzbd",
       name: displayName(slot.filename),
       category: mediaType(slot.cat),
@@ -163,7 +165,7 @@ async function sabItems(env) {
 }
 
 export async function onRequest({ env, request }) {
-  if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
+  if (!["GET","POST"].includes(request.method)) return json({ error: "Method not allowed" }, 405);
 
   if (!loginConfigured(env)) {
     return json({
@@ -177,6 +179,64 @@ export async function onRequest({ env, request }) {
       code: "login_required",
       error: "Sign in to view download details."
     }, 401);
+  }
+
+  if (request.method === "POST") {
+    let body;
+    try { body = await request.json(); } catch { return json({error:"Invalid request body."},400); }
+    const action = String(body?.action || "");
+    const source = String(body?.source || "");
+    const id = String(body?.id || "");
+    const name = displayName(body?.name || "");
+    if (!["pause","remove","replace"].includes(action) || !["qBittorrent","SABnzbd"].includes(source) || !name) return json({error:"Invalid download action."},400);
+    try {
+      if (source === "qBittorrent") {
+        const username=String(env.QBITTORRENT_USERNAME||""), password=String(env.QBITTORRENT_PASSWORD||"");
+        if(!username||!password) throw new Error("qBittorrent credentials are not configured.");
+        const root=serviceRoot(env.QBITTORRENT_BASE_URL,DEFAULT_QBITTORRENT_URL);
+        const login=await fetch(apiUrl(root,"api/v2/auth/login"),{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded",origin:root.origin,referer:root.href},body:new URLSearchParams({username,password}).toString(),signal:AbortSignal.timeout(7000),redirect:"manual"});
+        const cookie=login.headers.get("set-cookie")||"",sid=cookie.match(/(?:^|[,;\\s])SID=([^;,\\s]+)/)?.[1],loginText=await login.text().catch(()=>"");
+        if(!login.ok||!sid||!/^Ok\\.?$/i.test(loginText.trim())) throw new Error("qBittorrent login failed.");
+        const hash=String(body?.torrentHash||"");
+        if(!/^[a-f0-9]{40}$/i.test(hash)) throw new Error("Missing torrent identifier. Refresh the queue and try again.");
+        const command=action==="pause"?"api/v2/torrents/pause":"api/v2/torrents/delete";
+        const params=action==="pause"?{hashes:hash}:{hashes:hash,deleteFiles:"true"};
+        const response=await fetch(apiUrl(root,command),{method:"POST",headers:{cookie:"SID="+sid,origin:root.origin,referer:root.href,"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams(params).toString(),signal:AbortSignal.timeout(7000),redirect:"manual"});
+        if(!response.ok) throw new Error("qBittorrent rejected the action.");
+      } else {
+        const apiKey=String(env.SABNZBD_API_KEY||"");
+        if(!apiKey) throw new Error("SABnzbd API key is not configured.");
+        const root=serviceRoot(env.SABNZBD_BASE_URL,DEFAULT_SABNZBD_URL), url=apiUrl(root,"api");
+        url.searchParams.set("mode",action==="pause"?"queue":"queue");
+        url.searchParams.set("name",action==="pause"?"pause":"delete");
+        url.searchParams.set("output","json"); url.searchParams.set("apikey",apiKey);
+        if(action!=="pause") {
+          const nzoId=String(body?.nzoId||"");
+          if(!/^S?\w+-[a-f0-9]{8,}$/i.test(nzoId)) throw new Error("Missing SABnzbd job identifier. Refresh the queue and try again.");
+          url.searchParams.set("value",nzoId); url.searchParams.set("del_files","1");
+        }
+        await readJson(url);
+      }
+      if(action==="replace") {
+        const candidates=arrServices().filter(service=>arrServiceStatus(env,service).configured);
+        let triggered=false;
+        for(const service of candidates) {
+          try {
+            if(service.type==="tv") {
+              const series=await arrCall(env,service,"api/v3/series");
+              const match=(Array.isArray(series)?series:[]).find(item=>String(item.title||"").toLowerCase()===name.toLowerCase());
+              if(match){await arrCall(env,service,"api/v3/command",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:"SeriesSearch",seriesId:Number(match.id)})});triggered=true;break;}
+            } else {
+              const movies=await arrCall(env,service,"api/v3/movie");
+              const match=(Array.isArray(movies)?movies:[]).find(item=>String(item.title||"").toLowerCase()===name.toLowerCase());
+              if(match){await arrCall(env,service,"api/v3/command",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:"MoviesSearch",movieIds:[Number(match.id)]})});triggered=true;break;}
+            }
+          } catch {}
+        }
+        if(!triggered) return json({ok:true,message:"Download removed, but no matching monitored title was found in Sonarr/Radarr to rescan."});
+      }
+      return json({ok:true,message:action==="pause"?"Download paused.":action==="replace"?"Download removed and a replacement search was queued.":"Download removed and downloaded files deleted."});
+    } catch(error) { return json({error:error.message||"Download action failed."},502); }
   }
 
   const results = await Promise.allSettled([qbitItems(env), sabItems(env)]);
