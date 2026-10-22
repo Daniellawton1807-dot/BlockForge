@@ -829,7 +829,7 @@ function tickEtas() {
 async function initializeMedia() {
   renderServiceLinks();
   await loadArrConfig();
-  if (authenticated) { await refreshDownloads(); await refreshRecentMedia(); }
+  if (authenticated) { void refreshDownloads(); void refreshRecentMedia(); }
 }
 $("downloadLoginForm").addEventListener("submit", submitLogin);
 $("downloadLogout").addEventListener("click", lockMedia);
@@ -890,13 +890,14 @@ $("interactiveReleaseDialog").addEventListener("click", event => {
   const grab = event.target.closest("[data-grab-release]");
   if (grab && !grab.disabled) grabInteractiveRelease(grab);
 });
-setInterval(refreshRecentMedia, 60000);
+setInterval(() => { if (authenticated) refreshRecentMedia(); }, 300000);
 $("mediaRefresh").addEventListener("click", async () => {
   $("mediaRefresh").textContent = "…";
   await loadArrConfig();
-  await refreshDownloads();
+  void refreshDownloads();
+  void refreshRecentMedia();
   $("mediaRefresh").textContent = "↻";
 });
 initializeMedia();
-setInterval(() => { if (authenticated) refreshDownloads(); }, 3000);
+setInterval(() => { if (authenticated) refreshDownloads(); }, 10000);
 setInterval(tickEtas, 1000);
