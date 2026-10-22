@@ -1143,3 +1143,48 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
   .recent-media-item { gap: 10px; }
   .recent-media-poster { flex-basis: 46px; width: 46px; height: 64px; }
 }
+
+
+/* Homebase storage page */
+.storage-hero { margin-bottom: 20px; }
+.storage-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin:18px 0 28px; }
+.storage-section-head { margin-top: 28px; }
+.storage-list { display:grid; gap:12px; }
+.storage-drive-card { display:flex; align-items:flex-start; gap:15px; padding:18px; border:1px solid var(--line); border-radius:15px; background:linear-gradient(135deg,#121b2c,#101725); min-width:0; }
+.storage-drive-icon { display:grid; place-items:center; flex:none; width:45px; height:45px; border:1px solid #3c3a67; border-radius:13px; background:#211f3c; color:#b4a8ff; font-size:23px; }
+.storage-drive-main { flex:1; min-width:0; }
+.storage-drive-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.storage-drive-top h4 { margin:0; font-size:15px; overflow-wrap:anywhere; }
+.storage-drive-top p { margin:4px 0 0; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+.storage-drive-state { flex:none; padding:5px 9px; border:1px solid var(--line); border-radius:999px; font-size:10px; font-weight:750; }
+.storage-drive-state.is-mounted { border-color:#2b715a; background:#15362f; color:#75e3b5; }
+.storage-drive-state.is-missing { border-color:#70434a; background:#3a222b; color:#ff9ba5; }
+.storage-capacity-line { display:flex; justify-content:space-between; gap:12px; margin:15px 0 7px; color:var(--muted); font-size:11px; }
+.storage-capacity-line strong { color:var(--text); }
+.storage-drive-facts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; margin-top:13px; }
+.storage-drive-facts span { min-width:0; padding:9px; border:1px solid #263247; border-radius:9px; background:#0e1523; }
+.storage-drive-facts small,.storage-drive-facts strong { display:block; }
+.storage-drive-facts small { color:#8390aa; font-size:10px; }
+.storage-drive-facts strong { margin-top:3px; color:#e6ecfa; font-size:12px; overflow-wrap:anywhere; }
+.storage-io-line { margin-top:12px; color:#9b8eff; font-size:11px; overflow-wrap:anywhere; }
+.storage-restart-panel { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-top:25px; padding:20px; border:1px solid #5b3540; border-radius:15px; background:linear-gradient(120deg,#251821,#171725); }
+.storage-restart-panel h3 { margin:4px 0 7px; font-size:18px; }
+.storage-restart-panel p { max-width:690px; margin:0 0 8px; color:#aeb8ca; font-size:12px; }
+.storage-restart-status { color:#e7bd80 !important; }
+.storage-restart-button { flex:none; padding:11px 15px; border:1px solid #82434d; border-radius:10px; background:#4b252e; color:#ffdce0; font:inherit; font-size:12px; font-weight:750; cursor:pointer; }
+.storage-restart-button:hover:not(:disabled) { background:#63303b; }
+.storage-restart-button:disabled { opacity:.65; cursor:wait; }
+.storage-note { margin-top:15px; padding:15px 17px; border:1px solid var(--line); border-radius:13px; background:#111827; }
+.storage-note strong { font-size:12px; }
+.storage-note p { margin:5px 0 0; color:var(--muted); font-size:11px; line-height:1.6; }
+@media(max-width:700px) {
+ .storage-summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+ .storage-summary .metric:last-child { grid-column:1/-1; }
+ .storage-drive-card { padding:13px; gap:10px; }
+ .storage-drive-icon { width:36px; height:36px; border-radius:10px; font-size:18px; }
+ .storage-drive-top { flex-direction:column; gap:8px; }
+ .storage-drive-facts { gap:6px; }
+ .storage-drive-facts span { padding:7px; }
+ .storage-restart-panel { align-items:stretch; flex-direction:column; padding:16px; }
+ .storage-restart-button { width:100%; }
+}
