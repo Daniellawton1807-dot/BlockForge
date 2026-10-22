@@ -31,6 +31,7 @@ let pendingMediaDelete = null;
 let downloadView = "active";
 let latestDownloadItems = [];
 let latestDownloadSources = [];
+let ignoredDownloadIds = new Set();
 
 function safeUrl(value) {
   try {
@@ -63,12 +64,13 @@ function downloadCard(item, updatedAt) {
   const hasEta = item.etaSeconds !== null && item.etaSeconds !== undefined && Number.isFinite(Number(item.etaSeconds)) && lifecycle === "downloading";
   const seconds = hasEta ? Math.max(0, Math.floor(Number(item.etaSeconds))) : null;
   const eta = hasEta ? formatEta(seconds) : lifecycle === "importing" ? "Waiting for import" : lifecycle === "imported" ? "Complete" : lifecycle === "failed" ? "Failed" : "In progress";
-  const etaLabel = hasEta
-    ? '<span class="download-eta" data-eta-seconds="' + seconds + '" data-eta-started="' + updatedAt + '">ETA ' + esc(eta) + '</span>'
-    : '<span>' + esc(eta) + '</span>';
+  const etaLabel = hasEta ? '<span class="download-eta" data-eta-seconds="' + seconds + '" data-eta-started="' + updatedAt + '">ETA ' + esc(eta) + '</span>' : '<span>' + esc(eta) + '</span>';
   const title = String(item.name || "Untitled download");
-  const eventDetail = item.eventDetail ? '<p class="download-event-detail">' + esc(item.eventDetail) + '</p>' : "";
-  return '<article class="download-card lifecycle-' + lifecycle + '"><div class="download-card-header"><span class="download-source">' + esc(item.source || "Downloader") + '</span><span class="download-state lifecycle-label">' + label + '</span></div><h4 class="download-name" title="' + esc(title) + '">' + esc(title) + '</h4><div class="download-progress" role="progressbar" aria-label="' + esc(title) + ' progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(progress) + '"><span style="width:' + progress + '%"></span></div><div class="download-facts"><span>' + esc(item.category || "Download") + '</span><strong>' + Math.round(progress) + '%</strong>' + etaLabel + '</div>' + eventDetail + '</article>';
+  const actions = lifecycle === "downloading" || lifecycle === "importing"
+    ? '<div class="download-actions"><button class="download-action-pause" type="button" data-download-action="pause" data-download-id="' + esc(item.id) + '">Ⅱ Pause</button><div class="download-more-wrap"><button class="download-action-more" type="button" aria-label="Download options" aria-expanded="false" data-download-menu="' + esc(item.id) + '">×</button><div class="download-action-menu" hidden><button type="button" data-download-action="remove" data-download-id="' + esc(item.id) + '">Remove download</button><button type="button" data-download-action="replace" data-download-id="' + esc(item.id) + '">Remove and rescan</button><button type="button" data-download-action="ignore" data-download-id="' + esc(item.id) + '">Ignore download</button></div></div></div>'
+    : '<div class="download-actions download-actions-placeholder" aria-hidden="true"></div>';
+  const errorDetail = item.eventDetail ? '<p class="download-event-detail">' + esc(item.eventDetail) + '</p>' : "";
+  return '<article class="download-card lifecycle-' + lifecycle + '" data-card-download="' + esc(item.id) + '"><div class="download-card-header"><span class="download-source">' + esc(item.source || "Downloader") + '</span><span class="download-state lifecycle-label">' + label + '</span></div><h4 class="download-name" title="' + esc(title) + '">' + esc(title) + '</h4><div class="download-progress" role="progressbar" aria-label="' + esc(title) + ' progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(progress) + '"><span style="width:' + progress + '%"></span></div><div class="download-facts"><span>' + esc(item.category || "Download") + '</span><strong>' + Math.round(progress) + '%</strong>' + etaLabel + '</div>' + actions + errorDetail + '</article>';
 }
 async function refreshRecentMedia(){
  const list=$("recentMediaList");
@@ -194,7 +196,7 @@ function setDownloadView(view) {
 function renderDownloads(data) {
   latestDownloadItems = Array.isArray(data.items) ? data.items : [];
   latestDownloadSources = Array.isArray(data.sources) ? data.sources : [];
-  const activeItems = latestDownloadItems.filter(item => !["imported","failed"].includes(item.lifecycle));
+  const activeItems = latestDownloadItems.filter(item => !["imported","failed"].includes(item.lifecycle) && !ignoredDownloadIds.has(String(item.id)));
   const completedItems = latestDownloadItems.filter(item => ["imported","failed"].includes(item.lifecycle))
     .sort((a,b) => Date.parse(b.eventDate || 0) - Date.parse(a.eventDate || 0)).slice(0,5);
   const items = downloadView === "active" ? activeItems : completedItems;
@@ -859,6 +861,33 @@ $("downloadLoginForm").addEventListener("submit", submitLogin);
 $("downloadLogout").addEventListener("click", lockMedia);
 $("downloadTabActive").addEventListener("click", () => setDownloadView("active"));
 $("downloadTabCompleted").addEventListener("click", () => setDownloadView("completed"));
+$("downloadList").addEventListener("click", async event => {
+  const menuButton=event.target.closest("[data-download-menu]");
+  if(menuButton){
+    const card=menuButton.closest(".download-card");
+    const menu=card?.querySelector(".download-action-menu");
+    if(menu){const opening=menu.hidden;document.querySelectorAll(".download-action-menu").forEach(node=>node.hidden=true);document.querySelectorAll("[data-download-menu]").forEach(node=>node.setAttribute("aria-expanded","false"));menu.hidden=!opening;menuButton.setAttribute("aria-expanded",String(opening));}
+    return;
+  }
+  const button=event.target.closest("[data-download-action]");
+  if(!button)return;
+  const action=button.dataset.downloadAction,id=String(button.dataset.downloadId||"");
+  const item=latestDownloadItems.find(entry=>String(entry.id)===id);
+  if(!item)return;
+  if(action==="ignore"){ignoredDownloadIds.add(id);renderDownloads({items:latestDownloadItems,sources:latestDownloadSources});return;}
+  button.disabled=true;button.textContent=action==="pause"?"Pausing…":action==="replace"?"Rescanning…":"Removing…";
+  try{
+    const response=await fetch(endpoints.queue,{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"content-type":"application/json"},body:JSON.stringify({action,source:item.source,id:item.id,name:item.name,torrentHash:item.torrentHash,nzoId:item.nzoId})});
+    const result=await response.json().catch(()=>null);
+    if(response.status===401){showLogin("Your Homebase sign-in expired. Sign in again to continue.");return;}
+    if(!response.ok)throw new Error(result?.error||"Download action failed.");
+    if(result?.message) $("downloadSummary").textContent=result.message;
+    if(action!=="pause") ignoredDownloadIds.add(id);
+    await refreshDownloads();
+  }catch(error){$("downloadSummary").textContent=error.message||"Download action failed.";button.disabled=false;button.textContent=action==="pause"?"Ⅱ Pause":action==="replace"?"Remove and rescan":"Remove download";}
+});
+document.addEventListener("click",event=>{if(!event.target.closest(".download-more-wrap"))document.querySelectorAll(".download-action-menu").forEach(node=>node.hidden=true);});
+
 $("mediaSearchForm").addEventListener("submit", searchMedia);
 $("mediaResults").addEventListener("click", event => {
   const select = event.target.closest("[data-select-index]");
