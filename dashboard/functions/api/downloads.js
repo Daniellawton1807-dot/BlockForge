@@ -195,7 +195,7 @@ export async function onRequest({ env, request }) {
     const source = String(body?.source || "");
     const id = String(body?.id || "");
     const name = displayName(body?.name || "");
-    if (!["pause","remove","replace"].includes(action) || !["qBittorrent","SABnzbd"].includes(source) || !name) return json({error:"Invalid download action."},400);
+    if (!["pause","resume","remove","replace"].includes(action) || !["qBittorrent","SABnzbd"].includes(source) || !name) return json({error:"Invalid download action."},400);
     try {
       if (source === "qBittorrent") {
         const username=String(env.QBITTORRENT_USERNAME||""), password=String(env.QBITTORRENT_PASSWORD||"");
