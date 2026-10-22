@@ -247,7 +247,39 @@ export async function onRequest({ env, request }) {
                 const title=normalize(item.title);
                 return title && (title===wanted || title.includes(wanted) || wanted.includes(title));
               });
+              if(match) {
+                // A series-level search searches every missing episode. Only
+                // queue EpisodeSearch when the download name identifies one episode.
+                const episodeCode=String(name).match(/\\bS(\\d{1,2})\\s*E(\\d{1,3})\\b/i)
+                  || String(name).match(/\\b(\\d{1,2})x(\\d{1,3})\\b/i);
+                const episodeTitle=normalize(String(name)
+                  .replace(/\\bS\\d{1,2}\\s*E\\d{1,3}\\b/ig," ")
+                  .replace(/\\b\\d{1,2}x\\d{1,3}\\b/ig," ")
+                  .replace(/\\b(19|20)\\d{2}\\b/g," ")
+                  .replace(new RegExp(String(match.title||"").replace(/[.*+?^\\$\\{\\}()|[\\]\\\\]/g,"\\\\            if(service.type==="tv") {
+              const series=await arrCall(env,service,"api/v3/series");
+              const match=(Array.isArray(series)?series:[]).find(item=>{
+                const title=normalize(item.title);
+                return title && (title===wanted || title.includes(wanted) || wanted.includes(title));
+              });
               if(match) matches.push({service,match});
+            } else {"),"ig")," "));
+                const episodes=await arrCall(env,service,"api/v3/episode?seriesId="+Number(match.id));
+                if(Array.isArray(episodes)) {
+                  let episodeMatches=[];
+                  if(episodeCode) {
+                    const seasonNumber=Number(episodeCode[1]), episodeNumber=Number(episodeCode[2]);
+                    episodeMatches=episodes.filter(ep=>Number(ep.seasonNumber)===seasonNumber&&Number(ep.episodeNumber)===episodeNumber);
+                  }
+                  if(!episodeMatches.length && episodeTitle.length>=4) {
+                    episodeMatches=episodes.filter(ep=>{
+                      const title=normalize(ep.title);
+                      return title && (title===episodeTitle || title.includes(episodeTitle) || episodeTitle.includes(title));
+                    });
+                  }
+                  if(episodeMatches.length) matches.push({service,match,episodes:episodeMatches});
+                }
+              }
             } else {
               const movies=await arrCall(env,service,"api/v3/movie");
               const match=(Array.isArray(movies)?movies:[]).find(item=>{
@@ -260,17 +292,18 @@ export async function onRequest({ env, request }) {
         }
         if(!matches.length) {
           const detail=failures.length ? " Checked instances: " + failures.join("; ").slice(0,500) : "";
-          return json({ok:true,searchQueued:false,message:"Download removed, but no matching monitored title was found in Sonarr/Radarr." + detail});
+          return json({ok:true,searchQueued:false,message:"Download removed, but no specific matching episode or movie was found in Sonarr/Radarr. This action will not queue a whole-series search." + detail});
         }
         const queued=[];
         const queueErrors=[];
-        for(const {service,match} of matches) {
+        for(const entry of matches) {
           try {
             const command=service.type==="tv"
-              ? {name:"SeriesSearch",seriesId:Number(match.id)}
+              ? {name:"EpisodeSearch",episodeIds:(entry.episodes||[]).map(ep=>Number(ep.id))}
               : {name:"MoviesSearch",movieIds:[Number(match.id)]};
+            const {service,match}=entry;
             await arrCall(env,service,"api/v3/command",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(command)});
-            queued.push(service.name);
+            queued.push(service.name + (service.type==="tv" ? " (" + entry.episodes.length + " episode" + (entry.episodes.length===1?"":"s") + ")" : ""));
           } catch(error) { queueErrors.push(service.name + ": " + (error?.message || "search queue failed")); }
         }
         if(!queued.length) {
