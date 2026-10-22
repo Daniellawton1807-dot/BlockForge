@@ -650,18 +650,27 @@ async function runLibraryDetailAction(button, confirmedDelete = false) {
     if (action === "removeEpisode" || action === "removeMovie") {
       button.textContent = "Removed ✓";
       button.classList.add("is-complete");
+      if (status) {
+        status.textContent = action === "removeEpisode" ? "Episode file removed successfully. Refreshing episode counts…" : "Movie file removed successfully. Refreshing library…";
+        status.className = "media-status is-success";
+      }
+      // Refresh the library first, then reopen the current title so episode-file
+      // flags and season counts are rebuilt from the live ARR API response.
       await loadLibrary();
       if (action === "removeMovie") {
         const detailDialog = $("libraryDetailDialog");
         if (detailDialog.open) detailDialog.close();
-        $("librarySummary").textContent = "Removed " + (item?.title || "movie") + " from Radarr and deleted its file.";
+        $("librarySummary").textContent = "Removed " + (item?.title || "movie") + " file. Library updated.";
         $("librarySummary").className = "media-status is-success";
       } else if ($("libraryDetailDialog").open) {
         const opener = [...$("libraryList").querySelectorAll("[data-library-details]")].find(control => control.dataset.libraryKey === body.serviceKey && Number(control.dataset.libraryId) === body.id);
         if (opener) {
           await openLibraryDetails(opener);
           const refreshedStatus = $("libraryDetailStatus");
-          if (refreshedStatus) refreshedStatus.textContent = "Episode file deleted from storage.";
+          if (refreshedStatus) {
+            refreshedStatus.textContent = "Episode file removed successfully. Episode counts updated.";
+            refreshedStatus.className = "media-status is-success";
+          }
         }
       }
       return;
