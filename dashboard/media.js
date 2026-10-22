@@ -24,6 +24,7 @@ let searchResults = [];
 let libraryItems = [];
 let libraryLoaded = false;
 let serviceFilter = "all";
+let librarySort = "recent";
 let interactiveRequestId = 0;
 let interactiveReleases = [];
 let activeReleaseContext = null;
@@ -822,6 +823,13 @@ function renderLibrary() {
   const query = $("libraryFilter").value.trim().toLowerCase();
   const filtered = libraryItems.filter(item => (serviceFilter === "all" || item.serviceKey === serviceFilter)
     && (!query || (item.title + " " + item.year + " " + item.serviceName).toLowerCase().includes(query)));
+  filtered.sort((a, b) => {
+    if (librarySort === "title-asc") return (a.title || "").localeCompare(b.title || "");
+    if (librarySort === "title-desc") return (b.title || "").localeCompare(a.title || "");
+    if (librarySort === "year-desc") return (Number(b.year) || 0) - (Number(a.year) || 0) || (a.title || "").localeCompare(b.title || "");
+    if (librarySort === "year-asc") return (Number(a.year) || 9999) - (Number(b.year) || 9999) || (a.title || "").localeCompare(b.title || "");
+    return (Date.parse(b.added || "") || 0) - (Date.parse(a.added || "") || 0) || (a.title || "").localeCompare(b.title || "");
+  });
   if (!filtered.length) {
     $("libraryList").innerHTML = '<div class="media-empty">' + (libraryItems.length ? "No titles match these filters." : "No titles are in the connected libraries yet.") + '</div>';
     return;
@@ -956,6 +964,19 @@ $("mediaDetail").addEventListener("click", event => {
 $("mediaModeAdd").addEventListener("click", () => setMediaMode("add"));
 $("mediaModeLibrary").addEventListener("click", () => setMediaMode("library"));
 $("libraryFilter").addEventListener("input", renderLibrary);
+$("librarySortMenu")?.addEventListener("click", event => {
+  const option = event.target.closest("[data-library-sort]");
+  if (!option) return;
+  librarySort = option.dataset.librarySort || "recent";
+  $("librarySortMenu").querySelectorAll("[data-library-sort]").forEach(button => {
+    button.classList.toggle("is-active", button === option);
+    button.setAttribute("aria-pressed", String(button === option));
+  });
+  const labels = { recent: "Recently added", "title-asc": "Title (A–Z)", "title-desc": "Title (Z–A)", "year-desc": "Release year (newest)", "year-asc": "Release year (oldest)" };
+  $("librarySortMenu").querySelector("summary").innerHTML = "Sort by: " + labels[librarySort] + ' <span aria-hidden="true">▾</span>';
+  $("librarySortMenu").open = false;
+  renderLibrary();
+});
 $("libraryServiceFilters").addEventListener("click", event => {
   const button = event.target.closest("[data-service-filter]");
   if (!button) return;
