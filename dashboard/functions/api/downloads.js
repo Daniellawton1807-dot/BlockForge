@@ -210,11 +210,10 @@ export async function onRequest({ env, request }) {
         url.searchParams.set("mode",action==="pause"?"queue":"queue");
         url.searchParams.set("name",action==="pause"?"pause":"delete");
         url.searchParams.set("output","json"); url.searchParams.set("apikey",apiKey);
-        if(action!=="pause") {
-          const nzoId=String(body?.nzoId||"");
-          if(!/^S?\w+-[a-f0-9]{8,}$/i.test(nzoId)) throw new Error("Missing SABnzbd job identifier. Refresh the queue and try again.");
-          url.searchParams.set("value",nzoId); url.searchParams.set("del_files","1");
-        }
+        const nzoId=String(body?.nzoId||"");
+        if(!/^S?\w+-[a-f0-9]{8,}$/i.test(nzoId)) throw new Error("Missing SABnzbd job identifier. Refresh the queue and try again.");
+        url.searchParams.set("value",nzoId);
+        if(action!=="pause") url.searchParams.set("del_files","1");
         await readJson(url);
       }
       if(action==="replace") {
