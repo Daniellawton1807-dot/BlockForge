@@ -37,7 +37,7 @@
   function paintFavorites(){
     document.querySelectorAll("[data-favorite]").forEach(btn=>{
       const on=isFavorite(btn.dataset.favorite);
-      btn.textContent=on?"★":"☆";btn.classList.toggle("is-favorite",on);
+      const star=on?"★":"☆";if(btn.textContent!==star)btn.textContent=star;btn.classList.toggle("is-favorite",on);
       btn.title=on?"Unpin favorite":"Pin favorite";btn.setAttribute("aria-label",(on?"Unpin ":"Pin ")+btn.dataset.favorite);
     });
   }
