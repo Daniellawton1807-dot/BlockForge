@@ -560,7 +560,8 @@ function renderLibraryDetail(item, data) {
     }).join("") : '<div class="media-empty">No episode information was returned for this season.</div>';
     return '<details class="library-season" data-season-number="' + number + '"' + (index === 0 ? " open" : "") + '><summary><span>' + esc(label) + '</span>' + badge + '<span class="library-season-chevron" aria-hidden="true">⌄</span></summary><div class="library-season-body"><div class="library-season-toolbar">' + seasonAction + '<span>' + missing.length + ' missing</span></div><div class="library-episodes">' + epHtml + '</div></div></details>';
   }).join("");
-  return common + titleActions + facts + '<section class="library-detail-section"><div class="library-section-heading"><div><div class="kicker">SEASONS &amp; EPISODES</div><h3>Episodes</h3></div><span class="library-season-count">' + seasons.length + ' seasons</span></div><div class="library-seasons">' + (seasonHtml || '<div class="media-empty">No season information was returned.</div>') + '</div></section><div class="library-detail-footer"><span id="libraryDetailStatus" role="status" aria-live="polite"></span><button class="media-secondary-button" type="button" data-library-detail-close>Close</button></div>';
+  const removeSeriesAction = '<div class="library-remove-actions"><button type="button" class="media-danger-button" data-detail-action="removeSeries" data-library-key="' + esc(item.serviceKey) + '" data-library-id="' + Number(item.id) + '" data-library-title="' + esc(title) + '">Delete show and all files</button><span>Removes the show from Sonarr and permanently deletes all episode files.</span></div>';
+  return common + titleActions + facts + '<section class="library-detail-section"><div class="library-section-heading"><div><div class="kicker">SEASONS &amp; EPISODES</div><h3>Episodes</h3></div><span class="library-season-count">' + seasons.length + ' seasons</span></div><div class="library-seasons">' + (seasonHtml || '<div class="media-empty">No season information was returned.</div>') + '</div></section>' + removeSeriesAction + '<div class="library-detail-footer"><span id="libraryDetailStatus" role="status" aria-live="polite"></span><button class="media-secondary-button" type="button" data-library-detail-close>Close</button></div>';
 }
 let libraryDetailRequestId = 0;
 async function openLibraryDetails(button) {
@@ -592,34 +593,35 @@ async function openLibraryDetails(button) {
 }
 function openMediaDeleteConfirmation(button) {
   const action = button.dataset.detailAction;
-  if (!["removeEpisode", "removeMovie"].includes(action) || !authenticated) return;
+  if (!["removeEpisode", "removeMovie", "removeSeries"].includes(action) || !authenticated) return;
   const serviceKey = button.dataset.libraryKey;
   const id = Number(button.dataset.libraryId);
   const item = libraryItems.find(entry => entry.serviceKey === serviceKey && entry.id === id);
   if (!item) return;
   const isEpisode = action === "removeEpisode";
+  const isSeries = action === "removeSeries";
   const episodeName = [button.dataset.episodeCode, button.dataset.episodeTitle].filter(Boolean).join(" · ");
   const title = isEpisode ? episodeName : (item.title || "this movie");
   const filePath = button.dataset.filePath || "";
   const sharedNames = button.dataset.sharedEpisodeNames || "";
-  $("mediaDeleteConfirmTitle").textContent = isEpisode ? "Delete " + title + "?" : "Delete " + title + " from your library?";
+  $("mediaDeleteConfirmTitle").textContent = isEpisode ? "Delete " + title + "?" : "Delete " + (isSeries ? title : title) + (isSeries ? " and all its files?" : " from your library?");
   $("mediaDeleteConfirmMessage").textContent = isEpisode
     ? "This permanently deletes the episode file for " + item.title + " from storage. The episode record will remain in " + item.serviceName + "."
-    : "This permanently removes " + title + " from " + item.serviceName + " and deletes its movie file from storage. Its library entry and file will both be removed. This cannot be undone.";
+     : isSeries ? "This permanently removes the entire show from Sonarr and deletes all episode files and folders managed by Sonarr. This cannot be undone." : "This permanently removes " + title + " from " + item.serviceName + " and deletes its movie file from storage. Its library entry and file will both be removed. This cannot be undone.";
   $("mediaDeleteConfirmPath").textContent = filePath;
   $("mediaDeleteConfirmPath").hidden = !filePath;
   $("mediaDeleteConfirmImpact").textContent = sharedNames
     ? "This shared file also contains " + sharedNames + ". Those episodes will be deleted with the same file."
     : "";
   $("mediaDeleteConfirmImpact").hidden = !sharedNames;
-  $("mediaDeleteConfirmSubmit").textContent = isEpisode ? "Delete episode file" : "Delete movie and files";
+  $("mediaDeleteConfirmSubmit").textContent = isEpisode ? "Delete episode file" : isSeries ? "Delete show and all files" : "Delete movie and files";
   pendingMediaDelete = button;
   const dialog = $("mediaDeleteConfirmDialog");
   if (!dialog.open) dialog.showModal();
 }
 async function runLibraryDetailAction(button, confirmedDelete = false) {
   const action = button.dataset.detailAction;
-  if (["removeEpisode", "removeMovie"].includes(action) && !confirmedDelete) {
+  if (["removeEpisode", "removeMovie", "removeSeries"].includes(action) && !confirmedDelete) {
     openMediaDeleteConfirmation(button);
     return;
   }
@@ -631,7 +633,7 @@ async function runLibraryDetailAction(button, confirmedDelete = false) {
   const status = $("libraryDetailStatus");
   button.disabled = true;
   const original = button.textContent;
-  button.textContent = action === "searchEpisode" ? "Queueing search…" : action === "removeEpisode" || action === "removeMovie" ? "Removing…" : "Queueing…";
+  button.textContent = action === "searchEpisode" ? "Queueing search…" : action === "removeEpisode" || action === "removeMovie" || action === "removeSeries" ? "Removing…" : "Queueing…";
   if (status) status.textContent = "";
   try {
     const result = await readResponse(await fetch(endpoints.manage, {
@@ -646,8 +648,8 @@ async function runLibraryDetailAction(button, confirmedDelete = false) {
       showLogin("Your Homebase sign-in expired. Sign in again to continue.");
       return;
     }
-    if (!result.response.ok) throw new Error(result.data?.error || (action === "removeEpisode" || action === "removeMovie" ? "Could not remove that media file." : "Could not queue that search."));
-    if (action === "removeEpisode" || action === "removeMovie") {
+    if (!result.response.ok) throw new Error(result.data?.error || (action === "removeEpisode" || action === "removeMovie" || action === "removeSeries" ? "Could not remove that media item." : "Could not queue that search."));
+    if (action === "removeEpisode" || action === "removeMovie" || action === "removeSeries") {
       button.textContent = "Removed ✓";
       button.classList.add("is-complete");
       if (status) {
@@ -657,10 +659,10 @@ async function runLibraryDetailAction(button, confirmedDelete = false) {
       // Refresh the library first, then reopen the current title so episode-file
       // flags and season counts are rebuilt from the live ARR API response.
       await loadLibrary();
-      if (action === "removeMovie") {
+      if (action === "removeMovie" || action === "removeSeries") {
         const detailDialog = $("libraryDetailDialog");
         if (detailDialog.open) detailDialog.close();
-        $("librarySummary").textContent = "Removed " + (item?.title || "movie") + " file. Library updated.";
+        $("librarySummary").textContent = "Removed " + (item?.title || "media item") + (action === "removeSeries" ? " and all its files. Library updated." : " file. Library updated.");
         $("librarySummary").className = "media-status is-success";
       } else if ($("libraryDetailDialog").open) {
         const opener = [...$("libraryList").querySelectorAll("[data-library-details]")].find(control => control.dataset.libraryKey === body.serviceKey && Number(control.dataset.libraryId) === body.id);
@@ -682,7 +684,7 @@ async function runLibraryDetailAction(button, confirmedDelete = false) {
   } catch (error) {
     button.disabled = false;
     button.textContent = original;
-    if (status) status.textContent = error.message || (action === "removeEpisode" || action === "removeMovie" ? "The media file could not be removed." : "The search could not be queued.");
+    if (status) status.textContent = error.message || (action === "removeEpisode" || action === "removeMovie" || action === "removeSeries" ? "The media item could not be removed." : "The search could not be queued.");
   }
 }
 
