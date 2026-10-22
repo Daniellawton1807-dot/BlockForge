@@ -1313,3 +1313,45 @@ html[data-theme="light"] .activity-panel{background:#fff}html[data-theme="light"
 .lifecycle-importing .download-state{color:#b6aaff}
 .lifecycle-failed{border-color:#633944}
 @media(max-width:430px){.download-tab{padding:9px 6px;font-size:10px}}
+
+
+/* Keep the download list compact and scroll inside the panel. */
+.downloads-section .download-list{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:9px;
+  max-height:430px;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+  padding:2px 5px 2px 0;
+  align-content:start;
+}
+.downloads-section .download-card{max-width:none;width:100%;padding:12px 14px}
+.downloads-section .download-name{margin:8px 0 10px;line-height:1.4;overflow-wrap:anywhere}
+.downloads-section .download-lifecycle{display:none}
+.downloads-section .download-state.lifecycle-label{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:78px;padding:5px 9px;border:1px solid var(--line);
+  border-radius:999px;background:#192438;color:#bfc9dd;
+  font-size:10px;font-weight:750;letter-spacing:.01em;
+}
+.downloads-section .lifecycle-downloading .lifecycle-label{background:#162d42;border-color:#294f6b;color:#8bc9ff}
+.downloads-section .lifecycle-importing .lifecycle-label{background:#282344;border-color:#4b407a;color:#c7baff}
+.downloads-section .lifecycle-imported .lifecycle-label{background:#15352f;border-color:#285f50;color:#83e0bb}
+.downloads-section .lifecycle-failed .lifecycle-label{background:#3b202b;border-color:#713847;color:#ff9eaa}
+.download-tabs{gap:8px;padding:0;border:0;background:transparent}
+.download-tab{
+  flex:0 1 auto;padding:9px 13px;border:1px solid var(--line);
+  border-radius:10px;background:linear-gradient(180deg,#172236,#111a2a);
+  color:#9baac2;font-size:11px;font-weight:700;transition:background .15s,border-color .15s,color .15s;
+}
+.download-tab:hover{border-color:#465779;background:#1b2940;color:#e6edfa}
+.download-tab.is-active{border-color:#7667d8;background:linear-gradient(135deg,#39305f,#242442);color:#f0edff;box-shadow:inset 0 1px 0 #ffffff12,0 3px 10px #0002}
+html[data-theme="light"] .download-tab{background:#fff;color:#64718a}
+html[data-theme="light"] .download-tab.is-active{background:#efedff;border-color:#aaa0ef;color:#42358e}
+@media(max-width:700px){
+  .downloads-section .download-list{max-height:360px}
+  .download-tabs{display:grid;grid-template-columns:1fr 1fr}
+  .download-tab{width:100%;padding:10px 6px}
+}
