@@ -80,21 +80,25 @@ async function refreshActivity(){
     const subtitle=item.mediaType==="tv"?[item.episodeLabel,item.episodeTitle].filter(Boolean).join(" · "):"Movie imported";
     events.push({date:Number.isFinite(date)?date:0,type:"success",icon:"✓",title:"Media imported",detail:String(item.title||"Untitled")+(subtitle?" · "+subtitle:"")+" · "+String(item.serviceName||"Sonarr/Radarr")});
    }
+   for(const event of (Array.isArray(data.events)?data.events:[]).slice(0,40)){
+    const date=Date.parse(event.date||"");
+    events.push({date:Number.isFinite(date)?date:0,type:["failure","warning"].includes(event.type)?event.type:"info",icon:event.type==="failure"?"×":event.type==="warning"?"!":"i",title:String(event.title||"Media event"),detail:String(event.detail||"Sonarr/Radarr reported an event")});
+   }
   } else if(response.status===401){
-   events.push({date:Date.now(),type:"info",icon:"↗",title:"Media activity requires sign-in",detail:"Sign in to the Media Hub to show recent Sonarr/Radarr imports."});
+   events.push({date:Date.now(),type:"info",icon:"i",title:"Media activity requires sign-in",detail:"Sign in to the Media Hub to show Sonarr/Radarr imports and health alerts."});
   }
  }catch{}
  try{
   const response=await fetch("/api/metrics",{cache:"no-store",credentials:"same-origin"});
   if(response.ok){
    const m=await response.json();
-   if(Number.isFinite(Number(m.diskPercent))&&Number(m.diskPercent)>=85)events.push({date:Date.now(),type:Number(m.diskPercent)>=95?"warning":"warning",icon:"!",title:"Storage usage is high",detail:"The monitored filesystem is "+Math.round(Number(m.diskPercent))+"% full."});
+   if(Number.isFinite(Number(m.diskPercent))&&Number(m.diskPercent)>=85)events.push({date:Date.now(),type:"warning",icon:"!",title:"Storage usage is high",detail:"The monitored filesystem is "+Math.round(Number(m.diskPercent))+"% full."});
    if(Number.isFinite(Number(m.memoryPercent))&&Number(m.memoryPercent)>=90)events.push({date:Date.now(),type:"warning",icon:"!",title:"Memory usage is high",detail:"Memory utilization is "+Math.round(Number(m.memoryPercent))+"%."});
   }
  }catch{}
  events.sort((a,b)=>b.date-a.date);
- if(!events.length){feed.innerHTML='<div class="activity-empty">No recent events available. Import events appear after you sign in to the Media Hub; monitoring alerts appear when metrics are available.</div>';return;}
- feed.innerHTML=events.slice(0,12).map(e=>'<article class="activity-item"><span class="activity-icon '+e.type+'">'+e.icon+'</span><div class="activity-copy"><strong>'+esc(e.title)+'</strong><span>'+esc(e.detail)+'</span></div><time>'+ (e.date?new Date(e.date).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):"Recent")+'</time></article>').join("");
+ if(!events.length){feed.innerHTML='<div class="activity-empty">No recent events available. Sign in to the Media Hub to show Sonarr/Radarr imports, failed history events and health-check warnings.</div>';return;}
+ feed.innerHTML=events.slice(0,12).map(e=>'<article class="activity-item"><span class="activity-icon '+e.type+'">'+e.icon+'</span><div class="activity-copy"><strong>'+esc(e.title)+'</strong><span>'+esc(e.detail)+'</span></div><time>'+ (e.date?new Date(e.date).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):"Current")+'</time></article>').join("");
 }
 $("activityRefresh")?.addEventListener("click",refreshActivity);
 
