@@ -1274,3 +1274,12 @@ html[data-theme="light"] .command-result-icon { background:#eeecff;color:#5545b0
 .activity-copy{display:grid;flex:1;min-width:0;gap:3px}.activity-copy strong{font-size:12px}.activity-copy span{color:var(--muted);font-size:11px;overflow-wrap:anywhere}.activity-item time{flex:none;color:var(--muted);font-size:10px;text-align:right}.activity-empty{padding:18px;border:1px dashed var(--line);border-radius:11px;color:var(--muted);font-size:12px;text-align:center}
 html[data-theme="light"] .activity-panel{background:#fff}html[data-theme="light"] .activity-item{background:#f8f9fd}
 @media(max-width:600px){.activity-panel{padding:13px}.activity-item{align-items:flex-start;gap:9px;padding:9px}.activity-item time{max-width:78px;font-size:9px}.activity-copy strong{font-size:11px}}
+
+
+/* Keep the Homelab Timeline compact; scroll events within the panel. */
+.activity-panel{padding:14px;margin:18px 0 22px}
+.activity-heading{margin-bottom:10px}
+.activity-feed{max-height:260px;overflow-y:auto;overscroll-behavior:contain;padding-right:4px;scrollbar-width:thin}
+.activity-item{padding:8px 10px}
+.activity-icon{width:26px;height:26px;border-radius:7px}
+@media(max-width:600px){.activity-panel{padding:11px}.activity-feed{max-height:220px}}
