@@ -95,15 +95,16 @@
 
     <section id="downloads" class="media-panel downloads-section" aria-labelledby="downloadsTitle">
       <div class="downloads-head"><div><div class="kicker">CURRENTLY IN PROGRESS</div><h3 id="downloadsTitle">Downloads</h3></div><div id="downloadSummary" class="download-summary" aria-live="polite">Checking sign-in…</div></div>
-      <p class="media-intro">Only active qBittorrent and SABnzbd downloads appear here. Progress refreshes every few seconds.</p>
+      <p class="media-intro">Track active downloads through to import, and review the five most recent completed or failed items. Updates automatically.</p>
       <div id="downloadsPrivate" hidden>
         <div class="downloads-toolbar"><span>Queue details are private to this signed-in device.</span><button id="downloadLogout" class="download-logout" type="button">Lock media</button></div>
+        <div class="download-tabs" role="tablist" aria-label="Download status"><button id="downloadTabActive" class="download-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="downloadList">Currently downloading</button><button id="downloadTabCompleted" class="download-tab" type="button" role="tab" aria-selected="false" aria-controls="downloadList">Completed</button></div>
         <div id="downloadList" class="download-list" aria-live="polite"><div class="downloads-empty">Loading your download queue…</div></div>
       </div>
       <div id="downloadsLocked" class="media-empty">Sign in above to see your private download queue.</div>
     </section>
 
-    <section class="recent-media-panel" aria-labelledby="recentMediaTitle"><div class="recent-media-heading"><div><div class="kicker">LATEST ARR IMPORTS</div><h3 id="recentMediaTitle">Recently downloaded</h3></div><a class="section-tag" href="/media/">OPEN MEDIA HUB ↗</a></div><div id="recentMediaList" class="recent-media-list" aria-live="polite"><div class="recent-media-empty">Loading recent downloads…</div></div></section>
+    
 
     <section class="media-panel media-services-panel" aria-labelledby="mediaServicesTitle">
       <div class="section-head media-panel-head"><div><div class="kicker">YOUR MEDIA SERVICES</div><h3 id="mediaServicesTitle">Shortcuts</h3></div><a class="section-tag media-all-apps" href="/#apps">ALL APPLICATIONS ↗</a></div>
@@ -114,8 +115,8 @@
   <footer><span>HOMEBASE</span><i>•</i> Media hub <small>Media actions are sent through the authenticated Homebase Pages Function to the selected Sonarr or Radarr instance.</small></footer>
 </main>
 </div>
-<script src="../config.js?v=homebase-media-1"></script>
-<script src="../media.js?v=homebase-recent-2"></script>
+<script src="../config.js?v=homebase-media-2"></script>
+<script src="../media.js?v=homebase-download-tabs-1"></script>
 <script>
 (()=>{const key="homebase-theme";const get=()=>{try{return localStorage.getItem(key)||"dark"}catch{return "dark"}};const set=t=>{document.documentElement.dataset.theme=t;const b=document.getElementById("mediaThemeToggle");if(b){b.textContent=t==="light"?"☾":"☼";b.title=t==="light"?"Switch to dark theme":"Switch to light theme";}const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=t==="light"?"#f4f6fb":"#0b1020";};set(get());document.getElementById("mediaThemeToggle")?.addEventListener("click",()=>{const t=get()==="light"?"dark":"light";try{localStorage.setItem(key,t)}catch{}set(t);});})();
 </script></body>
