@@ -602,17 +602,17 @@ function openMediaDeleteConfirmation(button) {
   const title = isEpisode ? episodeName : (item.title || "this movie");
   const filePath = button.dataset.filePath || "";
   const sharedNames = button.dataset.sharedEpisodeNames || "";
-  $("mediaDeleteConfirmTitle").textContent = isEpisode ? "Delete " + title + "?" : "Remove " + title + " and its file?";
+  $("mediaDeleteConfirmTitle").textContent = isEpisode ? "Delete " + title + "?" : "Delete " + title + " from your library?";
   $("mediaDeleteConfirmMessage").textContent = isEpisode
     ? "This permanently deletes the episode file for " + item.title + " from storage. The episode record will remain in " + item.serviceName + "."
-    : "This removes the movie from Radarr and permanently deletes its movie file from storage. This cannot be undone.";
+    : "This permanently removes " + title + " from " + item.serviceName + " and deletes its movie file from storage. Its library entry and file will both be removed. This cannot be undone.";
   $("mediaDeleteConfirmPath").textContent = filePath;
   $("mediaDeleteConfirmPath").hidden = !filePath;
   $("mediaDeleteConfirmImpact").textContent = sharedNames
     ? "This shared file also contains " + sharedNames + ". Those episodes will be deleted with the same file."
     : "";
   $("mediaDeleteConfirmImpact").hidden = !sharedNames;
-  $("mediaDeleteConfirmSubmit").textContent = isEpisode ? "Delete episode file" : "Remove movie and file";
+  $("mediaDeleteConfirmSubmit").textContent = isEpisode ? "Delete episode file" : "Delete movie and files";
   pendingMediaDelete = button;
   const dialog = $("mediaDeleteConfirmDialog");
   if (!dialog.open) dialog.showModal();
