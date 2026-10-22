@@ -128,7 +128,7 @@
 </main>
 </div>
 <script src="../config.js?v=homebase-media-2"></script>
-<script src="../media.js?v=homebase-delete-refresh-2"></script>
+<script src="../media.js?v=homebase-resume-diagnostics-1"></script>
 <script>
 (()=>{const key="homebase-theme";const get=()=>{try{return localStorage.getItem(key)||"dark"}catch{return "dark"}};const set=t=>{document.documentElement.dataset.theme=t;const b=document.getElementById("mediaThemeToggle");if(b){b.textContent=t==="light"?"☾":"☼";b.title=t==="light"?"Switch to dark theme":"Switch to light theme";}const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=t==="light"?"#f4f6fb":"#0b1020";};set(get());document.getElementById("mediaThemeToggle")?.addEventListener("click",()=>{const t=get()==="light"?"dark":"light";try{localStorage.setItem(key,t)}catch{}set(t);});})();
 </script></body>
