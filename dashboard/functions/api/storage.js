@@ -18,6 +18,49 @@ async function glancesJson(root, path) {
   return response.json();
 }
 
+async function getHostInventory(env) {
+  const endpoint = String(env.HOMEBASE_STORAGE_AGENT_URL || "").trim();
+  const token = String(env.HOMEBASE_STORAGE_AGENT_TOKEN || "");
+  if (!endpoint || token.length < 32) return null;
+  let url;
+  try { url = new URL(endpoint); } catch { throw new Error("Storage agent URL is invalid."); }
+  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) throw new Error("Storage agent URL must be HTTPS and must not contain credentials or query strings.");
+  const response = await fetch(new URL("/api/drives", url), {
+    headers: { accept: "application/json", authorization: "Bearer " + token },
+    signal: AbortSignal.timeout(6000),
+    redirect: "manual"
+  });
+  if (!response.ok || response.status >= 300 && response.status < 400) throw new Error("Storage agent returned HTTP " + response.status);
+  const payload = await response.json();
+  const disks = [];
+  for (const device of Array.isArray(payload.devices) ? payload.devices : []) {
+    if (device.type !== "disk") continue;
+    const partitions = Array.isArray(device.children) ? device.children : [];
+    const mountedParts = partitions.filter(p => Array.isArray(p.mounts) && p.mounts.length);
+    const stats = mountedParts.map(p => ({ part:p, stats:p.filesystemStats })).find(x => x.stats);
+    const totalBytes = number(device.sizeBytes);
+    const usedBytes = number(stats?.stats?.usedBytes);
+    const freeBytes = number(stats?.stats?.freeBytes);
+    const percent = number(stats?.stats?.percent);
+    const mounts = mountedParts.flatMap(p => p.mounts);
+    disks.push({
+      id: device.path || device.name,
+      name: safeText(device.model || device.path || device.name),
+      mount: safeText(mounts.join(", ") || "Not mounted"),
+      filesystem: safeText(stats?.part?.filesystem || device.filesystem || "Physical drive"),
+      totalBytes, usedBytes, freeBytes, percent,
+      mounted: mountedParts.length > 0,
+      detected: true,
+      devicePath: safeText(device.path || ""),
+      transport: safeText(device.transport || ""),
+      state: safeText(device.state || "unknown"),
+      removable: Boolean(device.removable),
+      readBytesPerSecond: null, writeBytesPerSecond: null, ioAvailable: false
+    });
+  }
+  return json({ updatedAt: payload.updatedAt || new Date().toISOString(), source: "host-agent", disks });
+}
+
 async function getStorage(env) {
   const base = String(env.GLANCES_BASE_URL || DEFAULT_GLANCES_URL).trim().replace(/\/+$/, "");
   let root;
