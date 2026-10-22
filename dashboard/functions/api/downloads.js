@@ -38,7 +38,10 @@ async function readJson(url, options = {}) {
   if (response.status >= 300 && response.status < 400) {
     throw new Error("The service redirected the API request.");
   }
-  if (!response.ok) throw new Error("The service returned HTTP " + response.status + ".");
+  if (!response.ok) {
+    const detail = (await response.text().catch(() => "")).replace(/[\\r\\n\\t]+/g, " ").trim().slice(0, 240);
+    throw new Error("The service returned HTTP " + response.status + (detail ? ": " + detail : ".") );
+  }
 
   try {
     return await response.json();
@@ -221,7 +224,10 @@ export async function onRequest({ env, request }) {
         if(!/^SABnzbd_nzo_[A-Za-z0-9]+$/i.test(nzoId)) throw new Error("Missing or invalid SABnzbd job identifier. Refresh the queue and try again.");
         url.searchParams.set("value",nzoId);
         if(action!=="pause" && action!=="resume") url.searchParams.set("del_files","1");
-        await readJson(url);
+        const actionResult = await readJson(url);
+        if (actionResult?.status === false || actionResult?.status === "false") {
+          throw new Error("SABnzbd did not " + (action === "resume" ? "resume" : action === "pause" ? "pause" : "remove") + " this job. It may no longer be in the queue; refresh and try again.");
+        }
       }
       if(action==="replace") {
         const candidates=arrServices().filter(service=>arrServiceStatus(env,service).configured);
