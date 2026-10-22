@@ -106,7 +106,7 @@ async function qbitItems(env) {
   if (!Array.isArray(torrents)) throw new Error("qBittorrent returned an invalid queue.");
 
   return torrents
-    .filter(torrent => Number.isFinite(Number(torrent?.progress)) && (Number(torrent.progress) < 1 || ["uploading","stalledUP","pausedUP","queuedUP","checkingUP"].includes(torrent?.state)))
+    .filter(torrent => Number.isFinite(Number(torrent?.progress)) && Number(torrent.progress) < 1 && ["downloading","forcedDL","metaDL","allocating","moving"].includes(torrent?.state))
     .slice(0, MAX_ITEMS_PER_SOURCE)
     .map((torrent, index) => {
       const progress = Math.max(0, Math.min(100, Number(torrent.progress) * 100));
@@ -118,8 +118,8 @@ async function qbitItems(env) {
         category: mediaType(torrent.category),
         progress,
         etaSeconds: Number.isFinite(eta) && eta >= 0 && eta < 8640000 ? eta : null,
-        status: Number(torrent.progress) >= 1 ? "Downloaded · awaiting import" : qbitState(torrent.state),
-        lifecycle: Number(torrent.progress) >= 1 ? "importing" : "downloading"
+        status: qbitState(torrent.state),
+        lifecycle: "downloading"
       };
     });
 }
@@ -148,7 +148,7 @@ async function sabItems(env) {
   if (!Array.isArray(slots)) throw new Error("SABnzbd returned an invalid queue.");
 
   return slots
-    .filter(slot => Number.isFinite(Number(slot?.percentage)))
+    .filter(slot => Number.isFinite(Number(slot?.percentage)) && !/paused|queued|completed|failed/i.test(String(slot?.status || "")))
     .slice(0, MAX_ITEMS_PER_SOURCE)
     .map((slot, index) => ({
       id: "sabnzbd-" + index,
@@ -157,7 +157,7 @@ async function sabItems(env) {
       category: mediaType(slot.cat),
       progress: Math.max(0, Math.min(100, Number(slot.percentage))),
       etaSeconds: sabEta(slot.timeleft, slot.status),
-      status: Number(slot.percentage) >= 100 ? "Downloaded · awaiting import" : displayName(slot.status || "In queue").slice(0, 32),
+      status: Number(slot.percentage) >= 100 ? "Importing" : displayName(slot.status || "Downloading").slice(0, 32),
       lifecycle: Number(slot.percentage) >= 100 ? "importing" : "downloading"
     }));
 }
