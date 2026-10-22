@@ -57,7 +57,7 @@ async function refreshRecentMedia(){
   const data = await response.json().catch(()=>null);
   if(response.status===401){list.innerHTML='<div class="recent-media-empty">Sign in to the Media Hub to view recent imports.</div>';return;}
   if(!response.ok) throw new Error(data?.error||"Recent imports unavailable");
-  const items=Array.isArray(data?.items)?data.items:[];
+  const items=Array.isArray(data?.items)?data.items.slice(0,5):[];
   if(!items.length){list.innerHTML='<div class="recent-media-empty">No recent imported movies or episodes found yet.</div>';return;}
   list.innerHTML=items.map(item=>{
    const poster=safeUrl(item.posterUrl||"");
@@ -73,4 +73,5 @@ $("search").addEventListener("input",render);
 $("refresh").addEventListener("click",()=>{refreshMetrics();const b=$("refresh");b.textContent="✓";setTimeout(()=>b.textContent="↻",800);});
 render();refreshMetrics();refreshRecentMedia();
 const metricsRefreshInterval=Number(config.refreshIntervalMs);
-if(metricsRefreshInterval>=3000)setInterval(refreshMetrics,Math.min(metricsRefreshInterval,60000));\nsetInterval(refreshRecentMedia,60000);
+if(metricsRefreshInterval>=3000)setInterval(refreshMetrics,Math.min(metricsRefreshInterval,60000));
+setInterval(refreshRecentMedia,300000);
