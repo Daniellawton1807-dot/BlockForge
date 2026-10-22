@@ -12,7 +12,8 @@ const endpoints = {
   library: "/api/media/library",
   manage: "/api/media/manage",
   details: "/api/media/details",
-  releases: "/api/media/releases"
+  releases: "/api/media/releases",
+  recent: "/api/media/recent"
 };
 let authenticated = false;
 let arrReady = false;
@@ -63,6 +64,25 @@ function downloadCard(item, updatedAt) {
     : '<span>ETA ' + esc(eta) + '</span>';
   const title = String(item.name || "Untitled download");
   return '<article class="download-card"><div class="download-card-header"><span class="download-source">' + esc(item.source || "Downloader") + '</span><span class="download-state">' + esc(status) + '</span></div><h4 class="download-name" title="' + esc(title) + '">' + esc(title) + '</h4><div class="download-progress" role="progressbar" aria-label="' + esc(title) + ' progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(progress) + '"><span style="width:' + progress + '%"></span></div><div class="download-facts"><span>' + esc(item.category || "Download") + '</span><strong>' + Math.round(progress) + '%</strong>' + etaLabel + '</div></article>';
+}
+async function refreshRecentMedia(){
+ const list=$("recentMediaList");
+ if(!list) return;
+ if(!authenticated){list.innerHTML='<div class="recent-media-empty">Sign in to view recent downloads.</div>';return;}
+ try{
+  const response=await fetch(endpoints.recent,{cache:"no-store",credentials:"same-origin"});
+  const data=await response.json().catch(()=>null);
+  if(response.status===401){list.innerHTML='<div class="recent-media-empty">Sign in to view recent downloads.</div>';return;}
+  if(!response.ok) throw new Error("Recent imports unavailable");
+  const items=Array.isArray(data?.items)?data.items:[];
+  if(!items.length){list.innerHTML='<div class="recent-media-empty">No recent imported movies or episodes found yet.</div>';return;}
+  list.innerHTML=items.map(item=>{
+   const poster=safeUrl(item.posterUrl||"");
+   const subtitle=item.mediaType==="tv"?[item.episodeLabel,item.episodeTitle].filter(Boolean).join(" · "):"Movie";
+   const date=item.date?new Date(item.date).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):"Recently imported";
+   return '<article class="recent-media-item"><div class="recent-media-poster">'+(poster?'<img src="'+esc(poster)+'" alt="" loading="lazy">':'<span>'+(item.mediaType==="tv"?"TV":"FILM")+'</span>')+'</div><div class="recent-media-copy"><strong title="'+esc(item.title)+'">'+esc(item.title)+'</strong><span class="recent-media-episode" title="'+esc(subtitle)+'">'+esc(subtitle||"Recently imported")+'</span><small>'+esc(item.serviceName||"Sonarr/Radarr")+' · '+esc(date)+'</small></div></article>';
+  }).join("");
+ }catch{list.innerHTML='<div class="recent-media-empty">Could not load recent imports. Try refreshing the Media Hub.</div>';}
 }
 function showLogin(message) {
   authenticated = false;
@@ -809,7 +829,7 @@ function tickEtas() {
 async function initializeMedia() {
   renderServiceLinks();
   await loadArrConfig();
-  if (authenticated) await refreshDownloads();
+  if (authenticated) { await refreshDownloads(); await refreshRecentMedia(); }
 }
 $("downloadLoginForm").addEventListener("submit", submitLogin);
 $("downloadLogout").addEventListener("click", lockMedia);
@@ -870,6 +890,7 @@ $("interactiveReleaseDialog").addEventListener("click", event => {
   const grab = event.target.closest("[data-grab-release]");
   if (grab && !grab.disabled) grabInteractiveRelease(grab);
 });
+setInterval(refreshRecentMedia, 60000);
 $("mediaRefresh").addEventListener("click", async () => {
   $("mediaRefresh").textContent = "…";
   await loadArrConfig();
