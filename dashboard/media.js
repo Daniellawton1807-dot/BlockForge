@@ -58,26 +58,17 @@ function formatEta(seconds) {
 function downloadCard(item, updatedAt) {
   const raw = Number(item.progress);
   const progress = Number.isFinite(raw) ? Math.max(0, Math.min(100, raw)) : 0;
-  const status = String(item.status || "In queue");
-  const lifecycle = ["downloading","importing","imported","failed"].includes(item.lifecycle) ? item.lifecycle : (/failed|error/i.test(status) ? "failed" : /imported/i.test(status) ? "imported" : progress >= 100 ? "importing" : "downloading");
-  const stages = [
-    {id:"downloading",label:"Downloading"},
-    {id:"importing",label:"Importing"},
-    {id:"imported",label:"Imported"}
-  ];
-  const stageIndex = lifecycle === "failed" ? 2 : stages.findIndex(stage => stage.id === lifecycle);
-  const timeline = lifecycle === "failed"
-    ? '<div class="download-lifecycle is-failed"><span class="lifecycle-step is-done">✓ Downloaded</span><span class="lifecycle-connector"></span><span class="lifecycle-step is-failed">× Failed</span></div>'
-    : '<div class="download-lifecycle">' + stages.map((stage,index) => '<span class="lifecycle-step ' + (index < stageIndex ? "is-done" : index === stageIndex ? "is-current" : "") + '">' + (index < stageIndex ? "✓ " : "") + stage.label + '</span>' + (index < stages.length-1 ? '<span class="lifecycle-connector ' + (index < stageIndex ? "is-done" : "") + '"></span>' : "")).join("") + '</div>';
+  const lifecycle = ["downloading","importing","imported","failed"].includes(item.lifecycle) ? item.lifecycle : (/failed|error/i.test(String(item.status||"")) ? "failed" : /imported/i.test(String(item.status||"")) ? "imported" : progress >= 100 ? "importing" : "downloading");
+  const label = lifecycle === "importing" ? "Importing" : lifecycle === "imported" ? "Imported" : lifecycle === "failed" ? "Failed" : "Downloading";
   const hasEta = item.etaSeconds !== null && item.etaSeconds !== undefined && Number.isFinite(Number(item.etaSeconds)) && lifecycle === "downloading";
   const seconds = hasEta ? Math.max(0, Math.floor(Number(item.etaSeconds))) : null;
-  const eta = hasEta ? formatEta(seconds) : (/queued/i.test(status) ? "Pending" : /paused/i.test(status) ? "Paused" : /stalled/i.test(status) ? "Waiting" : lifecycle === "importing" ? "Waiting for ARR" : lifecycle === "imported" ? "Complete" : lifecycle === "failed" ? "Check error" : "Calculating");
+  const eta = hasEta ? formatEta(seconds) : lifecycle === "importing" ? "Waiting for import" : lifecycle === "imported" ? "Complete" : lifecycle === "failed" ? "Failed" : "In progress";
   const etaLabel = hasEta
     ? '<span class="download-eta" data-eta-seconds="' + seconds + '" data-eta-started="' + updatedAt + '">ETA ' + esc(eta) + '</span>'
     : '<span>' + esc(eta) + '</span>';
   const title = String(item.name || "Untitled download");
   const eventDetail = item.eventDetail ? '<p class="download-event-detail">' + esc(item.eventDetail) + '</p>' : "";
-  return '<article class="download-card lifecycle-' + lifecycle + '"><div class="download-card-header"><span class="download-source">' + esc(item.source || "Downloader") + '</span><span class="download-state">' + esc(status) + '</span></div><h4 class="download-name" title="' + esc(title) + '">' + esc(title) + '</h4>' + timeline + '<div class="download-progress" role="progressbar" aria-label="' + esc(title) + ' progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(progress) + '"><span style="width:' + progress + '%"></span></div><div class="download-facts"><span>' + esc(item.category || "Download") + '</span><strong>' + Math.round(progress) + '%</strong>' + etaLabel + '</div>' + eventDetail + '</article>';
+  return '<article class="download-card lifecycle-' + lifecycle + '"><div class="download-card-header"><span class="download-source">' + esc(item.source || "Downloader") + '</span><span class="download-state lifecycle-label">' + label + '</span></div><h4 class="download-name" title="' + esc(title) + '">' + esc(title) + '</h4><div class="download-progress" role="progressbar" aria-label="' + esc(title) + ' progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(progress) + '"><span style="width:' + progress + '%"></span></div><div class="download-facts"><span>' + esc(item.category || "Download") + '</span><strong>' + Math.round(progress) + '%</strong>' + etaLabel + '</div>' + eventDetail + '</article>';
 }
 async function refreshRecentMedia(){
  const list=$("recentMediaList");
