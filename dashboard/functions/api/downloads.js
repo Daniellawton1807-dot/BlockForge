@@ -231,21 +231,52 @@ export async function onRequest({ env, request }) {
       }
       if(action==="replace") {
         const candidates=arrServices().filter(service=>arrServiceStatus(env,service).configured);
-        let triggered=false;
+        const normalize=value=>String(value||"").toLowerCase()
+          .replace(/\\[[^\\]]*\\]/g," ")
+          .replace(/\\([^)]*\\)/g," ")
+          .replace(/\\b(19|20)\\d{2}\\b/g," ")
+          .replace(/[^a-z0-9]+/g," ").trim();
+        const wanted=normalize(name);
+        const matches=[];
+        const failures=[];
         for(const service of candidates) {
           try {
             if(service.type==="tv") {
               const series=await arrCall(env,service,"api/v3/series");
-              const match=(Array.isArray(series)?series:[]).find(item=>String(item.title||"").toLowerCase()===name.toLowerCase());
-              if(match){await arrCall(env,service,"api/v3/command",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:"SeriesSearch",seriesId:Number(match.id)})});triggered=true;break;}
+              const match=(Array.isArray(series)?series:[]).find(item=>{
+                const title=normalize(item.title);
+                return title && (title===wanted || title.includes(wanted) || wanted.includes(title));
+              });
+              if(match) matches.push({service,match});
             } else {
               const movies=await arrCall(env,service,"api/v3/movie");
-              const match=(Array.isArray(movies)?movies:[]).find(item=>String(item.title||"").toLowerCase()===name.toLowerCase());
-              if(match){await arrCall(env,service,"api/v3/command",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:"MoviesSearch",movieIds:[Number(match.id)]})});triggered=true;break;}
+              const match=(Array.isArray(movies)?movies:[]).find(item=>{
+                const title=normalize(item.title);
+                return title && (title===wanted || title.includes(wanted) || wanted.includes(title));
+              });
+              if(match) matches.push({service,match});
             }
-          } catch {}
+          } catch(error) { failures.push(service.name + ": " + (error?.message || "lookup failed")); }
         }
-        if(!triggered) return json({ok:true,message:"Download removed, but no matching monitored title was found in Sonarr/Radarr to rescan."});
+        if(!matches.length) {
+          const detail=failures.length ? " Checked instances: " + failures.join("; ").slice(0,500) : "";
+          return json({ok:true,searchQueued:false,message:"Download removed, but no matching monitored title was found in Sonarr/Radarr." + detail});
+        }
+        const queued=[];
+        const queueErrors=[];
+        for(const {service,match} of matches) {
+          try {
+            const command=service.type==="tv"
+              ? {name:"SeriesSearch",seriesId:Number(match.id)}
+              : {name:"MoviesSearch",movieIds:[Number(match.id)]};
+            await arrCall(env,service,"api/v3/command",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(command)});
+            queued.push(service.name);
+          } catch(error) { queueErrors.push(service.name + ": " + (error?.message || "search queue failed")); }
+        }
+        if(!queued.length) {
+          return json({ok:false,error:"Download was removed, but the replacement search could not be queued. " + queueErrors.join("; ").slice(0,500)},502);
+        }
+        return json({ok:true,searchQueued:true,message:"Download removed. Replacement search queued in " + queued.join(", ") + "." + (queueErrors.length ? " Some matching instances failed: " + queueErrors.join("; ").slice(0,300) : "")});
       }
       return json({ok:true,message:action==="pause"?"Download paused.":action==="resume"?"Download resumed.":action==="replace"?"Download removed and a replacement search was queued.":"Download removed and downloaded files deleted."});
     } catch(error) { return json({error:error.message||"Download action failed."},502); }
