@@ -60,15 +60,24 @@ export async function onRequest({ request, env }) {
       }
     }
   }
-  // Rank exact/prefix/substring title matches ahead of fuzzy ARR lookup results.
-  // This keeps a query such as "Arrow" from being buried under unrelated titles.
-  const normalizedQuery = query.normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  // Normalize titles and queries identically so capitalization never affects ranking.
+  // Rank exact matches first, then titles beginning with the query, then word-prefix matches,
+  // substring matches, and finally broader fuzzy results from Sonarr/Radarr.
+  function normalizeTitle(value) {
+    return String(value || "")
+      .normalize("NFKD")
+      .replace(/\\p{M}/gu, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  }
+  const normalizedQuery = normalizeTitle(query);
   const tokens = normalizedQuery.split(/\\s+/).filter(Boolean);
   function titleRank(item) {
-    const title = String(item.title || "").normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const title = normalizeTitle(item.title);
     if (!title) return 100;
     if (title === normalizedQuery) return 0;
-    if (title.startsWith(normalizedQuery)) return 1;
+    if (title.startsWith(normalizedQuery + " ") || title.startsWith(normalizedQuery)) return 1;
     if (title.split(/\\s+/).some(word => word.startsWith(normalizedQuery))) return 2;
     if (title.includes(normalizedQuery)) return 3;
     if (tokens.length && tokens.every(token => title.includes(token))) return 4;
