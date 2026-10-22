@@ -62,18 +62,19 @@ function formatEta(seconds) {
 function downloadCard(item, updatedAt) {
   const raw = Number(item.progress);
   const progress = Number.isFinite(raw) ? Math.max(0, Math.min(100, raw)) : 0;
+  const paused = /paused/i.test(String(item.status || ""));
   const lifecycle = ["downloading","importing","imported","failed"].includes(item.lifecycle) ? item.lifecycle : (/failed|error/i.test(String(item.status||"")) ? "failed" : /imported/i.test(String(item.status||"")) ? "imported" : progress >= 100 ? "importing" : "downloading");
-  const label = lifecycle === "importing" ? "Importing" : lifecycle === "imported" ? "Imported" : lifecycle === "failed" ? "Failed" : "Downloading";
-  const hasEta = item.etaSeconds !== null && item.etaSeconds !== undefined && Number.isFinite(Number(item.etaSeconds)) && lifecycle === "downloading";
+  const label = paused ? "Paused" : lifecycle === "importing" ? "Importing" : lifecycle === "imported" ? "Imported" : lifecycle === "failed" ? "Failed" : "Downloading";
+  const hasEta = !paused && item.etaSeconds !== null && item.etaSeconds !== undefined && Number.isFinite(Number(item.etaSeconds)) && lifecycle === "downloading";
   const seconds = hasEta ? Math.max(0, Math.floor(Number(item.etaSeconds))) : null;
-  const eta = hasEta ? formatEta(seconds) : lifecycle === "importing" ? "Waiting for import" : lifecycle === "imported" ? "Complete" : lifecycle === "failed" ? "Failed" : "In progress";
+  const eta = paused ? "Download paused" : hasEta ? formatEta(seconds) : lifecycle === "importing" ? "Waiting for import" : lifecycle === "imported" ? "Complete" : lifecycle === "failed" ? "Failed" : "In progress";
   const etaLabel = hasEta ? '<span class="download-eta" data-eta-seconds="' + seconds + '" data-eta-started="' + updatedAt + '">ETA ' + esc(eta) + '</span>' : '<span>' + esc(eta) + '</span>';
   const title = String(item.name || "Untitled download");
-  const actions = lifecycle === "downloading"
+  const actions = lifecycle === "downloading" && !paused
     ? '<div class="download-actions"><button class="download-action-pause" type="button" data-download-action="pause" data-download-id="' + esc(item.id) + '">Ⅱ Pause</button><div class="download-more-wrap"><button class="download-action-more" type="button" aria-label="Download options" aria-expanded="false" data-download-menu="' + esc(item.id) + '">×</button><div class="download-action-menu" hidden><button type="button" data-download-action="remove" data-download-id="' + esc(item.id) + '">Remove download</button><button type="button" data-download-action="replace" data-download-id="' + esc(item.id) + '">Remove and rescan</button><button type="button" data-download-action="ignore" data-download-id="' + esc(item.id) + '">Ignore download</button></div></div></div>'
     : '<div class="download-actions download-actions-placeholder" aria-hidden="true"></div>';
   const errorDetail = item.eventDetail ? '<p class="download-event-detail">' + esc(item.eventDetail) + '</p>' : "";
-  return '<article class="download-card lifecycle-' + lifecycle + '" data-card-download="' + esc(item.id) + '"><div class="download-card-header"><span class="download-source">' + esc(item.source || "Downloader") + '</span><span class="download-state lifecycle-label">' + label + '</span></div><h4 class="download-name" title="' + esc(title) + '">' + esc(title) + '</h4><div class="download-progress" role="progressbar" aria-label="' + esc(title) + ' progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(progress) + '"><span style="width:' + progress + '%"></span></div><div class="download-facts"><span>' + esc(item.category || "Download") + '</span><strong>' + Math.round(progress) + '%</strong>' + etaLabel + '</div>' + actions + errorDetail + '</article>';
+  return '<article class="download-card lifecycle-' + lifecycle + (paused ? ' download-paused' : '') + '" data-card-download="' + esc(item.id) + '"><div class="download-card-header"><span class="download-source">' + esc(item.source || "Downloader") + '</span><span class="download-state lifecycle-label">' + label + '</span></div><h4 class="download-name" title="' + esc(title) + '">' + esc(title) + '</h4><div class="download-progress" role="progressbar" aria-label="' + esc(title) + ' progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(progress) + '"><span style="width:' + progress + '%"></span></div><div class="download-facts"><span>' + esc(item.category || "Download") + '</span><strong>' + Math.round(progress) + '%</strong>' + etaLabel + '</div>' + actions + errorDetail + '</article>';
 }
 async function refreshRecentMedia(){
  const list=$("recentMediaList");
