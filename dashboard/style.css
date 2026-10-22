@@ -1074,3 +1074,72 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
   .library-episode-actions .media-secondary-button { flex: 1 1 auto; }
   .interactive-release-card { padding: 11px; }
 }
+
+
+/* Recently downloaded media rail */
+.recent-media-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, .75fr) minmax(0, 2fr);
+  gap: 22px;
+  align-items: start;
+  margin: 0 0 30px;
+  padding: 19px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #121b2c, #101725);
+}
+.recent-media-heading { min-width: 0; }
+.recent-media-heading h3 { margin: 5px 0 10px; font-size: 20px; letter-spacing: -.5px; }
+.recent-media-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  max-height: 360px;
+  min-height: 150px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1px 6px 1px 1px;
+  scrollbar-width: thin;
+  scrollbar-color: #414d6b transparent;
+}
+.recent-media-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #263247;
+  border-radius: 12px;
+  background: #141d2d;
+  transition: border-color .18s, background .18s;
+}
+.recent-media-item:hover { border-color: #655b9f; background: #182238; }
+.recent-media-poster {
+  display: grid;
+  place-items: center;
+  flex: 0 0 52px;
+  width: 52px;
+  height: 72px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: #202a40;
+  color: #9a8cff;
+  font-size: 10px;
+  font-weight: 800;
+}
+.recent-media-poster img { width: 100%; height: 100%; object-fit: cover; }
+.recent-media-copy { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
+.recent-media-copy strong, .recent-media-episode { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-media-copy strong { color: #edf2ff; font-size: 12px; font-weight: 750; }
+.recent-media-episode { color: #a99aff; font-size: 11px; }
+.recent-media-copy small { color: #8390aa; font-size: 10px; }
+.recent-media-empty { display: grid; place-items: center; min-height: 120px; padding: 18px; border: 1px dashed #2b3850; border-radius: 12px; color: #8d9bb3; text-align: center; font-size: 12px; }
+@media (max-width: 900px) {
+  .recent-media-panel { grid-template-columns: 1fr; gap: 12px; }
+  .recent-media-list { max-height: 330px; }
+}
+@media (max-width: 600px) {
+  .recent-media-panel { padding: 13px; }
+  .recent-media-item { gap: 10px; }
+  .recent-media-poster { flex-basis: 46px; width: 46px; height: 64px; }
+}
