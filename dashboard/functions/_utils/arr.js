@@ -148,6 +148,7 @@ export function normalizeLibraryItem(service, item) {
     tmdbId: Number(item.tmdbId) > 0 ? Number(item.tmdbId) : null,
     tvdbId: Number(item.tvdbId) > 0 ? Number(item.tvdbId) : null,
     title: String(item.title || "Untitled").slice(0, 180),
+    added: String(item.added || item.addedAt || item.addedDate || ""),
     year: Number(item.year) || null,
     monitored: Boolean(item.monitored),
     status: String(item.status || "").slice(0, 40),
