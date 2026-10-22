@@ -28,6 +28,8 @@ let interactiveRequestId = 0;
 let interactiveReleases = [];
 let activeReleaseContext = null;
 let pendingMediaDelete = null;
+let mediaSearchRequestId = 0;
+let mediaSearchDebounce = null;
 let downloadView = "active";
 let latestDownloadItems = [];
 let latestDownloadSources = [];
@@ -390,14 +392,17 @@ function chooseSearchResult(button) {
   }
 }
 async function searchMedia(event) {
-  event.preventDefault();
+  if (event?.preventDefault) event.preventDefault();
   if (!authenticated || !arrReady) {
     $("mediaSearchMessage").textContent = "No connected Sonarr/Radarr destination is ready yet.";
     return;
   }
   const query = $("mediaSearch").value.trim();
+  const requestId = ++mediaSearchRequestId;
   if (query.length < 2) {
-    $("mediaSearchMessage").textContent = "Enter at least two characters to search.";
+    $("mediaResults").innerHTML = "";
+    $("mediaDetail").hidden = true;
+    $("mediaSearchMessage").textContent = query.length ? "Keep typing to search (at least 2 characters)." : "Start typing a show or movie title to search automatically.";
     return;
   }
   $("mediaSearchButton").disabled = true;
@@ -406,6 +411,7 @@ async function searchMedia(event) {
   $("mediaDetail").hidden = true;
   try {
     const result = await readResponse(await fetch(endpoints.search + "?q=" + encodeURIComponent(query), { cache: "no-store", credentials: "same-origin" }));
+    if (requestId !== mediaSearchRequestId) return;
     if (result.response.status === 401) {
       showLogin("Your Homebase sign-in expired. Sign in again to continue.");
       return;
@@ -415,10 +421,11 @@ async function searchMedia(event) {
     const offline = (result.data?.services || []).filter(service => !service.connected).map(service => service.name);
     $("mediaSearchMessage").textContent = "Select a result to choose an instance and root folder." + (offline.length ? " Search also completed with " + offline.join(", ") + " unavailable." : "");
   } catch (error) {
+    if (requestId !== mediaSearchRequestId) return;
     $("mediaResults").innerHTML = '<div class="media-empty">Search failed. ' + esc(error.message || "Try again.") + '</div>';
     $("mediaSearchMessage").textContent = "Could not search the connected media services.";
   } finally {
-    $("mediaSearchButton").disabled = !arrReady;
+    if (requestId === mediaSearchRequestId) $("mediaSearchButton").disabled = !arrReady;
   }
 }
 async function addSelectedMedia(event) {
@@ -923,6 +930,22 @@ $("downloadList").addEventListener("click", async event => {
 document.addEventListener("click",event=>{if(!event.target.closest(".download-more-wrap"))document.querySelectorAll(".download-action-menu").forEach(node=>node.hidden=true);});
 
 $("mediaSearchForm").addEventListener("submit", searchMedia);
+$("mediaSearch").addEventListener("input", () => {
+  if (mediaSearchDebounce) clearTimeout(mediaSearchDebounce);
+  // Invalidate any in-flight query immediately so older results cannot overwrite
+  // the results for the text the user is currently typing.
+  mediaSearchRequestId++;
+  const query = $("mediaSearch").value.trim();
+  if (query.length < 2) {
+    $("mediaResults").innerHTML = "";
+    $("mediaDetail").hidden = true;
+    $("mediaSearchMessage").textContent = query.length ? "Keep typing to search (at least 2 characters)." : "Start typing a show or movie title to search automatically.";
+    $("mediaSearchButton").disabled = !arrReady;
+    return;
+  }
+  $("mediaSearchMessage").textContent = "Searching as you type…";
+  mediaSearchDebounce = setTimeout(() => { void searchMedia(); }, 350);
+});
 $("mediaResults").addEventListener("click", event => {
   const select = event.target.closest("[data-select-index]");
   if (select) chooseSearchResult(select);
