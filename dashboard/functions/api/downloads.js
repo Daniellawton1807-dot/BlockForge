@@ -1,4 +1,5 @@
 import { loginConfigured, validSession } from "../_utils/downloads-auth.js";
+import { arrCall, arrServiceStatus, arrServices } from "../_utils/arr.js";
 const DEFAULT_QBITTORRENT_URL = "https://qb.danielvault.uk";
 const DEFAULT_SABNZBD_URL = "https://sab.danielvault.uk";
 const MAX_ITEMS_PER_SOURCE = 30;
@@ -105,9 +106,7 @@ async function qbitItems(env) {
   if (!Array.isArray(torrents)) throw new Error("qBittorrent returned an invalid queue.");
 
   return torrents
-    .filter(torrent => ["downloading", "forcedDL"].includes(torrent?.state)
-      && Number.isFinite(Number(torrent?.progress))
-      && Number(torrent.progress) < 1)
+    .filter(torrent => Number.isFinite(Number(torrent?.progress)) && (Number(torrent.progress) < 1 || ["uploading","stalledUP","pausedUP","queuedUP","checkingUP"].includes(torrent?.state)))
     .slice(0, MAX_ITEMS_PER_SOURCE)
     .map((torrent, index) => {
       const progress = Math.max(0, Math.min(100, Number(torrent.progress) * 100));
@@ -119,7 +118,8 @@ async function qbitItems(env) {
         category: mediaType(torrent.category),
         progress,
         etaSeconds: Number.isFinite(eta) && eta >= 0 && eta < 8640000 ? eta : null,
-        status: qbitState(torrent.state)
+        status: Number(torrent.progress) >= 1 ? "Downloaded · awaiting import" : qbitState(torrent.state),
+        lifecycle: Number(torrent.progress) >= 1 ? "importing" : "downloading"
       };
     });
 }
@@ -148,7 +148,7 @@ async function sabItems(env) {
   if (!Array.isArray(slots)) throw new Error("SABnzbd returned an invalid queue.");
 
   return slots
-    .filter(slot => Number.isFinite(Number(slot?.percentage)) && Number(slot.percentage) < 100)
+    .filter(slot => Number.isFinite(Number(slot?.percentage)))
     .slice(0, MAX_ITEMS_PER_SOURCE)
     .map((slot, index) => ({
       id: "sabnzbd-" + index,
@@ -157,7 +157,8 @@ async function sabItems(env) {
       category: mediaType(slot.cat),
       progress: Math.max(0, Math.min(100, Number(slot.percentage))),
       etaSeconds: sabEta(slot.timeleft, slot.status),
-      status: displayName(slot.status || "In queue").slice(0, 32)
+      status: Number(slot.percentage) >= 100 ? "Downloaded · awaiting import" : displayName(slot.status || "In queue").slice(0, 32),
+      lifecycle: Number(slot.percentage) >= 100 ? "importing" : "downloading"
     }));
 }
 
@@ -202,9 +203,39 @@ export async function onRequest({ env, request }) {
     };
   });
 
+  const historyResults = await Promise.all(arrServices().map(async service => {
+    if (!arrServiceStatus(env, service).configured) return [];
+    try {
+      const response = await arrCall(env, service, "api/v3/history?page=1&pageSize=30&sortKey=date&sortDirection=descending");
+      const records = Array.isArray(response) ? response : Array.isArray(response?.records) ? response.records : [];
+      return records.filter(record => /downloadfolderimported|downloaded|imported|fail|error/i.test(String(record.eventType || record.event || ""))).map((record, index) => {
+        const event = String(record.eventType || record.event || "");
+        const failed = /fail|error/i.test(event);
+        const title = displayName(record.sourceTitle || record.data?.sourceTitle || record.series?.title || record.movie?.title || record.message || "Media download");
+        return {
+          id: "arr-" + service.key + "-" + String(record.id || index),
+          source: service.name,
+          name: title,
+          category: service.type === "tv" ? "TV show" : "Movie",
+          progress: failed ? 0 : 100,
+          etaSeconds: null,
+          status: failed ? "Failed" : "Imported",
+          lifecycle: failed ? "failed" : "imported",
+          eventDate: String(record.date || record.dateAdded || ""),
+          eventDetail: String(record.message || record.data?.message || event).slice(0, 300)
+        };
+      });
+    } catch { return []; }
+  }));
+  const lifecycleItems = historyResults.flat().sort((a,b) => Date.parse(b.eventDate || 0) - Date.parse(a.eventDate || 0)).slice(0, 12);
+  const seen = new Set(items.map(item => item.name.toLowerCase()));
+  for (const item of lifecycleItems) {
+    if (!seen.has(item.name.toLowerCase())) items.push(item);
+  }
+
   return json({
     updatedAt: new Date().toISOString(),
-    items,
+    items: items.slice(0, MAX_ITEMS_PER_SOURCE * 2),
     sources
   });
 }
