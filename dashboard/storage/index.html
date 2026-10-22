@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b1020">
+<title>Storage — Homebase</title><link rel="stylesheet" href="../style.css?v=homebase-storage-1">
+</head><body><div class="layout">
+<aside class="sidebar">
+<a class="brand" href="/"><span class="logo">H</span><span>homebase<small>PERSONAL HOMELAB</small></span></a>
+<div class="nav-title">WORKSPACE</div><a class="nav" href="/"><span>◫</span> Overview</a><a class="nav" href="/media/"><span>▤</span> Media hub</a><a class="nav active" href="/storage/" aria-current="page"><span>▤</span> Storage</a><a class="nav" href="/#apps"><span>▦</span> All applications</a>
+<div class="side-bottom"><div class="server"><i></i><div><b>Storage monitor</b><small id="storageConnection">Checking drive status…</small></div></div><p>Drive visibility and mount status from Glances.</p></div>
+</aside>
+<main class="main">
+<header class="topbar"><div><div class="kicker">SERVER HARDWARE</div><h1>Storage</h1></div><div class="top-right"><span class="badge"><i></i> Homebase</span><button id="storageRefresh" class="icon-btn" aria-label="Refresh storage" title="Refresh storage">↻</button></div></header>
+<section class="hero storage-hero"><div><div class="kicker">CONNECTED DRIVES &amp; FILESYSTEMS</div><h2>Know what’s <em>connected.</em></h2><p>See mounted volumes, capacity, and available disk activity information.</p></div><div class="hero-glyph">▤</div></section>
+<section class="storage-summary">
+<article class="metric"><div class="metric-head">VOLUMES FOUND <span>▤</span></div><div class="metric-number" id="storageCount">—</div><div class="metric-foot">Filesystems reported by Glances</div></article>
+<article class="metric"><div class="metric-head">MOUNTED <span>✓</span></div><div class="metric-number" id="storageMounted">—</div><div class="metric-foot">Currently visible mount points</div></article>
+<article class="metric"><div class="metric-head">CAPACITY IN USE <span>▥</span></div><div class="metric-number" id="storageUsed">—</div><div class="metric-foot" id="storageCapacityNote">Across reported volumes</div></article>
+</section>
+<section class="section-head storage-section-head"><div><div class="kicker">LIVE INVENTORY</div><h3>Connected volumes</h3></div><span id="storageUpdated" class="section-tag">Waiting for data</span></section>
+<div id="storageList" class="storage-list" aria-live="polite"><div class="media-empty">Loading storage information…</div></div>
+<section class="storage-restart-panel">
+<div><div class="kicker">SERVER RECOVERY</div><h3>Restart server</h3><p>Use this only if a drive has disappeared and normal recovery has failed. The server and hosted services will be unavailable while it restarts.</p><p id="restartStatus" class="storage-restart-status" aria-live="polite">Restart control requires a secure server-side restart agent.</p></div>
+<button id="restartServer" class="storage-restart-button" type="button">Restart server</button>
+</section>
+<section class="storage-note"><strong>Important distinction</strong><p>Glances can show mounted filesystems and may expose disk I/O counters, but it does not reliably report physical-drive SMART health or detect every disconnected disk. A drive missing from this list is not proof of a failed drive. Full hardware health needs a server-side SMART/USB inventory agent.</p></section>
+<footer><span>HOMEBASE</span><i>•</i> Storage <small>Restart is disabled until an authenticated server-side agent is configured.</small></footer>
+</main></div><script src="storage.js?v=homebase-storage-1"></script></body></html>
