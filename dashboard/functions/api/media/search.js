@@ -14,8 +14,20 @@ export async function onRequest({ request, env }) {
     const status = arrServiceStatus(env, service);
     if (!status.configured) return { service, error: status.message };
     try {
-      const result = await arrCall(env, service, "api/v3/" + (service.type === "tv" ? "series" : "movie") + "/lookup?term=" + encodeURIComponent(query));
-      return { service, items: Array.isArray(result) ? result : [] };
+      const endpoint = "api/v3/" + (service.type === "tv" ? "series" : "movie") + "/lookup?term=";
+      // ARR lookup can return different fuzzy matches depending on capitalization
+      // in some upstream metadata providers. Query the original and a normalized
+      // title-case variant, then merge/deduplicate before relevance ranking.
+      const variants = [...new Set([query, query.charAt(0).toLocaleUpperCase("en-US") + query.slice(1)])];
+      const results = await Promise.all(variants.map(async term => {
+        try {
+          const result = await arrCall(env, service, endpoint + encodeURIComponent(term));
+          return Array.isArray(result) ? result : [];
+        } catch {
+          return [];
+        }
+      }));
+      return { service, items: results.flat() };
     } catch (error) {
       return { service, error: error?.message || service.name + " is unavailable." };
     }
