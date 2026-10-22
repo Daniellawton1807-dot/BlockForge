@@ -1301,3 +1301,15 @@ html[data-theme="light"] .activity-panel{background:#fff}html[data-theme="light"
 .lifecycle-failed .download-state{color:#ff8b96}
 .lifecycle-importing .download-state{color:#b6aaff}
 @media(max-width:420px){.lifecycle-step{font-size:8px}.download-lifecycle{gap:3px}}
+
+
+/* Unified downloads panel tabs */
+.download-tabs{display:flex;gap:7px;margin:14px 0 12px;padding:4px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.download-tab{flex:1;min-width:0;padding:10px 12px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted);font:inherit;font-size:11px;font-weight:750;cursor:pointer}
+.download-tab:hover{color:var(--text);background:var(--card)}
+.download-tab.is-active{border-color:#51478d;background:#292443;color:#d4cdff;box-shadow:0 2px 8px #0002}
+.lifecycle-imported .download-state{color:#72ddb0}
+.lifecycle-failed .download-state{color:#ff8b96}
+.lifecycle-importing .download-state{color:#b6aaff}
+.lifecycle-failed{border-color:#633944}
+@media(max-width:430px){.download-tab{padding:9px 6px;font-size:10px}}
