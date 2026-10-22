@@ -231,78 +231,46 @@ export async function onRequest({ env, request }) {
       }
       if(action==="replace") {
         const candidates=arrServices().filter(service=>arrServiceStatus(env,service).configured);
-        const normalize=value=>String(value||"").toLowerCase()
-          .replace(/\\[[^\\]]*\\]/g," ")
-          .replace(/\\([^)]*\\)/g," ")
-          .replace(/\\b(19|20)\\d{2}\\b/g," ")
-          .replace(/[^a-z0-9]+/g," ").trim();
-        const wanted=normalize(name);
-        const matches=[];
-        const failures=[];
+        const normalize=value=>String(value||"").toLowerCase().replace(/\[[^\]]*\]/g," ").replace(/\([^)]*\)/g," ").replace(/\b(19|20)\d{2}\b/g," ").replace(/[^a-z0-9]+/g," ").trim();
+        const rawName=String(name||""), wanted=normalize(rawName);
+        const episodeCode=rawName.match(/\bS(\d{1,2})\s*E(\d{1,3})\b/i)||rawName.match(/\b(\d{1,2})x(\d{1,3})\b/i);
+        const matches=[], failures=[];
         for(const service of candidates) {
           try {
             if(service.type==="tv") {
               const series=await arrCall(env,service,"api/v3/series");
-              const match=(Array.isArray(series)?series:[]).find(item=>{
-                const title=normalize(item.title);
-                return title && (title===wanted || title.includes(wanted) || wanted.includes(title));
-              });
-              if(match) {
-                // A series-level search searches every missing episode. Only
-                // queue EpisodeSearch when the download name identifies one episode.
-                const episodeCode=String(name).match(/\\bS(\\d{1,2})\\s*E(\\d{1,3})\\b/i)
-                  || String(name).match(/\\b(\\d{1,2})x(\\d{1,3})\\b/i);
-                const episodeTitle=normalize(String(name)
-                  .replace(/\\bS\\d{1,2}\\s*E\\d{1,3}\\b/ig," ")
-                  .replace(/\\b\\d{1,2}x\\d{1,3}\\b/ig," ")
-                  .replace(/\\b(19|20)\\d{2}\\b/g," "))
-                  .replace(wanted," ").trim();
-                const episodes=await arrCall(env,service,"api/v3/episode?seriesId="+Number(match.id));
-                if(Array.isArray(episodes)) {
-                  let episodeMatches=[];
-                  if(episodeCode) {
-                    const seasonNumber=Number(episodeCode[1]), episodeNumber=Number(episodeCode[2]);
-                    episodeMatches=episodes.filter(ep=>Number(ep.seasonNumber)===seasonNumber&&Number(ep.episodeNumber)===episodeNumber);
-                  }
-                  if(!episodeMatches.length && episodeTitle.length>=4) {
-                    episodeMatches=episodes.filter(ep=>{
-                      const title=normalize(ep.title);
-                      return title && (title===episodeTitle || title.includes(episodeTitle) || episodeTitle.includes(title));
-                    });
-                  }
-                  if(episodeMatches.length) matches.push({service,match,episodes:episodeMatches});
-                }
+              const match=(Array.isArray(series)?series:[]).map(item=>({item,title:normalize(item.title)})).filter(x=>x.title&&wanted.includes(x.title)).sort((x,y)=>y.title.length-x.title.length)[0]?.item;
+              if(!match) continue;
+              const episodes=await arrCall(env,service,"api/v3/episode?seriesId="+Number(match.id));
+              if(!Array.isArray(episodes)) continue;
+              let found=[];
+              if(episodeCode) found=episodes.filter(ep=>Number(ep.seasonNumber)===Number(episodeCode[1])&&Number(ep.episodeNumber)===Number(episodeCode[2]));
+              if(!found.length) {
+                const residual=wanted.replace(normalize(match.title)," ").trim();
+                const words=residual.split(/\s+/).filter(word=>word.length>2&&!/^(1080p|720p|2160p|web|webrip|bluray|h264|h265|x264|x265|proper|repack|aac|dts|hdr)$/i.test(word));
+                const distinctive=words.join(" ");
+                if(distinctive.length>=4) found=episodes.filter(ep=>normalize(ep.title)===distinctive);
               }
+              if(found.length) matches.push({service,match,episodes:found});
             } else {
               const movies=await arrCall(env,service,"api/v3/movie");
-              const match=(Array.isArray(movies)?movies:[]).find(item=>{
-                const title=normalize(item.title);
-                return title && (title===wanted || title.includes(wanted) || wanted.includes(title));
-              });
+              const match=(Array.isArray(movies)?movies:[]).map(item=>({item,title:normalize(item.title)})).filter(x=>x.title&&wanted.includes(x.title)).sort((x,y)=>y.title.length-x.title.length)[0]?.item;
               if(match) matches.push({service,match});
             }
-          } catch(error) { failures.push(service.name + ": " + (error?.message || "lookup failed")); }
+          } catch(error) { failures.push(service.name+": "+(error?.message||"lookup failed")); }
         }
-        if(!matches.length) {
-          const detail=failures.length ? " Checked instances: " + failures.join("; ").slice(0,500) : "";
-          return json({ok:true,searchQueued:false,message:"Download removed, but no specific matching episode or movie was found in Sonarr/Radarr. This action will not queue a whole-series search." + detail});
-        }
-        const queued=[];
-        const queueErrors=[];
+        if(!matches.length) return json({ok:true,searchQueued:false,message:"Download removed, but the exact episode/movie could not be identified. No whole-series search was queued."+(failures.length?" Instance errors: "+failures.join("; ").slice(0,300):"")});
+        const queued=[], errors=[];
         for(const entry of matches) {
+          const {service,match}=entry;
           try {
-            const {service,match}=entry;
-            const command=service.type==="tv"
-              ? {name:"EpisodeSearch",episodeIds:(entry.episodes||[]).map(ep=>Number(ep.id))}
-              : {name:"MoviesSearch",movieIds:[Number(match.id)]};
+            const command=service.type==="tv"?{name:"EpisodeSearch",episodeIds:entry.episodes.map(ep=>Number(ep.id))}:{name:"MoviesSearch",movieIds:[Number(match.id)]};
             await arrCall(env,service,"api/v3/command",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(command)});
-            queued.push(service.name + (service.type==="tv" ? " (" + entry.episodes.length + " episode" + (entry.episodes.length===1?"":"s") + ")" : ""));
-          } catch(error) { queueErrors.push(service.name + ": " + (error?.message || "search queue failed")); }
+            queued.push(service.name+(service.type==="tv"?" ("+entry.episodes.map(ep=>"S"+String(ep.seasonNumber).padStart(2,"0")+"E"+String(ep.episodeNumber).padStart(2,"0")).join(", ")+")":""));
+          } catch(error) { errors.push(service.name+": "+(error?.message||"search queue failed")); }
         }
-        if(!queued.length) {
-          return json({ok:false,error:"Download was removed, but the replacement search could not be queued. " + queueErrors.join("; ").slice(0,500)},502);
-        }
-        return json({ok:true,searchQueued:true,message:"Download removed. Replacement search queued in " + queued.join(", ") + "." + (queueErrors.length ? " Some matching instances failed: " + queueErrors.join("; ").slice(0,300) : "")});
+        if(!queued.length) return json({ok:false,error:"Download removed, but targeted search could not be queued. "+errors.join("; ").slice(0,400)},502);
+        return json({ok:true,searchQueued:true,message:"Download removed. Targeted search queued in "+queued.join(", ")+(errors.length?". Errors: "+errors.join("; ").slice(0,200):"")});
       }
       return json({ok:true,message:action==="pause"?"Download paused.":action==="resume"?"Download resumed.":action==="replace"?"Download removed and a replacement search was queued.":"Download removed and downloaded files deleted."});
     } catch(error) { return json({error:error.message||"Download action failed."},502); }
