@@ -930,7 +930,7 @@ $("downloadList").addEventListener("click", async event => {
     const response=await fetch(endpoints.queue,{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"content-type":"application/json"},body:JSON.stringify({action,source:item.source,id:item.id,name:item.name,torrentHash:item.torrentHash,nzoId:item.nzoId})});
     const result=await response.json().catch(()=>null);
     if(response.status===401){showLogin("Your Homebase sign-in expired. Sign in again to continue.");return;}
-    if(!response.ok)throw new Error(result?.error||"Download action failed.");
+    if(!response.ok)throw new Error(result?.error||("Download action failed (HTTP "+response.status+")."));
     if(result?.message) $("downloadSummary").textContent=result.message;
     if(action!=="pause" && action!=="resume") ignoredDownloadIds.add(id);
     await refreshDownloads();
