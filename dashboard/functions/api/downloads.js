@@ -221,7 +221,7 @@ export async function onRequest({ env, request }) {
         url.searchParams.set("name",action==="pause"?"pause":action==="resume"?"resume":"delete");
         url.searchParams.set("output","json"); url.searchParams.set("apikey",apiKey);
         const nzoId=String(body?.nzoId||"");
-        if(!/^SABnzbd_nzo_[A-Za-z0-9]+$/i.test(nzoId)) throw new Error("Missing or invalid SABnzbd job identifier. Refresh the queue and try again.");
+        if(!/^SABnzbd_nzo_[A-Za-z0-9_-]+$/i.test(nzoId)) throw new Error("Missing or invalid SABnzbd job identifier. Refresh the queue and try again.");
         url.searchParams.set("value",nzoId);
         if(action!=="pause" && action!=="resume") url.searchParams.set("del_files","1");
         const actionResult = await readJson(url);
