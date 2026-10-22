@@ -1264,3 +1264,13 @@ html[data-theme="light"] .command-result-icon { background:#eeecff;color:#5545b0
  .widget-options { grid-template-columns:1fr; }
  .command-overlay { padding-top:8vh; }
 }
+
+
+/* Homebase activity feed */
+.activity-panel{margin:26px 0 30px;padding:19px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,#121b2b,#101725)}
+.activity-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}.activity-heading h3{margin:4px 0;font-size:20px}.activity-heading p{margin:0;color:var(--muted);font-size:11px}
+.activity-feed{display:grid;gap:8px}.activity-item{display:flex;align-items:center;gap:12px;min-width:0;padding:11px;border:1px solid var(--line);border-radius:11px;background:var(--card)}
+.activity-icon{display:grid;place-items:center;flex:none;width:30px;height:30px;border-radius:9px;background:#173a35;color:#7be2b9;font-weight:800}.activity-icon.warning{background:#44351f;color:#ffc17e}.activity-icon.info{background:#1b344f;color:#83c4ff}
+.activity-copy{display:grid;flex:1;min-width:0;gap:3px}.activity-copy strong{font-size:12px}.activity-copy span{color:var(--muted);font-size:11px;overflow-wrap:anywhere}.activity-item time{flex:none;color:var(--muted);font-size:10px;text-align:right}.activity-empty{padding:18px;border:1px dashed var(--line);border-radius:11px;color:var(--muted);font-size:12px;text-align:center}
+html[data-theme="light"] .activity-panel{background:#fff}html[data-theme="light"] .activity-item{background:#f8f9fd}
+@media(max-width:600px){.activity-panel{padding:13px}.activity-item{align-items:flex-start;gap:9px;padding:9px}.activity-item time{max-width:78px;font-size:9px}.activity-copy strong{font-size:11px}}
