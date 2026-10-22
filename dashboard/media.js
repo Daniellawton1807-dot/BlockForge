@@ -70,8 +70,8 @@ function downloadCard(item, updatedAt) {
   const eta = paused ? "Download paused" : hasEta ? formatEta(seconds) : lifecycle === "importing" ? "Waiting for import" : lifecycle === "imported" ? "Complete" : lifecycle === "failed" ? "Failed" : "In progress";
   const etaLabel = hasEta ? '<span class="download-eta" data-eta-seconds="' + seconds + '" data-eta-started="' + updatedAt + '">ETA ' + esc(eta) + '</span>' : '<span>' + esc(eta) + '</span>';
   const title = String(item.name || "Untitled download");
-  const actions = lifecycle === "downloading" && !paused
-    ? '<div class="download-actions"><button class="download-action-pause" type="button" data-download-action="pause" data-download-id="' + esc(item.id) + '">Ⅱ Pause</button><div class="download-more-wrap"><button class="download-action-more" type="button" aria-label="Download options" aria-expanded="false" data-download-menu="' + esc(item.id) + '">×</button><div class="download-action-menu" hidden><button type="button" data-download-action="remove" data-download-id="' + esc(item.id) + '">Remove download</button><button type="button" data-download-action="replace" data-download-id="' + esc(item.id) + '">Remove and rescan</button><button type="button" data-download-action="ignore" data-download-id="' + esc(item.id) + '">Ignore download</button></div></div></div>'
+  const actions = lifecycle === "downloading"
+    ? '<div class="download-actions">' + (paused ? '<button class="download-action-pause" type="button" data-download-action="resume" data-download-id="' + esc(item.id) + '">▶ Resume</button>' : '<button class="download-action-pause" type="button" data-download-action="pause" data-download-id="' + esc(item.id) + '">Ⅱ Pause</button>') + '<div class="download-more-wrap"><button class="download-action-more" type="button" aria-label="Download options" aria-expanded="false" data-download-menu="' + esc(item.id) + '">×</button><div class="download-action-menu" hidden><button type="button" data-download-action="remove" data-download-id="' + esc(item.id) + '">Remove download</button><button type="button" data-download-action="replace" data-download-id="' + esc(item.id) + '">Remove and rescan</button><button type="button" data-download-action="ignore" data-download-id="' + esc(item.id) + '">Ignore download</button></div></div></div>'
     : '<div class="download-actions download-actions-placeholder" aria-hidden="true"></div>';
   const errorDetail = item.eventDetail ? '<p class="download-event-detail">' + esc(item.eventDetail) + '</p>' : "";
   return '<article class="download-card lifecycle-' + lifecycle + (paused ? ' download-paused' : '') + '" data-card-download="' + esc(item.id) + '"><div class="download-card-header"><span class="download-source">' + esc(item.source || "Downloader") + '</span><span class="download-state lifecycle-label">' + label + '</span></div><h4 class="download-name" title="' + esc(title) + '">' + esc(title) + '</h4><div class="download-progress" role="progressbar" aria-label="' + esc(title) + ' progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(progress) + '"><span style="width:' + progress + '%"></span></div><div class="download-facts"><span>' + esc(item.category || "Download") + '</span><strong>' + Math.round(progress) + '%</strong>' + etaLabel + '</div>' + actions + errorDetail + '</article>';
@@ -925,16 +925,16 @@ $("downloadList").addEventListener("click", async event => {
   const item=latestDownloadItems.find(entry=>String(entry.id)===id);
   if(!item)return;
   if(action==="ignore"){ignoredDownloadIds.add(id);renderDownloads({items:latestDownloadItems,sources:latestDownloadSources});return;}
-  button.disabled=true;button.textContent=action==="pause"?"Pausing…":action==="replace"?"Rescanning…":"Removing…";
+  button.disabled=true;button.textContent=action==="pause"?"Pausing…":action==="resume"?"Resuming…":action==="replace"?"Rescanning…":"Removing…";
   try{
     const response=await fetch(endpoints.queue,{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"content-type":"application/json"},body:JSON.stringify({action,source:item.source,id:item.id,name:item.name,torrentHash:item.torrentHash,nzoId:item.nzoId})});
     const result=await response.json().catch(()=>null);
     if(response.status===401){showLogin("Your Homebase sign-in expired. Sign in again to continue.");return;}
     if(!response.ok)throw new Error(result?.error||"Download action failed.");
     if(result?.message) $("downloadSummary").textContent=result.message;
-    if(action!=="pause") ignoredDownloadIds.add(id);
+    if(action!=="pause" && action!=="resume") ignoredDownloadIds.add(id);
     await refreshDownloads();
-  }catch(error){$("downloadSummary").textContent=error.message||"Download action failed.";button.disabled=false;button.textContent=action==="pause"?"Ⅱ Pause":action==="replace"?"Remove and rescan":"Remove download";}
+  }catch(error){$("downloadSummary").textContent=error.message||"Download action failed.";button.disabled=false;button.textContent=action==="pause"?"Ⅱ Pause":action==="resume"?"▶ Resume":action==="replace"?"Remove and rescan":"Remove download";}
 });
 document.addEventListener("click",event=>{if(!event.target.closest(".download-more-wrap"))document.querySelectorAll(".download-action-menu").forEach(node=>node.hidden=true);});
 
