@@ -291,10 +291,10 @@ export async function onRequest({ env, request }) {
         const queueErrors=[];
         for(const entry of matches) {
           try {
+            const {service,match}=entry;
             const command=service.type==="tv"
               ? {name:"EpisodeSearch",episodeIds:(entry.episodes||[]).map(ep=>Number(ep.id))}
               : {name:"MoviesSearch",movieIds:[Number(match.id)]};
-            const {service,match}=entry;
             await arrCall(env,service,"api/v3/command",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(command)});
             queued.push(service.name + (service.type==="tv" ? " (" + entry.episodes.length + " episode" + (entry.episodes.length===1?"":"s") + ")" : ""));
           } catch(error) { queueErrors.push(service.name + ": " + (error?.message || "search queue failed")); }
