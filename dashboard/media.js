@@ -28,6 +28,9 @@ let interactiveRequestId = 0;
 let interactiveReleases = [];
 let activeReleaseContext = null;
 let pendingMediaDelete = null;
+let downloadView = "active";
+let latestDownloadItems = [];
+let latestDownloadSources = [];
 
 function safeUrl(value) {
   try {
@@ -188,13 +191,32 @@ async function loadArrConfig() {
     return true;
   }
 }
+function setDownloadView(view) {
+  downloadView = view === "completed" ? "completed" : "active";
+  const active = downloadView === "active";
+  $("downloadTabActive").classList.toggle("is-active", active);
+  $("downloadTabCompleted").classList.toggle("is-active", !active);
+  $("downloadTabActive").setAttribute("aria-selected", String(active));
+  $("downloadTabCompleted").setAttribute("aria-selected", String(!active));
+  renderDownloads({items: latestDownloadItems, sources: latestDownloadSources});
+}
 function renderDownloads(data) {
-  const items = Array.isArray(data.items) ? data.items : [];
-  const sources = Array.isArray(data.sources) ? data.sources : [];
+  latestDownloadItems = Array.isArray(data.items) ? data.items : [];
+  latestDownloadSources = Array.isArray(data.sources) ? data.sources : [];
+  const activeItems = latestDownloadItems.filter(item => !["imported","failed"].includes(item.lifecycle));
+  const completedItems = latestDownloadItems.filter(item => ["imported","failed"].includes(item.lifecycle))
+    .sort((a,b) => Date.parse(b.eventDate || 0) - Date.parse(a.eventDate || 0)).slice(0,5);
+  const items = downloadView === "active" ? activeItems : completedItems;
+  const sources = latestDownloadSources;
   const warnings = sources.filter(source => !source.connected).map(source => esc(source.name) + ": " + esc(source.message || "Unavailable"));
-  $("downloadSummary").textContent = items.length + " active " + (items.length === 1 ? "download" : "downloads");
+  const activeCount = activeItems.length;
+  $("downloadSummary").textContent = downloadView === "active"
+    ? activeCount + " active " + (activeCount === 1 ? "download" : "downloads")
+    : completedItems.length + " recent completed / failed";
   if (items.length) {
-    $("downloadList").innerHTML = items.map(item => downloadCard(item, Date.now())).join("") + (warnings.length ? '<div class="download-warning">' + warnings.join(" · ") + "</div>" : "");
+    $("downloadList").innerHTML = items.map(item => downloadCard(item, Date.now())).join("") + (downloadView === "active" && warnings.length ? '<div class="download-warning">' + warnings.join(" · ") + "</div>" : "");
+  } else if (downloadView === "completed") {
+    $("downloadList").innerHTML = '<div class="downloads-empty">No recent completed or failed downloads found in Sonarr/Radarr history yet.</div>';
   } else if (sources.length && sources.every(source => source.connected)) {
     $("downloadList").innerHTML = '<div class="downloads-empty">No active downloads right now.</div>';
   } else {
@@ -840,10 +862,12 @@ function tickEtas() {
 async function initializeMedia() {
   renderServiceLinks();
   await loadArrConfig();
-  if (authenticated) { void refreshDownloads(); void refreshRecentMedia(); }
+  if (authenticated) { void refreshDownloads(); }
 }
 $("downloadLoginForm").addEventListener("submit", submitLogin);
 $("downloadLogout").addEventListener("click", lockMedia);
+$("downloadTabActive").addEventListener("click", () => setDownloadView("active"));
+$("downloadTabCompleted").addEventListener("click", () => setDownloadView("completed"));
 $("mediaSearchForm").addEventListener("submit", searchMedia);
 $("mediaResults").addEventListener("click", event => {
   const select = event.target.closest("[data-select-index]");
@@ -901,12 +925,11 @@ $("interactiveReleaseDialog").addEventListener("click", event => {
   const grab = event.target.closest("[data-grab-release]");
   if (grab && !grab.disabled) grabInteractiveRelease(grab);
 });
-setInterval(() => { if (authenticated) refreshRecentMedia(); }, 300000);
+
 $("mediaRefresh").addEventListener("click", async () => {
   $("mediaRefresh").textContent = "…";
   await loadArrConfig();
   void refreshDownloads();
-  void refreshRecentMedia();
   $("mediaRefresh").textContent = "↻";
 });
 initializeMedia();
