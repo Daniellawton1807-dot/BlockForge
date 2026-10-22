@@ -74,7 +74,7 @@ async function refreshRecentMedia(){
   const data=await response.json().catch(()=>null);
   if(response.status===401){list.innerHTML='<div class="recent-media-empty">Sign in to view recent downloads.</div>';return;}
   if(!response.ok) throw new Error("Recent imports unavailable");
-  const items=Array.isArray(data?.items)?data.items:[];
+  const items=Array.isArray(data?.items)?data.items.slice(0,5):[];
   if(!items.length){list.innerHTML='<div class="recent-media-empty">No recent imported movies or episodes found yet.</div>';return;}
   list.innerHTML=items.map(item=>{
    const poster=safeUrl(item.posterUrl||"");
