@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0b1020">
 <title>Media — Homebase</title>
-<link rel="stylesheet" href="../style.css?v=homebase-storage-cleanup-1">
+<link rel="stylesheet" href="../style.css?v=homebase-polish-1">
 </head>
 <body>
 <div class="layout">
@@ -20,7 +20,7 @@
 <main class="main media-main">
   <header class="topbar">
     <div><div class="kicker">YOUR MEDIA STACK</div><h1>Media hub</h1></div>
-    <div class="top-right"><span class="badge"><i></i> Homebase online</span><button id="mediaRefresh" class="icon-btn" title="Refresh media status" aria-label="Refresh media status">↻</button></div>
+    <div class="top-right"><button id="mediaThemeToggle" class="icon-btn" type="button" title="Toggle light or dark theme" aria-label="Toggle theme">☼</button><span class="badge"><i></i> Homebase online</span><button id="mediaRefresh" class="icon-btn" title="Refresh media status" aria-label="Refresh media status">↻</button></div>
   </header>
   <section class="hero media-hero"><div><div class="kicker">REQUESTS, LIBRARIES, DOWNLOADS</div><h2>Your media, <em>in one place.</em></h2><p>Use Sonarr and Radarr directly, then follow active downloads here.</p></div><div class="hero-glyph">▶</div></section>
 
@@ -116,5 +116,7 @@
 </div>
 <script src="../config.js?v=homebase-media-1"></script>
 <script src="../media.js?v=homebase-recent-2"></script>
-</body>
+<script>
+(()=>{const key="homebase-theme";const get=()=>{try{return localStorage.getItem(key)||"dark"}catch{return "dark"}};const set=t=>{document.documentElement.dataset.theme=t;const b=document.getElementById("mediaThemeToggle");if(b){b.textContent=t==="light"?"☾":"☼";b.title=t==="light"?"Switch to dark theme":"Switch to light theme";}const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=t==="light"?"#f4f6fb":"#0b1020";};set(get());document.getElementById("mediaThemeToggle")?.addEventListener("click",()=>{const t=get()==="light"?"dark":"light";try{localStorage.setItem(key,t)}catch{}set(t);});})();
+</script></body>
 </html>
