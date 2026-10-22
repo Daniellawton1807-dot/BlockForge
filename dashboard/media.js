@@ -657,13 +657,23 @@ async function runLibraryDetailAction(button, confirmedDelete = false) {
         status.textContent = action === "removeEpisode" ? "Episode file removed successfully. Refreshing episode counts…" : "Movie file removed successfully. Refreshing library…";
         status.className = "media-status is-success";
       }
-      // Refresh the library first, then reopen the current title so episode-file
-      // flags and season counts are rebuilt from the live ARR API response.
-      await loadLibrary();
+      // Close the detail view for whole-title removals, then refresh after ARR
+      // has had a moment to reflect the deletion. Retry if a background library
+      // request is already running, so this refresh cannot silently be skipped.
       if (action === "removeMovie" || action === "removeSeries") {
         const detailDialog = $("libraryDetailDialog");
         if (detailDialog.open) detailDialog.close();
-        $("librarySummary").textContent = "Removed " + (item?.title || "media item") + (action === "removeSeries" ? " and all its files. Library updated." : " file. Library updated.");
+      }
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (!libraryFetchInFlight) {
+          await loadLibrary();
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      if (action === "removeMovie" || action === "removeSeries") {
+        $("librarySummary").textContent = "Removed " + (item?.title || "media item") + (action === "removeSeries" ? " and all its files. Library updated." : " from Radarr. Library updated.");
         $("librarySummary").className = "media-status is-success";
       } else if ($("libraryDetailDialog").open) {
         const opener = [...$("libraryList").querySelectorAll("[data-library-details]")].find(control => control.dataset.libraryKey === body.serviceKey && Number(control.dataset.libraryId) === body.id);
