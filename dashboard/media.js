@@ -66,7 +66,7 @@ function downloadCard(item, updatedAt) {
   const eta = hasEta ? formatEta(seconds) : lifecycle === "importing" ? "Waiting for import" : lifecycle === "imported" ? "Complete" : lifecycle === "failed" ? "Failed" : "In progress";
   const etaLabel = hasEta ? '<span class="download-eta" data-eta-seconds="' + seconds + '" data-eta-started="' + updatedAt + '">ETA ' + esc(eta) + '</span>' : '<span>' + esc(eta) + '</span>';
   const title = String(item.name || "Untitled download");
-  const actions = lifecycle === "downloading" || lifecycle === "importing"
+  const actions = lifecycle === "downloading"
     ? '<div class="download-actions"><button class="download-action-pause" type="button" data-download-action="pause" data-download-id="' + esc(item.id) + '">Ⅱ Pause</button><div class="download-more-wrap"><button class="download-action-more" type="button" aria-label="Download options" aria-expanded="false" data-download-menu="' + esc(item.id) + '">×</button><div class="download-action-menu" hidden><button type="button" data-download-action="remove" data-download-id="' + esc(item.id) + '">Remove download</button><button type="button" data-download-action="replace" data-download-id="' + esc(item.id) + '">Remove and rescan</button><button type="button" data-download-action="ignore" data-download-id="' + esc(item.id) + '">Ignore download</button></div></div></div>'
     : '<div class="download-actions download-actions-placeholder" aria-hidden="true"></div>';
   const errorDetail = item.eventDetail ? '<p class="download-event-detail">' + esc(item.eventDetail) + '</p>' : "";
