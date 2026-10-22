@@ -1390,3 +1390,9 @@ html[data-theme="light"] .download-tab.is-active{background:#efedff;border-color
 html[data-theme="light"] .downloads-section .download-action-pause,html[data-theme="light"] .downloads-section .download-action-more{background:#f5f7fc;color:#34415c;border-color:#d4dceb}
 html[data-theme="light"] .downloads-section .download-action-menu{background:#fff;border-color:#d8deeb;box-shadow:0 12px 32px #19203322}
 html[data-theme="light"] .downloads-section .download-action-menu button{color:#26344c}
+
+
+/* Make paused downloads visibly distinct from active transfers. */
+.download-card.download-paused .download-state { color: #f5c66b; border-color: rgba(245, 198, 107, .42); background: rgba(245, 198, 107, .1); }
+.download-card.download-paused .download-progress span { background: #e8b957; opacity: .8; }
+.download-card.download-paused .download-facts > span:last-child { color: #f5c66b; font-weight: 600; }
