@@ -57,7 +57,19 @@
       <div id="mediaLibraryView" class="media-library-view" role="tabpanel" aria-labelledby="mediaModeLibrary" hidden>
         <div class="media-library-toolbar">
           <label class="search media-search"><span>⌕</span><input id="libraryFilter" type="search" placeholder="Filter your library…" aria-label="Filter your media library" autocomplete="off"></label>
-          <button id="libraryRefresh" class="media-secondary-button" type="button">Refresh library</button>
+          <div class="library-toolbar-actions">
+            <details id="librarySortMenu" class="library-sort-menu">
+              <summary class="media-secondary-button">Sort by <span aria-hidden="true">▾</span></summary>
+              <div class="library-sort-options" role="group" aria-label="Sort library">
+                <button type="button" data-library-sort="recent" class="is-active">Recently added</button>
+                <button type="button" data-library-sort="title-asc">Title (A–Z)</button>
+                <button type="button" data-library-sort="title-desc">Title (Z–A)</button>
+                <button type="button" data-library-sort="year-desc">Release year (newest)</button>
+                <button type="button" data-library-sort="year-asc">Release year (oldest)</button>
+              </div>
+            </details>
+            <button id="libraryRefresh" class="media-secondary-button" type="button">Refresh library</button>
+          </div>
         </div>
         <div id="librarySummary" class="media-status" role="status" aria-live="polite">Open the library to load your Sonarr and Radarr items.</div>
         <div id="libraryServiceFilters" class="library-service-filters" aria-label="Filter by service"></div>
