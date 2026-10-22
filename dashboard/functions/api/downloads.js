@@ -255,15 +255,8 @@ export async function onRequest({ env, request }) {
                 const episodeTitle=normalize(String(name)
                   .replace(/\\bS\\d{1,2}\\s*E\\d{1,3}\\b/ig," ")
                   .replace(/\\b\\d{1,2}x\\d{1,3}\\b/ig," ")
-                  .replace(/\\b(19|20)\\d{2}\\b/g," ")
-                  .replace(new RegExp(String(match.title||"").replace(/[.*+?^\\$\\{\\}()|[\\]\\\\]/g,"\\\\            if(service.type==="tv") {
-              const series=await arrCall(env,service,"api/v3/series");
-              const match=(Array.isArray(series)?series:[]).find(item=>{
-                const title=normalize(item.title);
-                return title && (title===wanted || title.includes(wanted) || wanted.includes(title));
-              });
-              if(match) matches.push({service,match});
-            } else {"),"ig")," "));
+                  .replace(/\\b(19|20)\\d{2}\\b/g," "))
+                  .replace(wanted," ").trim();
                 const episodes=await arrCall(env,service,"api/v3/episode?seriesId="+Number(match.id));
                 if(Array.isArray(episodes)) {
                   let episodeMatches=[];
