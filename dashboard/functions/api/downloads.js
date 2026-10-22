@@ -149,19 +149,26 @@ async function sabItems(env) {
   if (!Array.isArray(slots)) throw new Error("SABnzbd returned an invalid queue.");
 
   return slots
-    .filter(slot => Number.isFinite(Number(slot?.percentage)) && !/paused|queued|completed|failed/i.test(String(slot?.status || "")))
+    // Keep paused and queued jobs visible in the active-downloads section.
+    // SABnzbd reports paused jobs in queue.slots too; only exclude completed/failed jobs.
+    .filter(slot => Number.isFinite(Number(slot?.percentage)) && !/completed|failed/i.test(String(slot?.status || "")))
     .slice(0, MAX_ITEMS_PER_SOURCE)
-    .map((slot, index) => ({
-      id: "sabnzbd-" + index,
-      nzoId: String(slot.nzo_id || ""),
-      source: "SABnzbd",
-      name: displayName(slot.filename),
-      category: mediaType(slot.cat),
-      progress: Math.max(0, Math.min(100, Number(slot.percentage))),
-      etaSeconds: sabEta(slot.timeleft, slot.status),
-      status: Number(slot.percentage) >= 100 ? "Importing" : displayName(slot.status || "Downloading").slice(0, 32),
-      lifecycle: Number(slot.percentage) >= 100 ? "importing" : "downloading"
-    }));
+    .map((slot, index) => {
+      const paused = /pause/i.test(String(slot?.status || ""));
+      const queued = /queued|pending/i.test(String(slot?.status || ""));
+      const importing = Number(slot.percentage) >= 100 && !paused;
+      return {
+        id: "sabnzbd-" + index,
+        nzoId: String(slot.nzo_id || ""),
+        source: "SABnzbd",
+        name: displayName(slot.filename),
+        category: mediaType(slot.cat),
+        progress: Math.max(0, Math.min(100, Number(slot.percentage))),
+        etaSeconds: paused || queued ? null : sabEta(slot.timeleft, slot.status),
+        status: paused ? "Paused" : queued ? "Queued" : importing ? "Importing" : displayName(slot.status || "Downloading").slice(0, 32),
+        lifecycle: importing ? "importing" : "downloading"
+      };
+    });
 }
 
 export async function onRequest({ env, request }) {
