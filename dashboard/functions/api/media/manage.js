@@ -14,11 +14,12 @@ export async function onRequest({ request, env }) {
   const service = arrService(body?.serviceKey);
   const id = Number(body?.id);
   const action = String(body?.action || "");
-  if (!service || !Number.isSafeInteger(id) || id <= 0 || !["monitor", "refresh", "search", "requestSeason", "requestEpisode", "searchEpisode", "removeEpisode", "removeMovie"].includes(action)) {
+  if (!service || !Number.isSafeInteger(id) || id <= 0 || !["monitor", "refresh", "search", "requestSeason", "requestEpisode", "searchEpisode", "removeEpisode", "removeMovie", "removeSeries"].includes(action)) {
     return json({ code: "invalid_request", error: "Select a valid library item and action." }, 400);
   }
   if (action === "removeEpisode" && service.type !== "tv") return json({ code: "invalid_request", error: "Episode files can only be removed from a Sonarr series." }, 400);
   if (action === "removeMovie" && service.type !== "movie") return json({ code: "invalid_request", error: "Movie files can only be removed from Radarr." }, 400);
+  if (action === "removeSeries" && service.type !== "tv") return json({ code: "invalid_request", error: "Whole shows can only be removed from Sonarr." }, 400);
   const status = arrServiceStatus(env, service);
   if (!status.configured) return json({ code: status.code, error: status.message }, 503);
 
@@ -57,6 +58,18 @@ export async function onRequest({ request, env }) {
       }
       await arrCall(env, service, "api/v3/episodefile/" + episodeFileId, { method: "DELETE" });
       return json({ accepted: true, action, removedEpisodeIds: actualIds });
+    }
+
+    if (action === "removeSeries") {
+      const series = await arrCall(env, service, "api/v3/series/" + id);
+      if (!series || Number(series.id) !== id) return json({ code: "not_found", error: "That show is no longer in the selected library." }, 404);
+      const files = await arrCall(env, service, "api/v3/episodefile?seriesId=" + id);
+      if (!Array.isArray(files)) return json({ code: "invalid_upstream_response", error: "Sonarr did not return the show's episode files, so deletion was stopped." }, 502);
+      const removedFileCount = files.filter(file => Number(file.seriesId) === id && Number.isSafeInteger(Number(file.id)) && Number(file.id) > 0).length;
+      // Sonarr's series delete with deleteFiles=true removes the library entry
+      // and all files/folders under its managed series path.
+      await arrCall(env, service, "api/v3/series/" + id + "?deleteFiles=true&addImportListExclusion=false", { method: "DELETE" });
+      return json({ accepted: true, action, removedFileCount });
     }
 
     if (action === "removeMovie") {
