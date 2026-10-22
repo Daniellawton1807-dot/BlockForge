@@ -1355,3 +1355,25 @@ html[data-theme="light"] .download-tab.is-active{background:#efedff;border-color
   .download-tabs{display:grid;grid-template-columns:1fr 1fr}
   .download-tab{width:100%;padding:10px 6px}
 }
+
+
+/* Aligned, compact per-download controls */
+.downloads-section .download-card{position:relative;padding-bottom:12px}
+.downloads-section .download-actions{display:grid;grid-template-columns:minmax(0,1fr) 36px;gap:8px;align-items:center;margin-top:11px;min-height:36px}
+.downloads-section .download-actions-placeholder{visibility:hidden}
+.downloads-section .download-action-pause,.downloads-section .download-action-more{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;border:1px solid #34445f;border-radius:9px;background:linear-gradient(180deg,#1a2940,#131e30);color:#c8d4e8;font:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s}
+.downloads-section .download-action-pause{width:100%}
+.downloads-section .download-action-pause:hover{background:#213b55;border-color:#547aa3;color:#e7f3ff}
+.downloads-section .download-action-more{width:36px;font-size:21px;line-height:1;color:#b4c0d4}
+.downloads-section .download-action-more:hover{background:#3b202b;border-color:#75414f;color:#ffb0ba}
+.downloads-section .download-action-pause:disabled,.downloads-section .download-action-more:disabled{opacity:.55;cursor:wait}
+.downloads-section .download-more-wrap{position:relative;justify-self:end}
+.downloads-section .download-action-menu{position:absolute;z-index:20;right:0;bottom:calc(100% + 7px);display:grid;gap:3px;width:190px;padding:6px;border:1px solid #35445f;border-radius:12px;background:#101827;box-shadow:0 12px 32px #0008}
+.downloads-section .download-action-menu[hidden]{display:none}
+.downloads-section .download-action-menu button{width:100%;padding:10px 9px;border:0;border-radius:7px;background:transparent;color:#d8e1ef;text-align:left;font:inherit;font-size:11px;cursor:pointer}
+.downloads-section .download-action-menu button:hover{background:#202e44;color:#fff}
+.downloads-section .download-action-menu button[data-download-action="remove"]{color:#ffadb7}
+.downloads-section .download-action-menu button[data-download-action="replace"]{color:#c9bdff}
+html[data-theme="light"] .downloads-section .download-action-pause,html[data-theme="light"] .downloads-section .download-action-more{background:#f5f7fc;color:#34415c;border-color:#d4dceb}
+html[data-theme="light"] .downloads-section .download-action-menu{background:#fff;border-color:#d8deeb;box-shadow:0 12px 32px #19203322}
+html[data-theme="light"] .downloads-section .download-action-menu button{color:#26344c}
