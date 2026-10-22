@@ -632,6 +632,16 @@ async function runLibraryDetailAction(button, confirmedDelete = false) {
   if (action === "removeEpisode") body.episodeFileEpisodeIds = String(button.dataset.episodeFileEpisodeIds || "").split(",").map(Number).filter(value => Number.isSafeInteger(value) && value > 0);
   const item = libraryItems.find(entry => entry.serviceKey === body.serviceKey && entry.id === body.id);
   const status = $("libraryDetailStatus");
+  const isWholeTitleRemoval = action === "removeMovie" || action === "removeSeries";
+  // Close the large details modal as soon as the user confirms a whole-title
+  // removal. ARR can take several seconds to delete a series and its files;
+  // keeping the modal open while waiting makes the action look unresponsive.
+  if (isWholeTitleRemoval) {
+    const detailDialog = $("libraryDetailDialog");
+    if (detailDialog?.open) detailDialog.close();
+    $("librarySummary").textContent = "Removing " + (item?.title || "media item") + "…";
+    $("librarySummary").className = "media-status";
+  }
   button.disabled = true;
   const original = button.textContent;
   button.textContent = action === "searchEpisode" ? "Queueing search…" : action === "removeEpisode" || action === "removeMovie" || action === "removeSeries" ? "Removing…" : "Queueing…";
@@ -660,10 +670,6 @@ async function runLibraryDetailAction(button, confirmedDelete = false) {
       // Close the detail view for whole-title removals, then refresh after ARR
       // has had a moment to reflect the deletion. Retry if a background library
       // request is already running, so this refresh cannot silently be skipped.
-      if (action === "removeMovie" || action === "removeSeries") {
-        const detailDialog = $("libraryDetailDialog");
-        if (detailDialog.open) detailDialog.close();
-      }
       await new Promise(resolve => setTimeout(resolve, 1000));
       // Wait for any library request already in progress to finish. Previously,
       // a short retry window could expire without refreshing the list at all.
@@ -697,6 +703,11 @@ async function runLibraryDetailAction(button, confirmedDelete = false) {
     button.disabled = false;
     button.textContent = original;
     if (status) status.textContent = error.message || (action === "removeEpisode" || action === "removeMovie" || action === "removeSeries" ? "The media item could not be removed." : "The search could not be queued.");
+    if (isWholeTitleRemoval) {
+      $("librarySummary").textContent = "Could not remove " + (item?.title || "media item") + ": " + (error.message || "request failed") + ".";
+      $("librarySummary").className = "media-status is-error";
+      if (authenticated) await loadLibrary();
+    }
   }
 }
 
