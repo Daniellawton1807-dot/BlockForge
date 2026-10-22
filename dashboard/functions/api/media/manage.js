@@ -77,11 +77,10 @@ export async function onRequest({ request, env }) {
       if (!movie || Number(movie.id) !== id) return json({ code: "not_found", error: "That movie is no longer in the selected library." }, 404);
       const movieFiles = await arrCall(env, service, "api/v3/moviefile?movieId=" + id);
       const files = Array.isArray(movieFiles) ? movieFiles : [];
-      if (!files.length || !files.some(file => Number(file.movieId) === id && Number.isSafeInteger(Number(file.id)) && Number(file.id) > 0)) {
-        return json({ code: "file_not_found", error: "Radarr no longer reports a movie file on disk." }, 409);
-      }
+      // Removing the Radarr library entry must work even if no movie file has
+      // been downloaded yet. deleteFiles=true removes any file if present.
       await arrCall(env, service, "api/v3/movie/" + id + "?deleteFiles=true&addImportExclusion=false", { method: "DELETE" });
-      return json({ accepted: true, action, removedFileCount: files.length });
+      return json({ accepted: true, action, removedFileCount: files.filter(file => Number(file.movieId) === id).length });
     }
 
     if (action === "requestSeason" || action === "requestEpisode" || action === "searchEpisode") {
