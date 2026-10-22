@@ -67,11 +67,43 @@ async function refreshRecentMedia(){
   }).join("");
  }catch(error){list.innerHTML='<div class="recent-media-empty">Could not load recent imports. Check the Media Hub connection.</div>';}
 }
+
+async function refreshActivity(){
+ const feed=$("activityFeed"); if(!feed)return;
+ const events=[];
+ try{
+  const response=await fetch("/api/media/recent",{cache:"no-store",credentials:"same-origin"});
+  if(response.ok){
+   const data=await response.json();
+   for(const item of (Array.isArray(data.items)?data.items:[]).slice(0,20)){
+    const date=Date.parse(item.date||"");
+    const subtitle=item.mediaType==="tv"?[item.episodeLabel,item.episodeTitle].filter(Boolean).join(" · "):"Movie imported";
+    events.push({date:Number.isFinite(date)?date:0,type:"success",icon:"✓",title:"Media imported",detail:String(item.title||"Untitled")+(subtitle?" · "+subtitle:"")+" · "+String(item.serviceName||"Sonarr/Radarr")});
+   }
+  } else if(response.status===401){
+   events.push({date:Date.now(),type:"info",icon:"↗",title:"Media activity requires sign-in",detail:"Sign in to the Media Hub to show recent Sonarr/Radarr imports."});
+  }
+ }catch{}
+ try{
+  const response=await fetch("/api/metrics",{cache:"no-store",credentials:"same-origin"});
+  if(response.ok){
+   const m=await response.json();
+   if(Number.isFinite(Number(m.diskPercent))&&Number(m.diskPercent)>=85)events.push({date:Date.now(),type:Number(m.diskPercent)>=95?"warning":"warning",icon:"!",title:"Storage usage is high",detail:"The monitored filesystem is "+Math.round(Number(m.diskPercent))+"% full."});
+   if(Number.isFinite(Number(m.memoryPercent))&&Number(m.memoryPercent)>=90)events.push({date:Date.now(),type:"warning",icon:"!",title:"Memory usage is high",detail:"Memory utilization is "+Math.round(Number(m.memoryPercent))+"%."});
+  }
+ }catch{}
+ events.sort((a,b)=>b.date-a.date);
+ if(!events.length){feed.innerHTML='<div class="activity-empty">No recent events available. Import events appear after you sign in to the Media Hub; monitoring alerts appear when metrics are available.</div>';return;}
+ feed.innerHTML=events.slice(0,12).map(e=>'<article class="activity-item"><span class="activity-icon '+e.type+'">'+e.icon+'</span><div class="activity-copy"><strong>'+esc(e.title)+'</strong><span>'+esc(e.detail)+'</span></div><time>'+ (e.date?new Date(e.date).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):"Recent")+'</time></article>').join("");
+}
+$("activityRefresh")?.addEventListener("click",refreshActivity);
+
 function formatBytes(n){if(!Number.isFinite(Number(n))||n<0)return "—";let v=Number(n),u=["B","KB","MB","GB","TB"],i=0;while(v>=1024&&i<u.length-1){v/=1024;i++;}return v.toFixed(i?1:0)+" "+u[i];}
 function formatUptime(n){n=Math.max(0,Math.floor(Number(n)||0));const d=Math.floor(n/86400),h=Math.floor(n%86400/3600),m=Math.floor(n%3600/60);return (d?d+"d ":"")+(h+"h "+m+"m");}
 $("search").addEventListener("input",render);
 $("refresh").addEventListener("click",()=>{refreshMetrics();const b=$("refresh");b.textContent="✓";setTimeout(()=>b.textContent="↻",800);});
-render();refreshMetrics();refreshRecentMedia();
+render();refreshMetrics();refreshRecentMedia();refreshActivity();
 const metricsRefreshInterval=Number(config.refreshIntervalMs);
 if(metricsRefreshInterval>=3000)setInterval(refreshMetrics,Math.min(metricsRefreshInterval,60000));
 setInterval(refreshRecentMedia,300000);
+setInterval(refreshActivity,120000);
