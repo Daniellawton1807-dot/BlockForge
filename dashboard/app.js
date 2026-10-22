@@ -49,10 +49,28 @@ async function refreshMetrics(){
  }
 }
 
+async function refreshRecentMedia(){
+ const list = $("recentMediaList");
+ if(!list) return;
+ try{
+  const response = await fetch("/api/media/recent",{cache:"no-store",credentials:"same-origin"});
+  const data = await response.json().catch(()=>null);
+  if(response.status===401){list.innerHTML='<div class="recent-media-empty">Sign in to the Media Hub to view recent imports.</div>';return;}
+  if(!response.ok) throw new Error(data?.error||"Recent imports unavailable");
+  const items=Array.isArray(data?.items)?data.items:[];
+  if(!items.length){list.innerHTML='<div class="recent-media-empty">No recent imported movies or episodes found yet.</div>';return;}
+  list.innerHTML=items.map(item=>{
+   const poster=safeUrl(item.posterUrl||"");
+   const subtitle=item.mediaType==="tv"?[item.episodeLabel,item.episodeTitle].filter(Boolean).join(" · "):"Movie";
+   const date=item.date?new Date(item.date).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):"Recently imported";
+   return '<article class="recent-media-item"><div class="recent-media-poster">'+(poster?'<img src="'+esc(poster)+'" alt="" loading="lazy">':'<span>'+(item.mediaType==="tv"?"TV":"FILM")+'</span>')+'</div><div class="recent-media-copy"><strong title="'+esc(item.title)+'">'+esc(item.title)+'</strong><span class="recent-media-episode" title="'+esc(subtitle)+'">'+esc(subtitle||"Recently imported")+'</span><small>'+esc(item.serviceName||"Sonarr/Radarr")+' · '+esc(date)+'</small></div></article>';
+  }).join("");
+ }catch(error){list.innerHTML='<div class="recent-media-empty">Could not load recent imports. Check the Media Hub connection.</div>';}
+}
 function formatBytes(n){if(!Number.isFinite(Number(n))||n<0)return "—";let v=Number(n),u=["B","KB","MB","GB","TB"],i=0;while(v>=1024&&i<u.length-1){v/=1024;i++;}return v.toFixed(i?1:0)+" "+u[i];}
 function formatUptime(n){n=Math.max(0,Math.floor(Number(n)||0));const d=Math.floor(n/86400),h=Math.floor(n%86400/3600),m=Math.floor(n%3600/60);return (d?d+"d ":"")+(h+"h "+m+"m");}
 $("search").addEventListener("input",render);
 $("refresh").addEventListener("click",()=>{refreshMetrics();const b=$("refresh");b.textContent="✓";setTimeout(()=>b.textContent="↻",800);});
-render();refreshMetrics();
+render();refreshMetrics();refreshRecentMedia();
 const metricsRefreshInterval=Number(config.refreshIntervalMs);
-if(metricsRefreshInterval>=3000)setInterval(refreshMetrics,Math.min(metricsRefreshInterval,60000));
+if(metricsRefreshInterval>=3000)setInterval(refreshMetrics,Math.min(metricsRefreshInterval,60000));\nsetInterval(refreshRecentMedia,60000);
