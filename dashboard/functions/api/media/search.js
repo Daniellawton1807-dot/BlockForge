@@ -66,19 +66,19 @@ export async function onRequest({ request, env }) {
   function normalizeTitle(value) {
     return String(value || "")
       .normalize("NFKD")
-      .replace(/\\p{M}/gu, "")
+      .replace(/\p{M}/gu, "")
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, " ")
       .trim();
   }
   const normalizedQuery = normalizeTitle(query);
-  const tokens = normalizedQuery.split(/\\s+/).filter(Boolean);
+  const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
   function titleRank(item) {
     const title = normalizeTitle(item.title);
     if (!title) return 100;
     if (title === normalizedQuery) return 0;
     if (title.startsWith(normalizedQuery + " ") || title.startsWith(normalizedQuery)) return 1;
-    if (title.split(/\\s+/).some(word => word.startsWith(normalizedQuery))) return 2;
+    if (title.split(/\s+/).some(word => word.startsWith(normalizedQuery))) return 2;
     if (title.includes(normalizedQuery)) return 3;
     if (tokens.length && tokens.every(token => title.includes(token))) return 4;
     return 10;
