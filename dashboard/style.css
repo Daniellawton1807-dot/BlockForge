@@ -869,7 +869,20 @@ footer small { max-width: 440px; margin-left: auto; font-size: 10px; text-align:
 .media-danger-button:disabled { opacity: .55; cursor: wait; }
 .media-secondary-button.is-monitored { border-color: #2e715e; color: #7fe0bb; }
 .media-library-toolbar { display: flex; align-items: center; gap: 9px; margin: 9px 0; }
-.media-library-toolbar .media-search { max-width: 480px; flex: 1; }
+.media-library-toolbar .media-search { max-width: 480px; flex: 1; min-width: 0; }
+.library-toolbar-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.library-sort-menu { position: relative; }
+.library-sort-menu > summary { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; white-space: nowrap; }
+.library-sort-menu > summary::-webkit-details-marker { display: none; }
+.library-sort-options { position: absolute; z-index: 20; top: calc(100% + 6px); right: 0; min-width: 190px; padding: 5px; border: 1px solid #303c53; border-radius: 10px; background: #111a29; box-shadow: 0 12px 30px #0008; }
+.library-sort-options button { display: block; width: 100%; padding: 9px 10px; border: 0; border-radius: 6px; background: transparent; color: #aebbd0; text-align: left; font: inherit; font-size: 12px; cursor: pointer; }
+.library-sort-options button:hover, .library-sort-options button.is-active { background: #252344; color: #e2deff; }
+.library-sort-options button.is-active::after { content: " ✓"; }
+@media (max-width: 600px) {
+  .media-library-toolbar { flex-wrap: wrap; }
+  .media-library-toolbar .media-search { flex-basis: 100%; max-width: none; }
+  .library-toolbar-actions { width: 100%; justify-content: space-between; }
+}
 .library-service-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 7px 0 10px; }
 .library-filter-chip { padding: 5px 9px; border: 1px solid #303c53; border-radius: 99px; background: #111a29; color: #91a0b7; font: inherit; font-size: 9px; cursor: pointer; }
 .library-filter-chip.is-active { border-color: #7469c9; background: #252344; color: #e2deff; }
