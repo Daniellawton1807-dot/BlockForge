@@ -664,16 +664,17 @@ async function runLibraryDetailAction(button, confirmedDelete = false) {
         const detailDialog = $("libraryDetailDialog");
         if (detailDialog.open) detailDialog.close();
       }
-      await new Promise(resolve => setTimeout(resolve, 1200));
-      for (let attempt = 0; attempt < 3; attempt++) {
-        if (!libraryFetchInFlight) {
-          await loadLibrary();
-          break;
-        }
-        await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Wait for any library request already in progress to finish. Previously,
+      // a short retry window could expire without refreshing the list at all.
+      for (let attempt = 0; libraryFetchInFlight && attempt < 20; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+      if (!libraryFetchInFlight && authenticated) {
+        await loadLibrary();
       }
       if (action === "removeMovie" || action === "removeSeries") {
-        $("librarySummary").textContent = "Removed " + (item?.title || "media item") + (action === "removeSeries" ? " and all its files. Library updated." : " from Radarr. Library updated.");
+        $("librarySummary").textContent = "Successfully removed " + (item?.title || "media item") + (action === "removeSeries" ? " and its managed files. Library refreshed." : " from Radarr. Library refreshed.");
         $("librarySummary").className = "media-status is-success";
       } else if ($("libraryDetailDialog").open) {
         const opener = [...$("libraryList").querySelectorAll("[data-library-details]")].find(control => control.dataset.libraryKey === body.serviceKey && Number(control.dataset.libraryId) === body.id);
