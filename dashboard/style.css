@@ -1283,3 +1283,21 @@ html[data-theme="light"] .activity-panel{background:#fff}html[data-theme="light"
 .activity-item{padding:8px 10px}
 .activity-icon{width:26px;height:26px;border-radius:7px}
 @media(max-width:600px){.activity-panel{padding:11px}.activity-feed{max-height:220px}}
+
+
+/* Per-download lifecycle: downloader -> ARR import -> terminal state */
+.download-lifecycle{display:flex;align-items:center;gap:5px;margin:10px 0 9px;min-width:0}
+.lifecycle-step{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;color:var(--muted);font-size:9px;font-weight:700}
+.lifecycle-step.is-current{color:#b6aaff}
+.lifecycle-step.is-done{color:#72ddb0}
+.lifecycle-step.is-failed{color:#ff8b96}
+.lifecycle-connector{height:1px;flex:1;min-width:5px;background:var(--line)}
+.lifecycle-connector.is-done{background:#3e9d7c}
+.lifecycle-failed .lifecycle-connector{background:#8e4651}
+.lifecycle-failed .lifecycle-step:first-child{color:#72ddb0}
+.lifecycle-failed .lifecycle-step:last-child{color:#ff8b96}
+.download-event-detail{margin:8px 0 0;color:#ff9ba5;font-size:10px;line-height:1.45;overflow-wrap:anywhere}
+.lifecycle-imported .download-state{color:#72ddb0}
+.lifecycle-failed .download-state{color:#ff8b96}
+.lifecycle-importing .download-state{color:#b6aaff}
+@media(max-width:420px){.lifecycle-step{font-size:8px}.download-lifecycle{gap:3px}}
