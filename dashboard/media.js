@@ -928,9 +928,14 @@ $("downloadList").addEventListener("click", async event => {
   button.disabled=true;button.textContent=action==="pause"?"Pausing…":action==="resume"?"Resuming…":action==="replace"?"Rescanning…":"Removing…";
   try{
     const response=await fetch(endpoints.queue,{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"content-type":"application/json"},body:JSON.stringify({action,source:item.source,id:item.id,name:item.name,torrentHash:item.torrentHash,nzoId:item.nzoId})});
-    const result=await response.json().catch(()=>null);
+    const responseText = await response.text().catch(() => "");
+    let result = null;
+    try { result = responseText ? JSON.parse(responseText) : null; } catch {}
     if(response.status===401){showLogin("Your Homebase sign-in expired. Sign in again to continue.");return;}
-    if(!response.ok)throw new Error(result?.error||("Download action failed (HTTP "+response.status+")."));
+    if(!response.ok) {
+      const detail = result?.error || (responseText && !responseText.trim().startsWith("<") ? responseText.slice(0,240) : "");
+      throw new Error(detail || ("Download action failed (HTTP "+response.status+")."));
+    }
     if(result?.message) $("downloadSummary").textContent=result.message;
     if(action!=="pause" && action!=="resume") ignoredDownloadIds.add(id);
     await refreshDownloads();
