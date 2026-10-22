@@ -50,7 +50,7 @@
     paintFavorites();
   });
   const overlay=$("commandPalette"),input=$("commandInput"),results=$("commandResults");
-  let entries=[],selected=0;
+  let entries=[],selected=0,recentMediaEntries=[];
   const staticEntries=[
     {title:"Overview",subtitle:"Dashboard page",url:"/#overview",kind:"Page"},
     {title:"Media Hub",subtitle:"Search and manage movies and shows",url:"/media/",kind:"Page"},
@@ -60,8 +60,9 @@
   ];
   function makeEntries(){
     const apps=(Array.isArray(window.HOMEBASE_CONFIG?.services)?window.HOMEBASE_CONFIG.services:[]).map(s=>({title:s.name,subtitle:s.desc||s.group||"Self-hosted service",url:s.url,kind:isFavorite(s.name)?"★ Favorite · App":"App"}));
-    return [...staticEntries,...apps];
+    return [...staticEntries,...apps,...recentMediaEntries];
   }
+  fetch("/api/media/recent",{cache:"no-store",credentials:"same-origin"}).then(r=>r.ok?r.json():null).then(d=>{recentMediaEntries=(Array.isArray(d?.items)?d.items:[]).slice(0,5).map(item=>({title:item.title,subtitle:[item.episodeLabel,item.episodeTitle].filter(Boolean).join(" · ")||"Recently imported",url:"/media/",kind:"Recent media"}));if(!overlay.hidden)renderResults(input.value);}).catch(()=>{});
   function renderResults(query){
     const q=query.trim().toLowerCase();
     const matches=makeEntries().filter(x=>(x.title+" "+x.subtitle+" "+x.kind).toLowerCase().includes(q));
