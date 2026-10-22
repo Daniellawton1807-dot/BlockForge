@@ -30,10 +30,27 @@ async function getStorage(env) {
       glancesJson(root, "/api/4/diskio").catch(() => [])
     ]);
     const io = Array.isArray(diskio) ? diskio : [];
-    const disks = Array.isArray(filesystems) ? filesystems.map((fs, index) => {
+    // Exclude bind/pseudo mounts such as /etc/hosts that duplicate root storage.
+    const excludedMount = /^(\/proc(?:\/|$)|\/sys(?:\/|$)|\/dev(?:\/|$)|\/run(?:\/|$)|\/etc\/(hosts|hostname|resolv\.conf)$|\/var\/lib\/docker(?:\/|$)|\/var\/lib\/containers(?:\/|$))/;
+    const candidates = (Array.isArray(filesystems) ? filesystems : []).filter(fs => {
+      const mount = String(fs?.mnt_point || "");
+      const device = String(fs?.device_name || fs?.device || fs?.name || "");
+      const type = String(fs?.fs_type || fs?.fstype || "");
+      if (!mount || excludedMount.test(mount)) return false;
+      if (/^(tmpfs|devtmpfs|overlay|squashfs|proc|sysfs|cgroup2?|nsfs|ramfs)$/i.test(type)) return false;
+      return device.startsWith("/dev/") || mount === "/" || mount.startsWith("/mnt/") || mount.startsWith("/media/") || mount.startsWith("/run/media/");
+    });
+    const unique = new Map();
+    for (const fs of candidates) {
+      const mount = String(fs?.mnt_point || "");
+      const device = String(fs?.device_name || fs?.device || fs?.name || mount);
+      const key = device + "|" + mount;
+      if (!unique.has(key)) unique.set(key, fs);
+    }
+    const disks = [...unique.values()].map((fs, index) => {
       const mount = safeText(fs?.mnt_point || "Unknown mount");
       const name = safeText(fs?.device_name || fs?.device || fs?.name || mount);
-      const matchingIo = io.find(d => [d?.disk_name,d?.name,d?.device_name].some(v => v && String(v).includes(name)) || String(name).includes(String(d?.disk_name || "\u0000")));
+      const matchingIo = io.find(d => [d?.disk_name,d?.name,d?.device_name].some(v => v && (String(v) === name || name.includes(String(v)) || String(v).includes(name))));
       const size = number(fs?.size);
       const used = number(fs?.used);
       const percent = number(fs?.percent);
@@ -47,7 +64,7 @@ async function getStorage(env) {
         writeBytesPerSecond: number(matchingIo?.write_bytes_rate ?? matchingIo?.write_bytes),
         ioAvailable: Boolean(matchingIo)
       };
-    }) : [];
+    });
     return json({ updatedAt: new Date().toISOString(), disks });
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Unable to read storage status from Glances." }, 502);
