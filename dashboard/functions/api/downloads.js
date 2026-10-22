@@ -206,8 +206,8 @@ export async function onRequest({ env, request }) {
         if(!login.ok||!sid||!/^Ok\\.?$/i.test(loginText.trim())) throw new Error("qBittorrent login failed.");
         const hash=String(body?.torrentHash||"");
         if(!/^[a-f0-9]{40}$/i.test(hash)) throw new Error("Missing torrent identifier. Refresh the queue and try again.");
-        const command=action==="pause"?"api/v2/torrents/pause":"api/v2/torrents/delete";
-        const params=action==="pause"?{hashes:hash}:{hashes:hash,deleteFiles:"true"};
+        const command=action==="pause"?"api/v2/torrents/pause":action==="resume"?"api/v2/torrents/resume":"api/v2/torrents/delete";
+        const params=action==="pause"||action==="resume"?{hashes:hash}:{hashes:hash,deleteFiles:"true"};
         const response=await fetch(apiUrl(root,command),{method:"POST",headers:{cookie:"SID="+sid,origin:root.origin,referer:root.href,"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams(params).toString(),signal:AbortSignal.timeout(7000),redirect:"manual"});
         if(!response.ok) throw new Error("qBittorrent rejected the action.");
       } else {
@@ -215,12 +215,12 @@ export async function onRequest({ env, request }) {
         if(!apiKey) throw new Error("SABnzbd API key is not configured.");
         const root=serviceRoot(env.SABNZBD_BASE_URL,DEFAULT_SABNZBD_URL), url=apiUrl(root,"api");
         url.searchParams.set("mode",action==="pause"?"queue":"queue");
-        url.searchParams.set("name",action==="pause"?"pause":"delete");
+        url.searchParams.set("name",action==="pause"?"pause":action==="resume"?"resume":"delete");
         url.searchParams.set("output","json"); url.searchParams.set("apikey",apiKey);
         const nzoId=String(body?.nzoId||"");
         if(!/^SABnzbd_nzo_[A-Za-z0-9]+$/i.test(nzoId)) throw new Error("Missing or invalid SABnzbd job identifier. Refresh the queue and try again.");
         url.searchParams.set("value",nzoId);
-        if(action!=="pause") url.searchParams.set("del_files","1");
+        if(action!=="pause" && action!=="resume") url.searchParams.set("del_files","1");
         await readJson(url);
       }
       if(action==="replace") {
@@ -241,7 +241,7 @@ export async function onRequest({ env, request }) {
         }
         if(!triggered) return json({ok:true,message:"Download removed, but no matching monitored title was found in Sonarr/Radarr to rescan."});
       }
-      return json({ok:true,message:action==="pause"?"Download paused.":action==="replace"?"Download removed and a replacement search was queued.":"Download removed and downloaded files deleted."});
+      return json({ok:true,message:action==="pause"?"Download paused.":action==="resume"?"Download resumed.":action==="replace"?"Download removed and a replacement search was queued.":"Download removed and downloaded files deleted."});
     } catch(error) { return json({error:error.message||"Download action failed."},502); }
   }
 
