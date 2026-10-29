@@ -596,10 +596,14 @@
       chips.querySelectorAll(".hub-chip").forEach(c => c.classList.toggle("on", Number(c.dataset.s) === season));
       list.replaceChildren(); list.className = ""; void list.offsetWidth; list.className = "hub-sheet-body swap";
       const eps = d.episodes.filter(e => e.seasonNumber === season).sort((a, b) => a.episodeNumber - b.episodeNumber);
-      const missing = eps.filter(e => aired(e) && !e.hasFile), have = eps.filter(e => e.hasFile).length;
+      const missing = eps.filter(e => aired(e) && !e.hasFile && !e.download), have = eps.filter(e => e.hasFile).length;
+      const queued = eps.filter(e => !e.hasFile && e.download);
+      const downloading = queued.filter(e => ["Downloading", "Importing"].includes(e.download.state)).length;
+      const waiting = queued.length - downloading;
       const head = el("div", "sh-progress"), line = el("div", "hub-bar-line" + (missing.length ? "" : " good")), b = el("i");
       b.style.width = (eps.length ? 100 * have / eps.length : 0) + "%"; line.append(b);
-      head.append(line, el("span", null, `${have} of ${eps.length} downloaded`));
+      const summary = `${have} of ${eps.length} downloaded` + (downloading ? ` · ${downloading} downloading` : "") + (waiting ? ` · ${waiting} queued` : "");
+      head.append(line, el("span", null, summary));
       if (missing.length) head.append(button(`Get ${missing.length} missing`, "small", () => act({ serviceKey: d.serviceKey, id: d.id, action: "requestSeason", seasonNumber: season }, `Looking for ${plural(missing.length, "episode")}.`, true), "download"));
       head.style.margin = "0 0 6px"; list.append(head);
       for (const e of eps) list.append(episodeRow(d, e, () => tvKey));
@@ -629,14 +633,25 @@
   function episodeRow(d, e, getTv) {
     const row = el("div", "hub-ep"), info = el("div", "info"), acts = el("div", "acts");
     const future = Boolean(e.airDate) && Date.parse(e.airDate) > Date.now();
-    const name = el("div", "nm"); name.append(el("i", "hub-dot " + (e.hasFile ? "have" : future ? "soon" : e.monitored ? "want" : "")), el("span", null, e.title || "Episode " + e.episodeNumber));
+    const queued = !e.hasFile && e.download;
+    const queueState = queued ? String(e.download.state || "Grabbed") : "";
+    const queueLabel = queued
+      ? [queueState, Number.isFinite(Number(e.download.progress)) ? Math.round(Number(e.download.progress)) + "%" : "", e.download.eta ? "ETA " + e.download.eta : ""].filter(Boolean).join(" · ")
+      : "";
+    const dotClass = e.hasFile ? "have" : future ? "soon" : queued && ["Downloading", "Importing"].includes(queueState) ? "downloading" : queued ? "queued" : e.monitored ? "want" : "";
+    const name = el("div", "nm"); name.append(el("i", "hub-dot " + dotClass), el("span", null, e.title || "Episode " + e.episodeNumber));
     const sub = [future ? "Airs " + dateText(e.airDate, { weekday: "short", day: "numeric", month: "short" }) : dateText(e.airDate), e.runtime ? e.runtime + " min" : "",
-      e.hasFile ? [e.file?.quality, size(e.file?.size)].filter(Boolean).join(" · ") : future ? "" : e.monitored ? "Wanted" : "Not monitored"].filter(Boolean).join(" · ");
+      e.hasFile ? [e.file?.quality, size(e.file?.size)].filter(Boolean).join(" · ") : queueLabel || (future ? "" : e.monitored ? "Wanted" : "Not monitored")].filter(Boolean).join(" · ");
     info.append(name, el("div", "sub", sub));
+    if (queued && Number.isFinite(Number(e.download.progress))) {
+      const progressLine = el("div", "hub-bar-line episode-download-progress"), progressFill = el("i");
+      progressFill.style.width = Math.max(0, Math.min(100, Number(e.download.progress))) + "%";
+      progressLine.append(progressFill); info.append(progressLine);
+    }
     info.onclick = () => { const m = row.querySelector(".more"); if (m) m.remove(); else if (e.overview) row.append(el("div", "more", e.overview)); };
     const busy = async fn => { row.classList.add("busy"); await fn(); row.classList.remove("busy"); };
     if (e.hasFile) acts.append(iconButton("play", "Play on TV", "go", () => playOnTv(`${playRef(d)} season ${e.seasonNumber} episode ${e.episodeNumber}`, getTv)));
-    else if (!future) {
+    else if (!future && !queued) {
       const get = iconButton("download", "Get this episode", "", () => busy(async () => {
         if (await act({ serviceKey: d.serviceKey, id: d.id, action: "requestEpisode", episodeId: e.id }, `Looking for ${code(e.seasonNumber, e.episodeNumber)}.`, true)) { e.monitored = true; get.classList.add("done"); get.replaceChildren(icon("check")); }
       }));
