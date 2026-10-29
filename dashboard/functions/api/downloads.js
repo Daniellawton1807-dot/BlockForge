@@ -146,6 +146,7 @@ async function queueReplacementSearch(env, name, onlyService = null) {
   }
 
   const normalize = value => String(value || "").toLowerCase()
+    .replace(/['’]/g, "")
     .replace(/\[[^\]]*\]/g, " ").replace(/\([^)]*\)/g, " ")
     .replace(/\b(19|20)\d{2}\b/g, " ").replace(/[^a-z0-9]+/g, " ").trim();
   const rawName = String(name || ""), wanted = normalize(rawName);
