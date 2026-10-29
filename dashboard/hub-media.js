@@ -675,25 +675,23 @@
   async function playOnTv(d, e, getTarget) {
     const key = getTarget(), what = playRef(d) + (e ? ` season ${e.seasonNumber} episode ${e.episodeNumber}` : "");
     if (key === "here") {
-      // open the tab straight away so the browser treats it as part of the tap, then point it at Jellyfin
-      // and, once that Jellyfin window has connected, have tvbot tell it to start playing
-      const win = window.open("", "_blank");
-      const ask = { ref: playRef(d), season: e?.seasonNumber ?? null, episode: e?.episodeNumber ?? null };
-      const q = "ref=" + encodeURIComponent(ask.ref) + (e ? `&season=${e.seasonNumber}&episode=${e.episodeNumber}` : "");
-      const [found, start] = await Promise.all([api("/api/tv/api/locate?" + q), api("/api/tv/api/playhere", { method: "POST", body: ask })]);
-      if (!found.ok || !found.data.id) { win?.close(); toast(errorText(found, "Couldn't find that in Jellyfin."), "error"); return; }
-      const url = `${JELLYFIN}/web/#/details?id=${encodeURIComponent(found.data.id)}` + (found.data.serverId ? "&serverId=" + encodeURIComponent(found.data.serverId) : "");
-      if (win) win.location.href = url; else location.href = url;
-      const since = start.data?.reply?.since;
-      if (!since) { toast("Opened " + (found.data.name || d.title) + " in Jellyfin. Tap play there."); return; }
-      toast("Opening " + (found.data.name || d.title) + " in Jellyfin…");
-      for (let tries = 0; tries < 18; tries++) {
-        await new Promise(r => setTimeout(r, 1500));
-        const r = await api("/api/tv/api/playhere", { method: "POST", body: { ...ask, since } });
-        if (r.data?.reply?.status === "playing") { toast("Playing " + (found.data.name || d.title) + " in Jellyfin."); return; }
-        if (!r.ok) break;
+      // tvbot waits on the server for Jellyfin to open on this device, then tells it to play (the browser
+      // can't do the waiting: a phone pauses it as soon as the Jellyfin app comes to the front)
+      const phone = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const win = phone ? null : window.open("", "_blank");  // opened during the tap so it isn't blocked
+      const ask = { ref: playRef(d), season: e?.seasonNumber ?? null, episode: e?.episodeNumber ?? null, kind: phone ? "app" : "web" };
+      const r = await api("/api/tv/api/playhere", { method: "POST", body: ask });
+      const reply = r.data?.reply;
+      if (!r.ok || reply?.status !== "armed") { win?.close(); toast(typeof reply === "string" ? reply : errorText(r, "Couldn't find that in Jellyfin."), "error"); return; }
+      if (phone) {
+        toast("Opening Jellyfin to play " + reply.name + "…");
+        location.href = "org.jellyfin.expo://";  // the Jellyfin iOS app; it starts playing once it connects
+        return;
       }
-      toast("Opened " + (found.data.name || d.title) + " in Jellyfin. Tap play there if it hasn't started.");
+      const found = await api("/api/tv/api/locate?ref=" + encodeURIComponent(ask.ref) + (e ? `&season=${e.seasonNumber}&episode=${e.episodeNumber}` : ""));
+      const url = found.ok && found.data.id ? `${JELLYFIN}/web/#/details?id=${encodeURIComponent(found.data.id)}&serverId=${encodeURIComponent(found.data.serverId || "")}` : JELLYFIN + "/web/";
+      if (win) win.location.href = url; else location.href = url;
+      toast("Playing " + reply.name + " in Jellyfin.");
       return;
     }
     const r = await api("/api/tv/cmd", { method: "POST", body: { text: "play " + what + TV_SUFFIX[key] } });
