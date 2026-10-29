@@ -28,7 +28,7 @@ function queueInfo(item) {
     : total > 0 ? Math.max(0, Math.min(100, (total - remaining) / total * 100)) : null;
   const timeleft = text(item?.timeleft, 40);
   const eta = /^\d+(?::\d+){1,2}$/.test(timeleft) ? timeleft : "";
-  return { state, progress, eta };
+  return { state, progress, eta, downloadId: text(item?.downloadId, 120).toLowerCase() };
 }
 function fileDetails(file) {
   if (!file) return null;

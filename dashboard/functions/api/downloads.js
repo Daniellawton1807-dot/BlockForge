@@ -402,6 +402,7 @@ export async function onRequest({ env, request }) {
     const key = String(item.torrentHash || item.nzoId || "").toLowerCase();
     const record = queue.find(r => !used.has(r) && ((key && r.downloadId === key) || looseName(r.release) === looseName(item.name)));
     if (record) used.add(record);
+    item.downloadId = key || record?.downloadId || "";
     applyArr(item, record);
   }
   for (const record of queue) {
@@ -409,7 +410,7 @@ export async function onRequest({ env, request }) {
     const progress = record.size ? Math.max(0, Math.min(100, 100 * (1 - record.sizeleft / record.size))) : 0;
     const parts = record.timeleft.split(":").map(Number), eta = parts.length === 3 && parts.every(Number.isFinite) ? parts[0] * 3600 + parts[1] * 60 + parts[2] : null;
     items.push(applyArr({
-      id: "queue-" + record.service.key + "-" + record.id, source: record.client, name: displayName(record.release),
+      id: "queue-" + record.service.key + "-" + record.id, downloadId: record.downloadId, source: record.client, name: displayName(record.release),
       category: record.service.type === "tv" ? "TV show" : "Movie", progress, etaSeconds: eta,
       status: record.status === "paused" ? "Paused" : record.status === "queued" ? "Queued" : "Downloading", lifecycle: "downloading"
     }, record));

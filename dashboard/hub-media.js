@@ -610,6 +610,49 @@
     };
     for (const x of seasons) { const c = el("button", "hub-chip", x.seasonNumber === 0 ? "Specials" : "Season " + x.seasonNumber); c.type = "button"; c.dataset.s = x.seasonNumber; c.onclick = () => { season = x.seasonNumber; drawSeason(); }; chips.append(c); }
     sec.append(list); block.append(sec); drawSeason(); finish();
+
+    // while anything in this show is downloading, follow it live from qBittorrent/SABnzbd (Sonarr's own
+    // queue only catches up about once a minute): poll every 3s, count the ETA down every second, and
+    // reload the episodes once a download has been imported
+    const downloadingNow = () => d.episodes.some(e => !e.hasFile && e.download);
+    if (!downloadingNow()) return;
+    const seen = new Set(); let reloading = false;
+    const alive = () => list.isConnected && sheetOpen();
+    const paint = () => list.querySelectorAll(".hub-ep[data-ep]").forEach(row => {
+      const e = d.episodes.find(x => String(x.id) === row.dataset.ep); if (!e || e.hasFile || !e.download) return;
+      row.querySelector(".sub").textContent = episodeSub(e);
+      const fill = row.querySelector(".episode-download-progress i"); if (fill) fill.style.width = Math.max(0, Math.min(100, Number(e.download.progress) || 0)) + "%";
+    });
+    const sync = async () => {
+      if (!alive()) return stop();
+      await refreshDownloads();
+      const live = new Map((downloads?.items || []).filter(i => i.downloadId).map(i => [String(i.downloadId).toLowerCase(), i]));
+      let finished = false;
+      for (const e of d.episodes) {
+        if (e.hasFile || !e.download?.downloadId) continue;
+        const it = live.get(e.download.downloadId);
+        if (!it) { if (seen.has(e.id)) finished = true; continue; }
+        seen.add(e.id);
+        const paused = /paused/i.test(it.status || "");
+        e.download.state = it.lifecycle === "importing" ? "Importing" : it.lifecycle === "blocked" ? "Needs attention" : it.lifecycle === "imported" ? "Imported" : paused ? "Paused" : "Downloading";
+        e.download.progress = it.lifecycle === "downloading" ? Number(it.progress) || 0 : 100;
+        e.download.etaSec = it.lifecycle === "downloading" && !paused && it.etaSeconds > 0 ? it.etaSeconds : null;
+        if (it.lifecycle === "imported") finished = true;
+      }
+      if (!alive()) return stop();
+      paint();
+      if (finished && !reloading) {
+        reloading = true;
+        const fresh = await api(`/api/media/details?serviceKey=${encodeURIComponent(d.serviceKey)}&id=${d.id}`);
+        reloading = false;
+        if (fresh.ok && alive()) { d.episodes = fresh.data.item.episodes; d.episodeFileCount = fresh.data.item.episodeFileCount; seen.clear(); drawSeason(); }
+      }
+      if (!downloadingNow()) stop();
+    };
+    const tick = () => { if (!alive()) return stop(); for (const e of d.episodes) if (e.download?.etaSec > 0) e.download.etaSec--; paint(); };
+    const pollTimer = setInterval(sync, 3000), tickTimer = setInterval(tick, 1000);
+    function stop() { clearInterval(pollTimer); clearInterval(tickTimer); }
+    sync();
     requestAnimationFrame(() => { const on = chips.querySelector(".hub-chip.on"); if (on) chips.scrollLeft = on.offsetLeft - chips.clientWidth / 2 + on.offsetWidth / 2; });
   }
   function successBanner(text, withDownloads) {
@@ -630,19 +673,25 @@
     const r = await api("/api/tv/cmd", { method: "POST", body: { text: "play " + what + TV_SUFFIX[key] } });
     toast(r.ok ? r.data.text || "Playing on " + TVS[key] + "." : errorText(r, "The TV didn't answer."), r.ok ? { action: { label: "Open remote", onClick: () => { location.href = "/remote/"; } } } : "error");
   }
+  // "hh:mm:ss" / "d.hh:mm:ss" from Sonarr's queue, as seconds
+  const etaFrom = t => { const m = String(t || "").match(/^(?:(\d+)\.)?(\d+):(\d+):(\d+)$/); return m ? ((+m[1] || 0) * 86400) + (+m[2]) * 3600 + (+m[3]) * 60 + (+m[4]) : null; };
+  const etaText = s => s == null || s < 0 ? "" : s >= 3600 ? Math.floor(s / 3600) + "h " + Math.floor(s % 3600 / 60) + "m left" : Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0") + " left";
+  function episodeSub(e) {
+    const future = Boolean(e.airDate) && Date.parse(e.airDate) > Date.now(), dl = !e.hasFile && e.download;
+    if (dl && dl.etaSec === undefined) dl.etaSec = etaFrom(dl.eta);
+    const queueLabel = dl ? [dl.state || "Grabbed", Number.isFinite(Number(dl.progress)) && dl.state !== "Importing" ? Math.round(Number(dl.progress)) + "%" : "", dl.state === "Downloading" ? etaText(dl.etaSec) : ""].filter(Boolean).join(" · ") : "";
+    return [future ? "Airs " + dateText(e.airDate, { weekday: "short", day: "numeric", month: "short" }) : dateText(e.airDate), e.runtime ? e.runtime + " min" : "",
+      e.hasFile ? [e.file?.quality, size(e.file?.size)].filter(Boolean).join(" · ") : queueLabel || (future ? "" : e.monitored ? "Wanted" : "Not monitored")].filter(Boolean).join(" · ");
+  }
   function episodeRow(d, e, getTv) {
     const row = el("div", "hub-ep"), info = el("div", "info"), acts = el("div", "acts");
+    row.dataset.ep = e.id;
     const future = Boolean(e.airDate) && Date.parse(e.airDate) > Date.now();
     const queued = !e.hasFile && e.download;
     const queueState = queued ? String(e.download.state || "Grabbed") : "";
-    const queueLabel = queued
-      ? [queueState, Number.isFinite(Number(e.download.progress)) ? Math.round(Number(e.download.progress)) + "%" : "", e.download.eta ? "ETA " + e.download.eta : ""].filter(Boolean).join(" · ")
-      : "";
     const dotClass = e.hasFile ? "have" : queued && ["Downloading", "Importing"].includes(queueState) ? "downloading" : queued ? "queued" : future ? "soon" : e.monitored ? "want" : "";
     const name = el("div", "nm"); name.append(el("i", "hub-dot " + dotClass), el("span", null, e.title || "Episode " + e.episodeNumber));
-    const sub = [future ? "Airs " + dateText(e.airDate, { weekday: "short", day: "numeric", month: "short" }) : dateText(e.airDate), e.runtime ? e.runtime + " min" : "",
-      e.hasFile ? [e.file?.quality, size(e.file?.size)].filter(Boolean).join(" · ") : queueLabel || (future ? "" : e.monitored ? "Wanted" : "Not monitored")].filter(Boolean).join(" · ");
-    info.append(name, el("div", "sub", sub));
+    info.append(name, el("div", "sub", episodeSub(e)));
     if (queued && Number.isFinite(Number(e.download.progress))) {
       const progressLine = el("div", "hub-bar-line episode-download-progress"), progressFill = el("i");
       progressFill.style.width = Math.max(0, Math.min(100, Number(e.download.progress))) + "%";
