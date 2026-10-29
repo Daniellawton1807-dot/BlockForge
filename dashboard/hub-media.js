@@ -679,7 +679,8 @@
       // can't do the waiting: a phone pauses it as soon as the Jellyfin app comes to the front)
       const phone = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
       const win = phone ? null : window.open("", "_blank");  // opened during the tap so it isn't blocked
-      const ask = { ref: playRef(d), season: e?.seasonNumber ?? null, episode: e?.episodeNumber ?? null, kind: phone ? "app" : "web" };
+      const ask = { ref: playRef(d), season: e?.seasonNumber ?? null, episode: e?.episodeNumber ?? null, kind: phone ? "app" : "web",
+        device: /iPad/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ? "ipad" : /iPhone|iPod/.test(navigator.userAgent) ? "iphone" : /Android/.test(navigator.userAgent) ? "android" : "" };
       const r = await api("/api/tv/api/playhere", { method: "POST", body: ask });
       const reply = r.data?.reply;
       if (!r.ok || reply?.status !== "armed") { win?.close(); toast(typeof reply === "string" ? reply : errorText(r, "Couldn't find that in Jellyfin."), "error"); return; }
