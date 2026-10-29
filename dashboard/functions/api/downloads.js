@@ -115,7 +115,7 @@ async function qbitItems(env) {
       const progress = Math.max(0, Math.min(100, Number(torrent.progress) * 100));
       const eta = Number(torrent.eta);
       return {
-        id: "qbittorrent-" + index,
+        id: "qbittorrent-" + (torrent.hash ? String(torrent.hash).toLowerCase() : index),
         torrentHash: String(torrent.hash || ""),
         source: "qBittorrent",
         name: displayName(torrent.name),
@@ -239,7 +239,7 @@ async function sabItems(env) {
       const queued = /queued|pending/i.test(String(slot?.status || ""));
       const importing = Number(slot.percentage) >= 100 && !paused;
       return {
-        id: "sabnzbd-" + index,
+        id: "sabnzbd-" + (slot.nzo_id || index),
         nzoId: String(slot.nzo_id || ""),
         source: "SABnzbd",
         name: displayName(slot.filename),
@@ -250,6 +250,59 @@ async function sabItems(env) {
         lifecycle: importing ? "importing" : "downloading"
       };
     });
+}
+
+// Sonarr/Radarr's own view of each download: the stage it's at (downloading, waiting to import,
+// importing, import blocked, imported) and any warnings, exactly as their Activity queue shows it.
+async function arrQueues(env) {
+  const lists = await Promise.all(arrServices().map(async service => {
+    if (!arrServiceStatus(env, service).configured) return [];
+    try {
+      const include = service.type === "tv" ? "&includeSeries=true&includeEpisode=true" : "&includeMovie=true";
+      const response = await arrCall(env, service, "api/v3/queue?page=1&pageSize=100" + include);
+      const records = Array.isArray(response?.records) ? response.records : Array.isArray(response) ? response : [];
+      return records.map(record => {
+        const ep = record.episode, title = service.type === "tv" ? record.series?.title : record.movie?.title;
+        const code = ep && Number.isFinite(Number(ep.seasonNumber)) ? " · S" + String(ep.seasonNumber).padStart(2, "0") + "E" + String(ep.episodeNumber).padStart(2, "0") : "";
+        const messages = (Array.isArray(record.statusMessages) ? record.statusMessages : []).flatMap(m => Array.isArray(m?.messages) ? m.messages : []).concat(record.errorMessage ? [record.errorMessage] : []);
+        return {
+          service, id: Number(record.id) || 0,
+          downloadId: String(record.downloadId || "").toLowerCase(),
+          release: String(record.title || ""),
+          label: title ? String(title).slice(0, 160) + code : "",
+          client: String(record.downloadClient || service.name).slice(0, 40),
+          state: String(record.trackedDownloadState || "").toLowerCase(),
+          health: String(record.trackedDownloadStatus || "").toLowerCase(),
+          status: String(record.status || "").toLowerCase(),
+          size: Number(record.size) || 0, sizeleft: Number(record.sizeleft) || 0,
+          timeleft: String(record.timeleft || ""),
+          messages: [...new Set(messages.map(m => String(m).slice(0, 200)))].slice(0, 4)
+        };
+      });
+    } catch { return []; }
+  }));
+  return lists.flat();
+}
+const looseName = value => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+function arrStage(record) {
+  if (!record) return null;
+  if (record.state === "importpending") return { stage: "importing", lifecycle: "importing", status: "Waiting to import" };
+  if (record.state === "importing") return { stage: "importing", lifecycle: "importing", status: "Importing" };
+  if (record.state === "imported") return { stage: "imported", lifecycle: "importing", status: "Imported, tidying up" };
+  if (record.state === "importblocked") return { stage: "importing", lifecycle: "blocked", status: "Import blocked" };
+  if (record.state === "failedpending" || record.state === "failed" || record.status === "failed") return { stage: "failed", lifecycle: "failed", status: "Failed" };
+  return { stage: "downloading", lifecycle: "downloading", status: null };
+}
+function applyArr(item, record) {
+  const stage = arrStage(record);
+  item.stage = item.stage || "downloading";
+  if (!stage) return item;
+  item.stage = stage.stage;
+  item.service = record.service.name;
+  if (record.label) item.label = record.label;
+  if (stage.lifecycle !== "downloading") { item.lifecycle = stage.lifecycle; item.status = stage.status; item.progress = 100; item.etaSeconds = null; }
+  if (record.messages.length && (record.health !== "ok" || stage.lifecycle !== "downloading")) item.eventDetail = record.messages.join(" · ");
+  return item;
 }
 
 export async function onRequest({ env, request }) {
@@ -318,7 +371,7 @@ export async function onRequest({ env, request }) {
     } catch(error) { return json({error:error.message||"Download action failed."},502); }
   }
 
-  const results = await Promise.allSettled([qbitItems(env), sabItems(env)]);
+  const [results, queue] = await Promise.all([Promise.allSettled([qbitItems(env), sabItems(env)]), arrQueues(env)]);
   const items = [];
   const sources = [
     { id: "qbittorrent", name: "qBittorrent", result: results[0] },
@@ -341,6 +394,26 @@ export async function onRequest({ env, request }) {
         : message
     };
   });
+
+  // match each downloader job to its Sonarr/Radarr queue entry (by hash / job id, else by release name);
+  // queue entries with no live job (finished downloading, now importing) are shown from the queue itself
+  const used = new Set();
+  for (const item of items) {
+    const key = String(item.torrentHash || item.nzoId || "").toLowerCase();
+    const record = queue.find(r => !used.has(r) && ((key && r.downloadId === key) || looseName(r.release) === looseName(item.name)));
+    if (record) used.add(record);
+    applyArr(item, record);
+  }
+  for (const record of queue) {
+    if (used.has(record)) continue;
+    const progress = record.size ? Math.max(0, Math.min(100, 100 * (1 - record.sizeleft / record.size))) : 0;
+    const parts = record.timeleft.split(":").map(Number), eta = parts.length === 3 && parts.every(Number.isFinite) ? parts[0] * 3600 + parts[1] * 60 + parts[2] : null;
+    items.push(applyArr({
+      id: "queue-" + record.service.key + "-" + record.id, source: record.client, name: displayName(record.release),
+      category: record.service.type === "tv" ? "TV show" : "Movie", progress, etaSeconds: eta,
+      status: record.status === "paused" ? "Paused" : record.status === "queued" ? "Queued" : "Downloading", lifecycle: "downloading"
+    }, record));
+  }
 
   const historyResults = await Promise.all(arrServices().map(async service => {
     if (!arrServiceStatus(env, service).configured) return [];

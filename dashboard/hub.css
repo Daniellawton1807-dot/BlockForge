@@ -455,3 +455,16 @@ html.hub-locked { overflow: hidden; }
 .sh-path { margin-top: 8px; font-size: 12px; color: var(--muted); word-break: break-all; }
 a.hub-btn { text-decoration: none; }
 @media (min-width: 1021px) { .remote-layout > .hub-card { position: sticky; top: 20px; } }
+
+/* download stages: Grabbed → Downloading → Importing → Imported */
+.hub-dl .rel { margin-top: 1px; font-size: 11.5px; color: var(--muted); word-break: break-all; }
+.hub-dl .why { margin-top: 8px; font-size: 12px; color: var(--hub-amber); line-height: 1.45; }
+.hub-stages { display: flex; gap: 4px; margin-top: 10px; }
+.hub-stages span { flex: 1; position: relative; padding-top: 9px; font-size: 10.5px; font-weight: 700; letter-spacing: .02em; color: var(--muted); opacity: .6; white-space: nowrap; }
+.hub-stages span::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px; border-radius: 9px; background: var(--hub-soft-2); }
+.hub-stages span.done { opacity: 1; } .hub-stages span.done::before { background: var(--green); }
+.hub-stages span.now { opacity: 1; color: var(--text); } .hub-stages span.now::before { background: var(--hub-grad); animation: hub-pulse 1.6s ease-in-out infinite; }
+.hub-stages span.now[style*="--p"]::before { animation: none; background: linear-gradient(90deg, var(--accent), #00a4dc) 0 0 / var(--p) 100% no-repeat, var(--hub-soft-2); transition: background-size .6s var(--hub-ease); }
+.hub-stages.blocked span.now { color: var(--hub-amber); } .hub-stages.blocked span.now::before { background: var(--hub-amber); animation: none; }
+@keyframes hub-pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .hub-stages span.now::before { animation: none; } }
