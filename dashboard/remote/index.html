@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<title>Remote — Homebase</title>
+<link rel="stylesheet" href="../style.css?v=homebase-hub-1">
+<link rel="stylesheet" href="../hub.css?v=homebase-hub-1">
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <a class="brand" href="/"><span class="logo">H</span><span>homebase<small>PERSONAL HOMELAB</small></span></a>
+  <div class="nav-title">WORKSPACE</div>
+  <a class="nav" href="/"><span>◫</span> Overview</a>
+  <a class="nav" href="/media/"><span>▤</span> Media hub</a>
+  <a class="nav active" href="/remote/" aria-current="page"><span>◎</span> Remote</a>
+  <a class="nav" href="/#apps"><span>▦</span> All applications</a>
+  <div class="side-bottom"><div class="server"><i></i><div><b>TV remote</b><small id="tvConnectionLabel">Checking the TVs…</small></div></div><p>Control the living room, Mum's and Daniel's TVs from anywhere.</p></div>
+</aside>
+<main class="main">
+  <header class="topbar">
+    <div><div class="kicker">YOUR TVS</div><h1>Remote</h1></div>
+    <div class="top-right">
+      <div class="tv-seg" id="tvSeg" role="group" aria-label="Choose a TV">
+        <button type="button" data-tv="living room">Living Room</button>
+        <button type="button" data-tv="mum">Mum's</button>
+        <button type="button" data-tv="daniels tv">Daniel's</button>
+      </div>
+      <button id="hubThemeToggle" class="icon-btn" type="button" aria-label="Toggle theme">☼</button>
+    </div>
+  </header>
+
+  <section id="hubGate" class="download-login-panel media-access-panel hub-gate" hidden aria-labelledby="hubGateTitle">
+    <div><div class="kicker">PRIVATE CONTROLS</div><h2 id="hubGateTitle">Sign in to use the remote</h2><p id="hubGateMessage" class="download-auth-message" aria-live="polite">Checking this device's sign-in…</p></div>
+    <form id="hubLoginForm" class="download-login" autocomplete="on">
+      <label>Username<input id="hubUsername" name="username" type="text" autocomplete="username" maxlength="512" required></label>
+      <label>Password<input id="hubPassword" name="password" type="password" autocomplete="current-password" maxlength="512" required></label>
+      <label class="remember-row"><input id="hubRemember" type="checkbox"><span>Remember me on this device<small>The same Homebase sign-in as the Media hub.</small></span></label>
+      <button class="download-login-button" type="submit">Sign in</button>
+    </form>
+  </section>
+
+  <div id="hubContent" hidden>
+    <div class="remote-layout">
+      <section class="hub-card" aria-label="Now playing and playback">
+        <div class="np" id="np">
+          <div class="bg" id="npBg"></div><div class="shade"></div>
+          <div class="in">
+            <div class="thumb" id="npThumb">▶</div>
+            <div class="meta">
+              <div class="state" id="npState"><i></i><span id="npStateText">Connecting…</span></div>
+              <h2 id="npTitle">Nothing playing</h2>
+              <div class="sub" id="npSub">Pick something in the Media hub, or say what to play below.</div>
+              <div class="seek" id="seek"><div class="bar"><i id="npBar"></i><b id="npKnob"></b></div></div>
+              <div class="times"><span id="npPos"></span><span id="npLeft"></span></div>
+            </div>
+          </div>
+          <div class="more" id="npMore" hidden><p id="npOverview"></p><div class="ends" id="npEnds"></div></div>
+        </div>
+
+        <div class="transport">
+          <button class="rkey" data-cmd="previous episode" aria-label="Previous episode"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+          <button class="rkey" data-cmd="back 30 seconds" aria-label="Back 30 seconds"><span class="stack"><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg><small>30</small></span></button>
+          <button class="rkey big" id="playPause" aria-label="Play or pause"><svg viewBox="0 0 24 24" id="ppIcon"><path d="M8 5v14l11-7z"/></svg></button>
+          <button class="rkey" data-cmd="forward 30 seconds" aria-label="Forward 30 seconds"><span class="stack"><svg viewBox="0 0 24 24"><path d="M12 5V2l5 4-5 4V7a5 5 0 1 0 5 5h2a7 7 0 1 1-7-7z"/></svg><small>30</small></span></button>
+          <button class="rkey" data-cmd="next episode" aria-label="Next episode"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+        </div>
+        <div class="rrow">
+          <button class="hub-btn" data-cmd="subtitles on">Subtitles on</button>
+          <button class="hub-btn" data-cmd="stop">Stop</button>
+          <button class="hub-btn" data-cmd="subtitles off">Subtitles off</button>
+        </div>
+        <form class="say" id="sayForm">
+          <button type="button" class="hub-btn mic" id="mic" aria-label="Speak a command"><svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"/></svg></button>
+          <input id="say" placeholder="Say or type: pause, rewind 2 minutes, play The Flash" autocomplete="off" enterkeyhint="go">
+          <button class="hub-btn" type="submit">Send</button>
+        </form>
+        <div class="say-hint" id="sayHint"></div>
+      </section>
+
+      <section class="hub-card" aria-label="Navigation pad">
+        <div class="hub-head"><div><div class="kicker">NAVIGATE</div><h3>Pad</h3></div>
+          <div class="hub-tabs" id="padMode" role="group" aria-label="Pad style"><button type="button" data-mode="buttons">Buttons</button><button type="button" data-mode="swipe">Swipe</button></div></div>
+        <div class="pad-wrap">
+          <div class="dpad" id="dpad">
+            <button class="arrow up" data-key="up" aria-label="Up"><svg viewBox="0 0 24 24"><path d="M12 7l-7 8h14z"/></svg></button>
+            <button class="arrow left" data-key="left" aria-label="Left"><svg viewBox="0 0 24 24"><path d="M7 12l8-7v14z"/></svg></button>
+            <button class="ok" data-key="ok" aria-label="OK">OK</button>
+            <button class="arrow right" data-key="right" aria-label="Right"><svg viewBox="0 0 24 24"><path d="M17 12l-8 7V5z"/></svg></button>
+            <button class="arrow down" data-key="down" aria-label="Down"><svg viewBox="0 0 24 24"><path d="M12 17l7-8H5z"/></svg></button>
+          </div>
+          <div class="touchpad" id="touchpad" hidden aria-label="Touchpad: swipe to move, tap for OK"><div class="hint">Swipe to move<br>Tap for OK</div><div class="dot" id="dot"></div></div>
+          <div class="rrow">
+            <button class="rkey" data-key="back" aria-label="Back"><span class="stack"><svg viewBox="0 0 24 24"><path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"/></svg><small>Back</small></span></button>
+            <button class="rkey" data-key="home" aria-label="Home"><span class="stack"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg><small>Home</small></span></button>
+            <button class="rkey" data-key="menu" aria-label="Menu"><span class="stack"><svg viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg><small>Menu</small></span></button>
+          </div>
+          <div class="rrow four">
+            <button class="rkey" data-key="voldown" aria-label="Volume down"><span class="stack"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4z"/></svg><small>Vol −</small></span></button>
+            <button class="rkey" data-key="mute" aria-label="Mute"><span class="stack"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm13.6 3 2.7-2.7-1.4-1.4-2.7 2.7-2.7-2.7-1.4 1.4 2.7 2.7-2.7 2.7 1.4 1.4 2.7-2.7 2.7 2.7 1.4-1.4z"/></svg><small>Mute</small></span></button>
+            <button class="rkey" data-key="volup" aria-label="Volume up"><span class="stack"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1c2.9.9 5 3.5 5 6.7s-2.1 5.8-5 6.7v2.1c4-.9 7-4.5 7-8.8s-3-7.9-7-8.8z"/></svg><small>Vol +</small></span></button>
+            <button class="rkey" data-key="power" aria-label="Power" style="color:#ff7b86"><span class="stack"><svg viewBox="0 0 24 24"><path d="M13 3h-2v10h2zm4.8 2.2-1.4 1.4A7 7 0 1 1 7.6 6.6L6.2 5.2A9 9 0 1 0 17.8 5.2z"/></svg><small>Power</small></span></button>
+          </div>
+          <form class="type-row" id="typeForm"><input id="typeText" placeholder="Type into a search box on the TV" autocomplete="off" enterkeyhint="send"><button class="hub-btn" type="submit">Type</button></form>
+          <div class="kbd-hint">Keyboard: arrows move · Enter OK · Esc back · H home · Space play/pause · +/− volume</div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <footer><span>HOMEBASE</span><i>•</i> Remote <small>Commands go through the signed-in Homebase Pages Function and a private Cloudflare connection to tvbot on the server.</small></footer>
+</main>
+</div>
+<script src="../hub.js?v=homebase-hub-1"></script>
+<script src="../remote.js?v=homebase-hub-1"></script>
+</body>
+</html>
