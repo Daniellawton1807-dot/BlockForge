@@ -1396,3 +1396,21 @@ html[data-theme="light"] .downloads-section .download-action-menu button{color:#
 .download-card.download-paused .download-state { color: #f5c66b; border-color: rgba(245, 198, 107, .42); background: rgba(245, 198, 107, .1); }
 .download-card.download-paused .download-progress span { background: #e8b957; opacity: .8; }
 .download-card.download-paused .download-facts > span:last-child { color: #f5c66b; font-weight: 600; }
+
+/* Phones: the sidebar becomes an app-style tab bar along the bottom of every page */
+@media (max-width: 680px) {
+  body { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+  .sidebar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
+    min-height: 0; padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    border: 0; border-top: 1px solid var(--line);
+    background: color-mix(in srgb, #0b101c 88%, transparent);
+    backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  }
+  html[data-theme="light"] .sidebar { background: color-mix(in srgb, #ffffff 90%, transparent); }
+  .sidebar .brand { display: none; }
+  .sidebar .nav { min-height: 54px; margin: 0; padding: 6px 2px; gap: 3px; border-radius: 12px; font-size: 10.5px; font-weight: 650; box-shadow: none; -webkit-tap-highlight-color: transparent; }
+  .sidebar .nav.active { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text); box-shadow: none; }
+  .sidebar .nav span { font-size: 18px; }
+}

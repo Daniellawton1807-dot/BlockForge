@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1020">
 <title>Remote — Homebase</title>
-<link rel="stylesheet" href="../style.css?v=homebase-hub-1">
-<link rel="stylesheet" href="../hub.css?v=homebase-hub-1">
+<link rel="stylesheet" href="../style.css?v=homebase-hub-2">
+<link rel="stylesheet" href="../hub.css?v=homebase-hub-2">
 </head>
 <body>
 <div class="layout">
@@ -20,15 +20,15 @@
   <div class="side-bottom"><div class="server"><i></i><div><b>TV remote</b><small id="tvConnectionLabel">Checking the TVs…</small></div></div><p>Control the living room, Mum's and Daniel's TVs from anywhere.</p></div>
 </aside>
 <main class="main">
-  <header class="topbar">
+  <header class="topbar remote-top">
     <div><div class="kicker">YOUR TVS</div><h1>Remote</h1></div>
     <div class="top-right">
       <div class="tv-seg" id="tvSeg" role="group" aria-label="Choose a TV">
-        <button type="button" data-tv="living room">Living Room</button>
-        <button type="button" data-tv="mum">Mum's</button>
-        <button type="button" data-tv="daniels tv">Daniel's</button>
+        <button type="button" data-tv="living room"><i></i>Living Room</button>
+        <button type="button" data-tv="mum"><i></i>Mum's</button>
+        <button type="button" data-tv="daniels tv"><i></i>Daniel's</button>
       </div>
-      <button id="hubThemeToggle" class="icon-btn" type="button" aria-label="Toggle theme">☼</button>
+      <button id="hubThemeToggle" class="icon-btn" type="button" aria-label="Toggle theme"></button>
     </div>
   </header>
 
@@ -44,11 +44,13 @@
 
   <div id="hubContent" hidden>
     <div class="remote-layout">
+      <div class="remote-col">
       <section class="hub-card" aria-label="Now playing and playback">
+        <div class="hub-head"><div><div class="kicker" id="npTvName">LIVING ROOM TV</div><h3>Now playing</h3></div><a class="hub-btn small ghost" href="/media/">Media hub ›</a></div>
         <div class="np" id="np">
           <div class="bg" id="npBg"></div><div class="shade"></div>
           <div class="in">
-            <div class="thumb" id="npThumb">▶</div>
+            <div class="thumb" id="npThumb"><span data-icon="tv"></span></div>
             <div class="meta">
               <div class="state" id="npState"><i></i><span id="npStateText">Connecting…</span></div>
               <h2 id="npTitle">Nothing playing</h2>
@@ -72,17 +74,34 @@
           <button class="hub-btn" data-cmd="stop">Stop</button>
           <button class="hub-btn" data-cmd="subtitles off">Subtitles off</button>
         </div>
+      </section>
+
+      <section class="hub-card" aria-label="Say a command">
+        <div class="hub-head"><div><div class="kicker">ASK</div><h3>Say what you want</h3></div></div>
         <form class="say" id="sayForm">
           <button type="button" class="hub-btn mic" id="mic" aria-label="Speak a command"><svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"/></svg></button>
-          <input id="say" placeholder="Say or type: pause, rewind 2 minutes, play The Flash" autocomplete="off" enterkeyhint="go">
+          <input id="say" placeholder="Pause, rewind 2 minutes, play The Flash…" autocomplete="off" enterkeyhint="go" aria-label="Command">
           <button class="hub-btn" type="submit">Send</button>
         </form>
         <div class="say-hint" id="sayHint"></div>
+        <div class="hub-chips say-chips">
+          <button type="button" class="hub-chip" data-cmd="what's playing">What's on?</button>
+          <button type="button" class="hub-chip" data-cmd="restart">Start again</button>
+          <button type="button" class="hub-chip" data-cmd="back 10 seconds">Back 10s</button>
+          <button type="button" class="hub-chip" data-cmd="forward 2 minutes">Skip 2 min</button>
+          <button type="button" class="hub-chip" data-cmd="pause">Pause</button>
+        </div>
       </section>
+
+      <section class="hub-card" aria-label="Play something" id="quickCard" hidden>
+        <div class="hub-head"><div><div class="kicker">JUST LANDED</div><h3>Play something new</h3></div><span class="hub-meta" id="quickHint"></span></div>
+        <div id="quickRail"></div>
+      </section>
+      </div>
 
       <section class="hub-card" aria-label="Navigation pad">
         <div class="hub-head"><div><div class="kicker">NAVIGATE</div><h3>Pad</h3></div>
-          <div class="hub-tabs" id="padMode" role="group" aria-label="Pad style"><button type="button" data-mode="buttons">Buttons</button><button type="button" data-mode="swipe">Swipe</button></div></div>
+          <div class="tv-seg" id="padMode" role="group" aria-label="Pad style"><button type="button" data-mode="buttons">Buttons</button><button type="button" data-mode="swipe">Swipe</button></div></div>
         <div class="pad-wrap">
           <div class="dpad" id="dpad">
             <button class="arrow up" data-key="up" aria-label="Up"><svg viewBox="0 0 24 24"><path d="M12 7l-7 8h14z"/></svg></button>
@@ -112,7 +131,7 @@
   <footer><span>HOMEBASE</span><i>•</i> Remote <small>Commands go through the signed-in Homebase Pages Function and a private Cloudflare connection to tvbot on the server.</small></footer>
 </main>
 </div>
-<script src="../hub.js?v=homebase-hub-1"></script>
-<script src="../remote.js?v=homebase-hub-1"></script>
+<script src="../hub.js?v=homebase-hub-2"></script>
+<script src="../remote.js?v=homebase-hub-2"></script>
 </body>
 </html>

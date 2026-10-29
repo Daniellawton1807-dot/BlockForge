@@ -103,8 +103,8 @@ export async function readArrOptions(env, service) {
   };
 }
 
-function posterUrl(item) {
-  const image = Array.isArray(item.images) ? item.images.find(candidate => String(candidate.coverType || "").toLowerCase() === "poster") : null;
+export function imageUrl(item, coverType) {
+  const image = Array.isArray(item?.images) ? item.images.find(candidate => String(candidate.coverType || "").toLowerCase() === coverType) : null;
   const value = String(image?.remoteUrl || image?.url || "");
   try {
     const url = new URL(value);
@@ -113,6 +113,9 @@ function posterUrl(item) {
     return "";
   }
 }
+
+const posterUrl = item => imageUrl(item, "poster");
+const fanartUrl = item => imageUrl(item, "fanart");
 
 export function normalizeLookup(service, item) {
   const mediaType = service.type === "tv" ? "tv" : "movie";
@@ -131,6 +134,7 @@ export function normalizeLookup(service, item) {
     year,
     overview: String(item.overview || "").slice(0, 700),
     posterUrl: posterUrl(item),
+    fanartUrl: fanartUrl(item),
     genres: Array.isArray(item.genres) ? item.genres.map(value => String(value).slice(0, 50)).slice(0, 6) : [],
     sourceServices: [service.key]
   };
@@ -156,6 +160,7 @@ export function normalizeLibraryItem(service, item) {
     qualityProfileId: Number(item.qualityProfileId) || null,
     sizeOnDisk: Number(item.statistics?.sizeOnDisk || item.sizeOnDisk || 0),
     posterUrl: posterUrl(item),
+    fanartUrl: fanartUrl(item),
     episodeFileCount: Number(item.statistics?.episodeFileCount || 0),
     episodeCount: Number(item.statistics?.episodeCount || 0)
   };

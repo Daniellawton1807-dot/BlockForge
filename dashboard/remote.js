@@ -1,7 +1,7 @@
 /* Homebase Remote: now playing, playback, voice/typed commands and the navigation pad.
    Everything goes to /api/tv/..., which forwards to tvbot through the private bridge. */
 (() => {
-  const { $, el, store, toast, api, errorText, gate, TVS, TV_SUFFIX } = Hub;
+  const { $, el, icon, store, toast, api, rail, errorText, gate, TVS, TV_SUFFIX } = Hub;
   let tv = store.get("jr_tv", "living room"); if (!TVS[tv]) tv = "living room";
   let status = null, statusAt = 0, dragging = false, dragPos = 0, poll = null;
 
@@ -13,6 +13,7 @@
   function setTv(key) {
     tv = key; store.set("jr_tv", key);
     document.querySelectorAll("#tvSeg button").forEach(b => b.classList.toggle("on", b.dataset.tv === key));
+    $("npTvName").textContent = TVS[key].toUpperCase(); $("quickHint").textContent = "Tap to play on " + TVS[key];
     status = null; render(); refresh();
   }
   document.querySelectorAll("#tvSeg button").forEach(b => b.onclick = () => setTv(b.dataset.tv));
@@ -35,7 +36,18 @@
   async function refresh() {
     const result = await api("/api/tv/api/status?tv=" + encodeURIComponent(tv));
     if (!result.ok) { $("npStateText").textContent = result.status === 401 ? "Signed out" : "Can't reach the TVs"; $("tvConnectionLabel").textContent = errorText(result, "The remote is unavailable."); return; }
-    status = result.data; statusAt = Date.now(); $("tvConnectionLabel").textContent = "Connected to tvbot"; render();
+    status = result.data; statusAt = Date.now(); $("tvConnectionLabel").textContent = "Connected to tvbot"; dot(tv, status); render();
+  }
+  // a dot on each TV button: green playing, amber paused, grey on, faint off
+  function dot(key, s) {
+    const i = document.querySelector(`#tvSeg button[data-tv="${key}"] i`); if (!i) return;
+    i.className = s?.playing ? (s.playing.paused ? "paused" : "playing") : s?.online ? "online" : "";
+  }
+  async function refreshOthers() {
+    for (const key of Object.keys(TVS)) {
+      if (key === tv) continue;
+      const r = await api("/api/tv/api/status?tv=" + encodeURIComponent(key)); if (r.ok) dot(key, r.data);
+    }
   }
   let lastThumb = null;
   function render() {
@@ -45,13 +57,13 @@
     if (!p) {
       state.className = "state"; $("npStateText").textContent = status.online ? "Jellyfin open" : "Idle";
       $("npTitle").textContent = "Nothing playing"; $("npSub").textContent = "Pick something in the Media hub, or say what to play below.";
-      $("npThumb").style.backgroundImage = ""; $("npThumb").textContent = "▶"; $("npBg").style.backgroundImage = "";
+      $("npThumb").style.backgroundImage = ""; $("npThumb").replaceChildren(icon("tv")); $("npBg").style.backgroundImage = "";
       $("npBar").style.width = "0"; $("npPos").textContent = ""; $("npLeft").textContent = ""; lastThumb = null; setPP(false); return;
     }
     state.className = "state " + (p.paused ? "paused" : "playing"); $("npStateText").textContent = p.paused ? "Paused" : "Now playing";
     $("npTitle").textContent = p.title; $("npSub").textContent = p.subtitle;
     if (lastThumb !== p.thumb) {
-      $("npThumb").textContent = ""; $("npThumb").style.backgroundImage = img(p.thumb, 360, "Primary");
+      $("npThumb").replaceChildren(); $("npThumb").style.backgroundImage = img(p.thumb, 360, "Primary");
       $("npBg").style.backgroundImage = img(p.backdrop, 480, "Backdrop"); lastThumb = p.thumb;
       $("npOverview").textContent = p.overview || ""; $("npOverview").classList.remove("open");
     }
@@ -164,10 +176,25 @@
     const key = KEYMAP[e.key]; if (!key) return; e.preventDefault(); press(key);
   });
 
+  // ---------- play something new: the latest downloads, one tap to play ----------
+  async function loadQuick() {
+    const r = await api("/api/media/recent"); if (!r.ok) return;
+    const seen = new Set(), items = (r.data.items || []).filter(i => !seen.has(i.title) && seen.add(i.title)).slice(0, 16);
+    if (!items.length) return;
+    $("quickRail").replaceChildren(rail(items.map((i, n) => {
+      const t = el("button", "hub-tile"); t.type = "button"; t.style.setProperty("--i", n);
+      const art = el("div", "art" + (i.posterUrl ? "" : " empty"), i.posterUrl ? null : i.title); if (i.posterUrl) art.style.backgroundImage = `url("${i.posterUrl.replace(/["\\]/g, "")}")`;
+      t.append(art, el("div", "t", i.title), el("div", "s", i.episodeLabel || (i.mediaType === "movie" ? "Film" : "")));
+      t.onclick = () => cmd("play " + i.title); return t;
+    })));
+    $("quickCard").hidden = false;
+  }
+
   // ---------- start ----------
   gate({ message: "Sign in to use the TV remote.", onReady() {
-    setTv(tv); clearInterval(poll);
-    poll = setInterval(() => { if (!document.hidden) refresh(); }, 4000);
+    setTv(tv); clearInterval(poll); refreshOthers(); loadQuick();
+    let n = 0;
+    poll = setInterval(() => { if (document.hidden) return; refresh(); if (++n % 5 === 0) refreshOthers(); }, 4000);
   } });
   setInterval(tick, 1000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden && status) refresh(); });
