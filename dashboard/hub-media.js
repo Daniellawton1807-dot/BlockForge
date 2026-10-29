@@ -10,7 +10,7 @@
   let services = [], library = [], forYou = null, forYouError = "", recent = null, calendar = null, calendarAt = 0, downloads = null;
   let libFilter = store.get("hb_lib_filter", "all"), libSort = store.get("hb_lib_sort", "added"), upFilter = "all";
   let searching = false, searchTimer, searchSeq = 0, remoteResults = null, remoteError = "";
-  let dlTimer = null, spotTimer = null, flashDownload = "";
+  let dlTimer = null, spotTimer = null, flashDownload = "", dlShape = "";
 
   // ---------- formatting ----------
   const tmdb = (path, w = "w342") => path ? `https://image.tmdb.org/t/p/${w}${path}` : "";
@@ -90,12 +90,54 @@
     status.lastChild.textContent = cfg.ok ? (ready === services.length ? "Sonarr & Radarr online" : `${ready} of ${services.length} connected`) : "Media services offline";
     $("arrConnectionLabel").textContent = cfg.ok ? `${ready} of ${services.length} Sonarr/Radarr connected` : errorText(cfg, "Couldn't reach Sonarr and Radarr.");
   }
+  function downloadShape(items) {
+    return (items || []).map(i => [i.id || i.name, i.lifecycle, /paused/i.test(i.status || ""), i.name].join(":")).join("|");
+  }
+  function patchDownloadsInPlace() {
+    const v = $("view"), stats = v.querySelector(".hub-stats");
+    if (!stats || !downloads || downloads.error) return drawDownloads();
+    const items = downloads.items || [];
+    const active = items.filter(i => i.lifecycle === "downloading" || i.lifecycle === "importing");
+    const done = items.filter(i => i.lifecycle === "imported"), failed = items.filter(i => i.lifecycle === "failed");
+    const paused = active.filter(i => /paused/i.test(i.status || "")).length;
+    const values = [
+      [String(active.length - paused), active.length ? Math.round(active.reduce((n, i) => n + (Number(i.progress) || 0), 0) / active.length) + "% average" : "Queue is empty"],
+      [String(paused), paused ? "Tap resume to carry on" : "Nothing paused"],
+      [String(done.length), "Recently imported"],
+      [String(failed.length), failed.length ? "Replace tries another release" : "No problems"]
+    ];
+    [...stats.children].forEach((card, index) => {
+      if (!values[index]) return;
+      const value = card.querySelector(".v"), detail = card.querySelector(".d");
+      if (value) value.textContent = values[index][0];
+      if (detail) detail.textContent = values[index][1];
+      card.classList.toggle("warn", index === 3 && failed.length > 0);
+    });
+    const rows = new Map([...v.querySelectorAll(".hub-dl")].map(row => [row.dataset.id, row]));
+    for (const item of items) {
+      const row = rows.get(String(item.id || item.name));
+      if (!row) continue;
+      const pausedItem = /paused/i.test(item.status || ""), pct = Math.round(Number(item.progress) || 0);
+      const status = row.querySelector(".dl-status"), etaNode = row.querySelector(".dl-eta");
+      if (status) status.textContent = item.lifecycle === "importing" ? "Importing" : pausedItem ? "Paused · " + pct + "%" : pct + "%";
+      const eta = item.lifecycle === "downloading" && !pausedItem && item.etaSeconds > 0
+        ? (item.etaSeconds >= 3600 ? Math.floor(item.etaSeconds / 3600) + "h " + Math.round(item.etaSeconds % 3600 / 60) + "m left" : Math.max(1, Math.round(item.etaSeconds / 60)) + " min left") : "";
+      if (etaNode) { etaNode.textContent = eta; etaNode.hidden = !eta; }
+      const bar = row.querySelector(".hub-bar-line i");
+      if (bar) bar.style.width = (item.lifecycle === "importing" ? 100 : pct) + "%";
+    }
+  }
   async function refreshDownloads() {
     const r = await api("/api/downloads");
     if (r.ok) downloads = r.data; else if (!downloads) downloads = { items: [], error: errorText(r, "Couldn't load the download queue.") };
-    const active = (downloads.items || []).filter(i => i.lifecycle === "downloading" || i.lifecycle === "importing").length;
+    const items = downloads.items || [];
+    const active = items.filter(i => i.lifecycle === "downloading" || i.lifecycle === "importing").length;
     $("dlCount").textContent = active || "";
-    if (view === "downloads" && !searching) drawDownloads();
+    if (view === "downloads" && !searching) {
+      const nextShape = downloadShape(items);
+      if (nextShape !== dlShape || !$("view").querySelector(".hub-stats")) drawDownloads();
+      else patchDownloadsInPlace();
+    }
   }
 
   // ---------- views and tabs ----------
@@ -270,6 +312,7 @@
     if (!downloads) { v.append(skeleton("list", 4)); return; }
     if (downloads.error) { v.append(note("Couldn't load downloads", downloads.error)); return; }
     const items = downloads.items || [];
+    dlShape = downloadShape(items);
     const active = items.filter(i => i.lifecycle === "downloading" || i.lifecycle === "importing"), done = items.filter(i => i.lifecycle === "imported"), failed = items.filter(i => i.lifecycle === "failed");
     const paused = active.filter(i => /paused/i.test(i.status || "")).length;
     const stats = el("div", "hub-stats");
@@ -292,6 +335,7 @@
   }
   function downloadRow(i) {
     const row = el("div", "hub-dl" + (i.lifecycle === "failed" ? " failed" : ""));
+    row.dataset.id = String(i.id || i.name);
     row.dataset.name = String(i.name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ");
     const src = /sab/i.test(i.source) ? ["sab", "SAB"] : /qbit|torrent/i.test(i.source) ? ["qb", "qB"] : ["arr", (i.source || "?").slice(0, 2)];
     const paused = /paused/i.test(i.status || ""), pct = Math.round(Number(i.progress) || 0), info = el("div", "info");
@@ -299,7 +343,9 @@
     const sub = el("div", "sub");
     const status = i.lifecycle === "failed" ? "Failed" : i.lifecycle === "imported" ? "Imported " + dateText(i.eventDate, { day: "numeric", month: "short" }) : i.lifecycle === "importing" ? "Importing" : paused ? "Paused · " + pct + "%" : pct + "%";
     const eta = i.lifecycle === "downloading" && !paused && i.etaSeconds > 0 ? (i.etaSeconds >= 3600 ? Math.floor(i.etaSeconds / 3600) + "h " + Math.round(i.etaSeconds % 3600 / 60) + "m left" : Math.max(1, Math.round(i.etaSeconds / 60)) + " min left") : "";
-    [status, eta, i.category, i.source].filter(Boolean).forEach(x => sub.append(el("span", null, x)));
+    sub.append(el("span", "dl-status", status));
+    const etaSpan = el("span", "dl-eta", eta); etaSpan.hidden = !eta; sub.append(etaSpan);
+    [i.category, i.source].filter(Boolean).forEach(x => sub.append(el("span", null, x)));
     info.append(sub);
     if (i.lifecycle === "downloading" || i.lifecycle === "importing") { const line = el("div", "hub-bar-line" + (i.lifecycle === "importing" ? " good" : "")), b = el("i"); b.style.width = (i.lifecycle === "importing" ? 100 : pct) + "%"; line.append(b); info.append(line); }
     if (i.eventDetail && i.lifecycle === "failed") info.append(el("div", "sub", i.eventDetail));
