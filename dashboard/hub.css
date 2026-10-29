@@ -315,7 +315,7 @@ html.hub-locked { overflow: hidden; }
 .hub-ep .more { grid-column: 2 / -1; font-size: 13px; color: var(--muted); line-height: 1.5; padding: 4px 0 2px; }
 .hub-ep.busy .acts { opacity: .55; pointer-events: none; }
 .hub-dot { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: var(--muted); opacity: .6; }
-.hub-dot.have { background: var(--green); opacity: 1; } .hub-dot.want { background: var(--hub-amber); opacity: 1; } .hub-dot.soon { background: var(--accent); opacity: 1; }
+.hub-dot.have { background: var(--green); opacity: 1; } .hub-dot.want { background: var(--hub-amber); opacity: 1; } .hub-dot.soon { background: var(--accent); opacity: 1; } .hub-dot.downloading { background: #39b8ff; opacity: 1; box-shadow: 0 0 8px #39b8ff88; } .hub-dot.queued { background: var(--hub-amber); opacity: 1; }\n.hub-ep .episode-download-progress { margin-top: 5px; height: 4px; }
 @media (max-width: 680px) { .hub-ep { grid-template-columns: 34px minmax(0, 1fr) auto; gap: 4px 8px; padding: 11px 0; } .hub-ep .acts { gap: 4px; } .hub-ep .acts .hub-icon-btn { width: 32px; height: 32px; } }
 .hub-release { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 13px 0; border-top: 1px solid var(--line); }
 .hub-release:first-of-type { border-top: 0; }
