@@ -638,7 +638,7 @@
     const queueLabel = queued
       ? [queueState, Number.isFinite(Number(e.download.progress)) ? Math.round(Number(e.download.progress)) + "%" : "", e.download.eta ? "ETA " + e.download.eta : ""].filter(Boolean).join(" · ")
       : "";
-    const dotClass = e.hasFile ? "have" : future ? "soon" : queued && ["Downloading", "Importing"].includes(queueState) ? "downloading" : queued ? "queued" : e.monitored ? "want" : "";
+    const dotClass = e.hasFile ? "have" : queued && ["Downloading", "Importing"].includes(queueState) ? "downloading" : queued ? "queued" : future ? "soon" : e.monitored ? "want" : "";
     const name = el("div", "nm"); name.append(el("i", "hub-dot " + dotClass), el("span", null, e.title || "Episode " + e.episodeNumber));
     const sub = [future ? "Airs " + dateText(e.airDate, { weekday: "short", day: "numeric", month: "short" }) : dateText(e.airDate), e.runtime ? e.runtime + " min" : "",
       e.hasFile ? [e.file?.quality, size(e.file?.size)].filter(Boolean).join(" · ") : queueLabel || (future ? "" : e.monitored ? "Wanted" : "Not monitored")].filter(Boolean).join(" · ");
