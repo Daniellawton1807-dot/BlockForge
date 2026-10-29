@@ -20,8 +20,7 @@ service_id = "01a15918-e2d7-7d62-ab17-98cc8cadfbb7"
 binding = "VPC_RADARR"
 service_id = "01a15919-2937-76b2-a245-3f1dfc725909"
 
-# tvbot (TV remote) on the server, port 8765. Create a Workers VPC service for
-# 192.168.8.150:8765 in the Cloudflare dashboard and put its id here.
+# tvbot (TV remote) on the server, port 8765 (Workers VPC service "homebase-tvbot").
 [[vpc_services]]
 binding = "VPC_TVBOT"
-service_id = "REPLACE_WITH_TVBOT_VPC_SERVICE_ID"
+service_id = "01a1891d-e23e-7202-9f78-5112942ddb45"
