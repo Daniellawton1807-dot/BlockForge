@@ -120,9 +120,17 @@ window.Hub = (() => {
     let response;
     try { response = await fetch(path, init); } catch { return { ok: false, status: 0, data: { error: "Homebase is not reachable. Check your connection." } }; }
     const type = response.headers.get("content-type") || "";
-    const data = type.includes("json") ? await response.json().catch(() => ({})) : { text: await response.text().catch(() => "") };
+    let data, htmlResponse = false;
+    if (type.includes("json")) data = await response.json().catch(() => ({}));
+    else {
+      const body = await response.text().catch(() => "");
+      htmlResponse = /text\/html/i.test(type) || /^\s*(?:<!doctype\s+html|<html\b)/i.test(body);
+      data = htmlResponse
+        ? { error: response.status >= 500 ? "The service is temporarily unavailable (HTTP " + response.status + "). Try again shortly." : "The service returned an unexpected HTML page (HTTP " + response.status + ")." }
+        : { text: body };
+    }
     if (response.status === 401 && data.code === "login_required") onSignedOut(data.error);
-    return { ok: response.ok, status: response.status, data };
+    return { ok: response.ok && !htmlResponse, status: htmlResponse && response.ok ? 502 : response.status, data };
   }
   const errorText = (result, fallback) => result.data?.error || result.data?.reply || result.data?.text || fallback;
 
