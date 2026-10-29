@@ -5,7 +5,7 @@ import { json, loginConfigured, readJsonBody, validRequestOrigin, validSession }
 const ARR_BRIDGE_BINDING = "ARR_BRIDGE";
 const ROUTES = {
   GET: new Set(["api/status", "api/foryou", "api/locate", "img"]),
-  POST: new Set(["api/key", "api/type", "api/seek", "cmd"])
+  POST: new Set(["api/key", "api/type", "api/seek", "api/playhere", "cmd"])
 };
 
 export async function onRequest({ request, env, params }) {

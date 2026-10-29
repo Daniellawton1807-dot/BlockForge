@@ -676,13 +676,24 @@
     const key = getTarget(), what = playRef(d) + (e ? ` season ${e.seasonNumber} episode ${e.episodeNumber}` : "");
     if (key === "here") {
       // open the tab straight away so the browser treats it as part of the tap, then point it at Jellyfin
+      // and, once that Jellyfin window has connected, have tvbot tell it to start playing
       const win = window.open("", "_blank");
-      const q = "ref=" + encodeURIComponent(playRef(d)) + (e ? `&season=${e.seasonNumber}&episode=${e.episodeNumber}` : "");
-      const r = await api("/api/tv/api/locate?" + q);
-      if (!r.ok || !r.data.id) { win?.close(); toast(errorText(r, "Couldn't find that in Jellyfin."), "error"); return; }
-      const url = `${JELLYFIN}/web/#/details?id=${encodeURIComponent(r.data.id)}` + (r.data.serverId ? "&serverId=" + encodeURIComponent(r.data.serverId) : "");
+      const ask = { ref: playRef(d), season: e?.seasonNumber ?? null, episode: e?.episodeNumber ?? null };
+      const q = "ref=" + encodeURIComponent(ask.ref) + (e ? `&season=${e.seasonNumber}&episode=${e.episodeNumber}` : "");
+      const [found, start] = await Promise.all([api("/api/tv/api/locate?" + q), api("/api/tv/api/playhere", { method: "POST", body: ask })]);
+      if (!found.ok || !found.data.id) { win?.close(); toast(errorText(found, "Couldn't find that in Jellyfin."), "error"); return; }
+      const url = `${JELLYFIN}/web/#/details?id=${encodeURIComponent(found.data.id)}` + (found.data.serverId ? "&serverId=" + encodeURIComponent(found.data.serverId) : "");
       if (win) win.location.href = url; else location.href = url;
-      toast("Opened " + (r.data.name || d.title) + " in Jellyfin. Tap play there.");
+      const since = start.data?.reply?.since;
+      if (!since) { toast("Opened " + (found.data.name || d.title) + " in Jellyfin. Tap play there."); return; }
+      toast("Opening " + (found.data.name || d.title) + " in Jellyfin…");
+      for (let tries = 0; tries < 18; tries++) {
+        await new Promise(r => setTimeout(r, 1500));
+        const r = await api("/api/tv/api/playhere", { method: "POST", body: { ...ask, since } });
+        if (r.data?.reply?.status === "playing") { toast("Playing " + (found.data.name || d.title) + " in Jellyfin."); return; }
+        if (!r.ok) break;
+      }
+      toast("Opened " + (found.data.name || d.title) + " in Jellyfin. Tap play there if it hasn't started.");
       return;
     }
     const r = await api("/api/tv/cmd", { method: "POST", body: { text: "play " + what + TV_SUFFIX[key] } });
