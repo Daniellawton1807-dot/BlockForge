@@ -54,7 +54,14 @@ export async function onRequest({ request, env, params }) {
 
   const headers = new Headers({ "cache-control": route === "img" ? "private, max-age=86400" : "no-store", "x-content-type-options": "nosniff" });
   const type = response.headers.get("content-type") || "";
+  const bodyPreview = route === "img" ? "" : await response.clone().text().catch(() => "");
+  const htmlResponse = route !== "img" && (/text\/html/i.test(type) || /^\s*(?:<!doctype\s+html|<html\b)/i.test(bodyPreview));
+  if (htmlResponse) {
+    const status = response.status >= 500 ? response.status : 502;
+    return json({ code: "tv_upstream_error", error: "The TV service returned an HTML error page (HTTP " + status + "). Try again shortly." }, status);
+  }
   if (route === "img" ? /^image\//i.test(type) : /^(application\/json|text\/plain)/i.test(type)) headers.set("content-type", type);
   else if (response.ok) return json({ code: "invalid_upstream_response", error: "The TV remote returned an unexpected response." }, 502);
+  else if (route !== "img") return json({ code: "tv_upstream_error", error: "The TV service is temporarily unavailable (HTTP " + response.status + "). Try again shortly." }, response.status);
   return new Response(response.body, { status: response.status, headers });
 }
