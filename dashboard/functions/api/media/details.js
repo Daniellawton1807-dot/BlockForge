@@ -8,6 +8,28 @@ function numeric(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
 }
+function queueEpisodeIds(item) {
+  const ids = [item?.episodeId, item?.episode?.id, ...(Array.isArray(item?.episodes) ? item.episodes.map(episode => episode?.id ?? episode) : [])]
+    .map(Number).filter(value => Number.isSafeInteger(value) && value > 0);
+  return new Set(ids);
+}
+function queueInfo(item) {
+  const rawState = text(item?.trackedDownloadState || item?.status || item?.trackedDownloadStatus || "", 50).toLowerCase();
+  const state = rawState.includes("download") ? "Downloading"
+    : rawState.includes("import") ? "Importing"
+    : rawState.includes("pause") ? "Paused"
+    : rawState.includes("queue") || rawState.includes("delay") || rawState.includes("pending") ? "Queued"
+    : rawState.includes("fail") || rawState.includes("warn") || rawState.includes("error") ? "Needs attention"
+    : "Grabbed";
+  const total = numeric(item?.size), remaining = numeric(item?.sizeleft);
+  const progressValue = Number(item?.percentage);
+  const progress = Number.isFinite(progressValue) && progressValue >= 0
+    ? Math.max(0, Math.min(100, progressValue))
+    : total > 0 ? Math.max(0, Math.min(100, (total - remaining) / total * 100)) : null;
+  const timeleft = text(item?.timeleft, 40);
+  const eta = /^\d+(?::\d+){1,2}$/.test(timeleft) ? timeleft : "";
+  return { state, progress, eta };
+}
 function fileDetails(file) {
   if (!file) return null;
   const mediaInfo = file.mediaInfo && typeof file.mediaInfo === "object" ? file.mediaInfo : {};
@@ -52,12 +74,14 @@ export async function onRequest({ request, env }) {
       hasFile: Boolean(raw.hasFile || numeric(raw.sizeOnDisk) > 0)
     };
     if (service.type === "tv") {
-      const [episodeResult, fileResult] = await Promise.all([
+      const [episodeResult, fileResult, queueResult] = await Promise.all([
         arrCall(env, service, "api/v3/episode?seriesId=" + id),
-        arrCall(env, service, "api/v3/episodefile?seriesId=" + id)
+        arrCall(env, service, "api/v3/episodefile?seriesId=" + id),
+        arrCall(env, service, "api/v3/queue?page=1&pageSize=500").catch(() => [])
       ]);
       const episodes = Array.isArray(episodeResult) ? episodeResult : [];
       const files = Array.isArray(fileResult) ? fileResult : [];
+      const queueRecords = Array.isArray(queueResult) ? queueResult : Array.isArray(queueResult?.records) ? queueResult.records : [];
       const fileById = new Map(files.map(file => [Number(file.id), file]));
       const seasonMap = new Map();
       for (const season of Array.isArray(raw.seasons) ? raw.seasons : []) {
@@ -79,6 +103,11 @@ export async function onRequest({ request, env }) {
         if (!seasonMap.has(seasonNumber)) seasonMap.set(seasonNumber, { seasonNumber, monitored: Boolean(episode.monitored), statistics: { episodeCount: 0, episodeFileCount: 0, totalEpisodeCount: 0 } });
         const hasFile = Boolean(episode.hasFile || episodeFile);
         const normalizedFile = fileDetails(episodeFile);
+        const queueEntry = queueRecords.find(item => {
+          const itemSeriesId = Number(item?.seriesId || item?.episode?.seriesId || item?.series?.id);
+          return itemSeriesId === id && queueEpisodeIds(item).has(episodeId);
+        });
+        const download = queueEntry && !hasFile ? queueInfo(queueEntry) : null;
         if (normalizedFile) {
           const relatedIds = normalizedFile.episodeIds.length
             ? normalizedFile.episodeIds
@@ -96,6 +125,7 @@ export async function onRequest({ request, env }) {
           runtime: numeric(episode.runtime),
           hasFile,
           monitored: Boolean(episode.monitored),
+          download,
           file: normalizedFile
         };
       }).filter(episode => episode.id > 0).sort((a,b) => a.seasonNumber-b.seasonNumber || a.episodeNumber-b.episodeNumber);
