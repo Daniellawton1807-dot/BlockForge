@@ -49,13 +49,19 @@ window.Hub = (() => {
   const signOut = $("hubSignOut"); if (signOut) signOut.replaceChildren(icon("logout"));
 
   // toast(message) or toast(message, { kind: "error", action: { label, onClick } })
-  let toastTimer;
+  let toastTimer, toastSeq = 0;
   function toast(message, opts = {}) {
     if (typeof opts === "string") opts = { kind: opts };
     let t = $("hubToast"); if (!t) { t = el("div", "hub-toast"); t.id = "hubToast"; t.setAttribute("role", "status"); document.body.append(t); }
     t.className = "hub-toast" + (opts.kind ? " " + opts.kind : ""); t.replaceChildren(el("span", null, message));
     if (opts.action) { const b = el("button", "hub-toast-action", opts.action.label); b.type = "button"; b.onclick = () => { t.classList.remove("show"); opts.action.onClick(); }; t.append(b); }
-    requestAnimationFrame(() => t.classList.add("show")); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), opts.action ? 6000 : 3600);
+    // the hide timer starts once the toast is actually on screen: a background tab (say, after Play
+    // opened Jellyfin) shows it when you come back, then hides it as normal
+    const seq = ++toastSeq, life = opts.action ? 6000 : 3600;
+    clearTimeout(toastTimer);
+    const start = () => { if (seq !== toastSeq) return; t.classList.add("show"); toastTimer = setTimeout(() => t.classList.remove("show"), life); };
+    if (!document.hidden) requestAnimationFrame(start);
+    else document.addEventListener("visibilitychange", function shown() { if (document.hidden) return; document.removeEventListener("visibilitychange", shown); requestAnimationFrame(start); });
   }
 
   // sheet: one at a time; the browser/phone back button closes it
