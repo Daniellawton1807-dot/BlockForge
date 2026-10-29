@@ -338,8 +338,8 @@
     v.append(stats);
     if (!items.length) { v.append(note("Nothing downloading", "Request something from For You or search, and it'll show up here.")); return; }
     for (const [kicker, title, list] of [["IN PROGRESS", "Downloading", active], ["NEEDS ATTENTION", "Failed", failed], ["DONE", "Recently finished", done]]) {
-      if (!list.length) continue;
       const hiddenFailed = (downloads.items || []).filter(item => item.lifecycle === "failed" && dismissedDownloadHistory.has(String(item.id))).length;
+      if (!list.length && !(kicker === "NEEDS ATTENTION" && hiddenFailed)) continue;
       const aside = kicker === "NEEDS ATTENTION" && hiddenFailed
         ? button(showDismissedDownloads ? "Hide dismissed" : "Show dismissed (" + hiddenFailed + ")", "small", () => { showDismissedDownloads = !showDismissedDownloads; drawDownloads(); })
         : plural(list.length, "item");
