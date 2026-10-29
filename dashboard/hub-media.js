@@ -10,7 +10,9 @@
   let services = [], library = [], forYou = null, forYouError = "", recent = null, calendar = null, calendarAt = 0, downloads = null;
   let libFilter = store.get("hb_lib_filter", "all"), libSort = store.get("hb_lib_sort", "added"), upFilter = "all";
   let searching = false, searchTimer, searchSeq = 0, remoteResults = null, remoteError = "";
-  let dlTimer = null, spotTimer = null, flashDownload = "", dlShape = "";
+  let dlTimer = null, spotTimer = null, flashDownload = "", dlShape = "", showDismissedDownloads = false;
+  const dismissedDownloadHistory = new Set();
+  try { for (const id of JSON.parse(localStorage.getItem("hb_dismissed_download_history") || "[]")) dismissedDownloadHistory.add(String(id)); } catch {}
 
   // ---------- formatting ----------
   const tmdb = (path, w = "w342") => path ? `https://image.tmdb.org/t/p/${w}${path}` : "";
@@ -90,13 +92,27 @@
     status.lastChild.textContent = cfg.ok ? (ready === services.length ? "Sonarr & Radarr online" : `${ready} of ${services.length} connected`) : "Media services offline";
     $("arrConnectionLabel").textContent = cfg.ok ? `${ready} of ${services.length} Sonarr/Radarr connected` : errorText(cfg, "Couldn't reach Sonarr and Radarr.");
   }
+  function visibleDownloadItems() {
+    return (downloads?.items || []).filter(item => item.lifecycle !== "failed" || showDismissedDownloads || !dismissedDownloadHistory.has(String(item.id)));
+  }
+  function saveDismissedDownloadHistory() {
+    try { localStorage.setItem("hb_dismissed_download_history", JSON.stringify([...dismissedDownloadHistory])); } catch {}
+  }
+  function setDownloadHistoryDismissed(item, dismissed) {
+    const id = String(item.id || "");
+    if (!id) return;
+    if (dismissed) dismissedDownloadHistory.add(id); else dismissedDownloadHistory.delete(id);
+    saveDismissedDownloadHistory();
+    toast(dismissed ? "Failed entry hidden from Homebase on this device." : "Failed entry restored to Homebase.", dismissed ? {} : {});
+    drawDownloads();
+  }
   function downloadShape(items) {
     return (items || []).map(i => [i.id || i.name, i.lifecycle, /paused/i.test(i.status || ""), i.name].join(":")).join("|");
   }
   function patchDownloadsInPlace() {
     const v = $("view"), stats = v.querySelector(".hub-stats");
     if (!stats || !downloads || downloads.error) return drawDownloads();
-    const items = downloads.items || [];
+    const items = visibleDownloadItems();
     const active = items.filter(i => i.lifecycle === "downloading" || i.lifecycle === "importing");
     const done = items.filter(i => i.lifecycle === "imported"), failed = items.filter(i => i.lifecycle === "failed");
     const paused = active.filter(i => /paused/i.test(i.status || "")).length;
@@ -311,7 +327,7 @@
     const v = fresh();
     if (!downloads) { v.append(skeleton("list", 4)); return; }
     if (downloads.error) { v.append(note("Couldn't load downloads", downloads.error)); return; }
-    const items = downloads.items || [];
+    const items = visibleDownloadItems();
     dlShape = downloadShape(items);
     const active = items.filter(i => i.lifecycle === "downloading" || i.lifecycle === "importing"), done = items.filter(i => i.lifecycle === "imported"), failed = items.filter(i => i.lifecycle === "failed");
     const paused = active.filter(i => /paused/i.test(i.status || "")).length;
@@ -323,7 +339,11 @@
     if (!items.length) { v.append(note("Nothing downloading", "Request something from For You or search, and it'll show up here.")); return; }
     for (const [kicker, title, list] of [["IN PROGRESS", "Downloading", active], ["NEEDS ATTENTION", "Failed", failed], ["DONE", "Recently finished", done]]) {
       if (!list.length) continue;
-      const s = section(kicker, title, plural(list.length, "item")), box = el("div", "hub-list");
+      const hiddenFailed = (downloads.items || []).filter(item => item.lifecycle === "failed" && dismissedDownloadHistory.has(String(item.id))).length;
+      const aside = kicker === "NEEDS ATTENTION" && hiddenFailed
+        ? button(showDismissedDownloads ? "Hide dismissed" : "Show dismissed (" + hiddenFailed + ")", "small", () => { showDismissedDownloads = !showDismissedDownloads; drawDownloads(); })
+        : plural(list.length, "item");
+      const s = section(kicker, title, aside), box = el("div", "hub-list");
       for (const i of list) box.append(downloadRow(i));
       s.append(box); v.append(s);
     }
@@ -355,7 +375,13 @@
       acts.append(iconButton(paused ? "play" : "pause", paused ? "Resume" : "Pause", "", () => downloadAction(i, paused ? "resume" : "pause")));
       acts.append(armed(iconButton("trash", "Remove", "danger"), "Tap again to remove", () => downloadAction(i, "remove")));
     }
-    if (i.lifecycle === "failed") acts.append(button("Replace", "small", () => downloadAction(i, "replace"), "refresh"));
+    if (i.lifecycle === "failed") {
+      acts.append(button("Replace", "small", () => downloadAction(i, "replace"), "refresh"));
+      const dismissed = dismissedDownloadHistory.has(String(i.id));
+      const hide = button(dismissed ? "Restore" : "Dismiss", "small", () => setDownloadHistoryDismissed(i, !dismissed), dismissed ? "refresh" : "close");
+      hide.title = dismissed ? "Restore this failed entry in Homebase" : "Hide this failed entry from Homebase on this device";
+      acts.append(armed(hide, dismissed ? "Tap again to restore" : "Tap again to dismiss", () => setDownloadHistoryDismissed(i, !dismissed)));
+    }
     if (acts.childNodes.length) row.append(acts);
     return row;
   }
