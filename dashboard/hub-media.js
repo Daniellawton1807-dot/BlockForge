@@ -551,12 +551,14 @@
 
     // actions: play on a TV, then the management buttons, then remove on its own
     const acts = el("div", "sh-actions"), split = el("div", "hub-split");
-    let tvKey = store.get("jr_tv", "living room"); if (!TVS[tvKey]) tvKey = "living room";
-    const tvPick = el("select"); tvPick.setAttribute("aria-label", "Which TV");
-    for (const [k, n] of Object.entries(TVS)) { const o = el("option", null, n.replace(" TV", "")); o.value = k; tvPick.append(o); }
-    tvPick.value = tvKey; tvPick.onchange = () => { tvKey = tvPick.value; store.set("jr_tv", tvKey); };
+    // Play goes to the device you're holding unless you pick a TV for this title
+    let tvKey = "here";
+    const tvPick = el("select"); tvPick.setAttribute("aria-label", "Where to play");
+    for (const [k, n] of [["here", "This device"], ...Object.entries(TVS).map(([k, n]) => [k, n.replace(" TV", "")])]) { const o = el("option", null, n); o.value = k; tvPick.append(o); }
+    tvPick.value = tvKey;
+    tvPick.onchange = () => { tvKey = tvPick.value; play.lastChild.textContent = tvKey === "here" ? (tv ? "Play" : "Play film") : "Play on " + TVS[tvKey].replace(" TV", ""); if (tvKey !== "here") store.set("jr_tv", tvKey); };
     const playable = tv ? d.episodeFileCount > 0 : d.hasFile;
-    const play = button(tv ? "Play" : "Play film", "primary", () => playOnTv(playRef(d), () => tvKey), "play");
+    const play = button(tv ? "Play" : "Play film", "primary", () => playOnTv(d, null, () => tvKey), "play");
     play.disabled = !playable; if (!playable) play.title = "Nothing downloaded yet";
     split.append(play, tvPick); acts.append(split);
     acts.append(button(tv ? "Search missing" : "Search", "", () => act({ serviceKey: d.serviceKey, id: d.id, action: "search" }, tv ? "Searching for missing episodes." : "Searching for the film.", true), "search"));
@@ -668,11 +670,25 @@
   }
   // tvbot finds the title in Jellyfin by its TVDB/TMDB id, falling back to the name
   const playRef = d => d.mediaType === "tv" ? (d.tvdbId ? "tvdb:" + d.tvdbId : d.tmdbId ? "tmdb:" + d.tmdbId : d.title) : (d.tmdbId ? "tmdb:" + d.tmdbId : d.title);
-  async function playOnTv(what, getTv) {
-    const key = getTv();
+  const JELLYFIN = "https://jellyfin.danielvault.uk";
+  // play a title (or one episode) on this device via Jellyfin, or on a TV via tvbot
+  async function playOnTv(d, e, getTarget) {
+    const key = getTarget(), what = playRef(d) + (e ? ` season ${e.seasonNumber} episode ${e.episodeNumber}` : "");
+    if (key === "here") {
+      // open the tab straight away so the browser treats it as part of the tap, then point it at Jellyfin
+      const win = window.open("", "_blank");
+      const q = "ref=" + encodeURIComponent(playRef(d)) + (e ? `&season=${e.seasonNumber}&episode=${e.episodeNumber}` : "");
+      const r = await api("/api/tv/api/locate?" + q);
+      if (!r.ok || !r.data.id) { win?.close(); toast(errorText(r, "Couldn't find that in Jellyfin."), "error"); return; }
+      const url = `${JELLYFIN}/web/#/details?id=${encodeURIComponent(r.data.id)}` + (r.data.serverId ? "&serverId=" + encodeURIComponent(r.data.serverId) : "");
+      if (win) win.location.href = url; else location.href = url;
+      toast("Opened " + (r.data.name || d.title) + " in Jellyfin. Tap play there.");
+      return;
+    }
     const r = await api("/api/tv/cmd", { method: "POST", body: { text: "play " + what + TV_SUFFIX[key] } });
     toast(r.ok ? r.data.text || "Playing on " + TVS[key] + "." : errorText(r, "The TV didn't answer."), r.ok ? { action: { label: "Open remote", onClick: () => { location.href = "/remote/"; } } } : "error");
   }
+
   // "hh:mm:ss" / "d.hh:mm:ss" from Sonarr's queue, as seconds
   const etaFrom = t => { const m = String(t || "").match(/^(?:(\d+)\.)?(\d+):(\d+):(\d+)$/); return m ? ((+m[1] || 0) * 86400) + (+m[2]) * 3600 + (+m[3]) * 60 + (+m[4]) : null; };
   const etaText = s => s == null || s < 0 ? "" : s >= 3600 ? Math.floor(s / 3600) + "h " + Math.floor(s % 3600 / 60) + "m left" : Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0") + " left";
@@ -699,7 +715,7 @@
     }
     info.onclick = () => { const m = row.querySelector(".more"); if (m) m.remove(); else if (e.overview) row.append(el("div", "more", e.overview)); };
     const busy = async fn => { row.classList.add("busy"); await fn(); row.classList.remove("busy"); };
-    if (e.hasFile) acts.append(iconButton("play", "Play on TV", "go", () => playOnTv(`${playRef(d)} season ${e.seasonNumber} episode ${e.episodeNumber}`, getTv)));
+    if (e.hasFile) acts.append(iconButton("play", "Play", "go", () => playOnTv(d, e, getTv)));
     else if (!future && !queued) {
       const get = iconButton("download", "Get this episode", "", () => busy(async () => {
         if (await act({ serviceKey: d.serviceKey, id: d.id, action: "requestEpisode", episodeId: e.id }, `Looking for ${code(e.seasonNumber, e.episodeNumber)}.`, true)) { e.monitored = true; get.classList.add("done"); get.replaceChildren(icon("check")); }
