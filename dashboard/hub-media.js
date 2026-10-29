@@ -107,7 +107,7 @@
     drawDownloads();
   }
   function downloadShape(items) {
-    return (items || []).map(i => [i.id || i.name, i.lifecycle, /paused/i.test(i.status || ""), i.name].join(":")).join("|");
+    return (items || []).map(i => [i.id || i.name, i.lifecycle, /paused/i.test(i.status || "")].join(":")).sort().join("|");
   }
   function patchDownloadsInPlace() {
     const v = $("view"), stats = v.querySelector(".hub-stats");
@@ -151,7 +151,8 @@
     $("dlCount").textContent = active || "";
     if (view === "downloads" && !searching) {
       const nextShape = downloadShape(items);
-      if (nextShape !== dlShape || !$("view").querySelector(".hub-stats")) drawDownloads();
+      // background refreshes never replay the fade-in; only switching tabs animates
+      if (nextShape !== dlShape || !$("view").querySelector(".hub-stats")) { $("view").classList.add("quiet"); drawDownloads(); }
       else patchDownloadsInPlace();
     }
   }
@@ -176,7 +177,7 @@
   }
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => setView(b.dataset.view));
   function draw() {
-    clearInterval(spotTimer);
+    clearInterval(spotTimer); $("view").classList.remove("quiet");
     if (searching) return drawSearch();
     if (view === "foryou") return drawForYou();
     if (view === "upcoming") return drawUpcoming();
@@ -545,7 +546,7 @@
     for (const [k, n] of Object.entries(TVS)) { const o = el("option", null, n.replace(" TV", "")); o.value = k; tvPick.append(o); }
     tvPick.value = tvKey; tvPick.onchange = () => { tvKey = tvPick.value; store.set("jr_tv", tvKey); };
     const playable = tv ? d.episodeFileCount > 0 : d.hasFile;
-    const play = button(tv ? "Play" : "Play film", "primary", () => playOnTv(d.title, () => tvKey), "play");
+    const play = button(tv ? "Play" : "Play film", "primary", () => playOnTv(playRef(d), () => tvKey), "play");
     play.disabled = !playable; if (!playable) play.title = "Nothing downloaded yet";
     split.append(play, tvPick); acts.append(split);
     acts.append(button(tv ? "Search missing" : "Search", "", () => act({ serviceKey: d.serviceKey, id: d.id, action: "search" }, tv ? "Searching for missing episodes." : "Searching for the film.", true), "search"));
@@ -608,6 +609,8 @@
     if (r.ok && showDownloads) setTimeout(refreshDownloads, 4000);
     return r.ok;
   }
+  // tvbot finds the title in Jellyfin by its TVDB/TMDB id, falling back to the name
+  const playRef = d => d.mediaType === "tv" ? (d.tvdbId ? "tvdb:" + d.tvdbId : d.tmdbId ? "tmdb:" + d.tmdbId : d.title) : (d.tmdbId ? "tmdb:" + d.tmdbId : d.title);
   async function playOnTv(what, getTv) {
     const key = getTv();
     const r = await api("/api/tv/cmd", { method: "POST", body: { text: "play " + what + TV_SUFFIX[key] } });
@@ -622,7 +625,7 @@
     info.append(name, el("div", "sub", sub));
     info.onclick = () => { const m = row.querySelector(".more"); if (m) m.remove(); else if (e.overview) row.append(el("div", "more", e.overview)); };
     const busy = async fn => { row.classList.add("busy"); await fn(); row.classList.remove("busy"); };
-    if (e.hasFile) acts.append(iconButton("play", "Play on TV", "go", () => playOnTv(`${d.title} season ${e.seasonNumber} episode ${e.episodeNumber}`, getTv)));
+    if (e.hasFile) acts.append(iconButton("play", "Play on TV", "go", () => playOnTv(`${playRef(d)} season ${e.seasonNumber} episode ${e.episodeNumber}`, getTv)));
     else if (!future) {
       const get = iconButton("download", "Get this episode", "", () => busy(async () => {
         if (await act({ serviceKey: d.serviceKey, id: d.id, action: "requestEpisode", episodeId: e.id }, `Looking for ${code(e.seasonNumber, e.episodeNumber)}.`, true)) { e.monitored = true; get.classList.add("done"); get.replaceChildren(icon("check")); }

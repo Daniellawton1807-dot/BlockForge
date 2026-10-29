@@ -351,6 +351,7 @@ html.hub-locked { overflow: hidden; }
 .hub-view > * { animation: hub-in .4s var(--hub-ease) both; }
 .hub-view > :nth-child(2) { animation-delay: .04s; } .hub-view > :nth-child(3) { animation-delay: .08s; } .hub-view > :nth-child(4) { animation-delay: .12s; } .hub-view > :nth-child(n+5) { animation-delay: .16s; }
 .hub-grid > .hub-tile, .hub-rail > .hub-tile { animation: hub-in .45s var(--hub-ease) both; animation-delay: calc(min(var(--i, 0), 18) * 22ms); }
+.hub-view.quiet > *, .hub-view.quiet .hub-tile { animation: none !important; }
 .hub-flash { animation: hub-flash 1.1s ease 2; border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
 @media (prefers-reduced-motion: reduce) {
   .hub-view > *, .hub-grid > .hub-tile, .hub-rail > .hub-tile, .hub-sheet-body.swap, .hub-spot .in.swap > * { animation: none !important; }
