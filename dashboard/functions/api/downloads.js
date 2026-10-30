@@ -271,6 +271,7 @@ async function arrQueues(env) {
           downloadId: String(record.downloadId || "").toLowerCase(),
           release: String(record.title || ""),
           label: title ? String(title).slice(0, 160) + code : "",
+          show: title ? String(title).slice(0, 160) : "", season: ep ? Number(ep.seasonNumber) : null,
           client: String(record.downloadClient || service.name).slice(0, 40),
           state: String(record.trackedDownloadState || "").toLowerCase(),
           health: String(record.trackedDownloadStatus || "").toLowerCase(),
@@ -283,6 +284,17 @@ async function arrQueues(env) {
     } catch { return []; }
   }));
   return lists.flat();
+}
+// a season pack is one download but Sonarr lists it once per episode: show it as one row
+function packOf(queue, record) {
+  if (!record?.downloadId) return record ? [record] : [];
+  return queue.filter(r => r.service === record.service && r.downloadId === record.downloadId);
+}
+function packLabel(records) {
+  if (records.length < 2 || !records[0].show) return records[0]?.label || "";
+  const seasons = [...new Set(records.map(r => r.season).filter(n => n != null))].sort((a, b) => a - b);
+  const where = seasons.length === 1 ? "Season " + seasons[0] : seasons.length ? "Seasons " + seasons[0] + "–" + seasons[seasons.length - 1] : "";
+  return records[0].show + " · " + (where ? where + " · " : "") + records.length + " episodes";
 }
 const looseName = value => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 function arrStage(record) {
@@ -403,12 +415,16 @@ export async function onRequest({ env, request }) {
   for (const item of items) {
     const key = String(item.torrentHash || item.nzoId || "").toLowerCase();
     const record = queue.find(r => !used.has(r) && ((key && r.downloadId === key) || looseName(r.release) === looseName(item.name)));
-    if (record) used.add(record);
+    const pack = packOf(queue, record);
+    for (const r of pack) used.add(r);
     item.downloadId = key || record?.downloadId || "";
     applyArr(item, record);
+    if (pack.length > 1) item.label = packLabel(pack);
   }
   for (const record of queue) {
     if (used.has(record)) continue;
+    const pack = packOf(queue, record);
+    for (const r of pack) used.add(r);
     const progress = record.size ? Math.max(0, Math.min(100, 100 * (1 - record.sizeleft / record.size))) : 0;
     const parts = record.timeleft.split(":").map(Number), eta = parts.length === 3 && parts.every(Number.isFinite) ? parts[0] * 3600 + parts[1] * 60 + parts[2] : null;
     items.push(applyArr({
@@ -416,6 +432,7 @@ export async function onRequest({ env, request }) {
       category: record.service.type === "tv" ? "TV show" : "Movie", progress, etaSeconds: eta,
       status: record.status === "paused" ? "Paused" : record.status === "queued" ? "Queued" : "Downloading", lifecycle: "downloading"
     }, record));
+    if (pack.length > 1) items[items.length - 1].label = packLabel(pack);
   }
 
   const historyResults = await Promise.all(arrServices().map(async service => {
