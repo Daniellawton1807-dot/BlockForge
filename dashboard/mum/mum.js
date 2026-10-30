@@ -149,9 +149,9 @@
     if (home.films.length) c.append(section("Trending films", "Popular this week", home.films));
     if (!c.childNodes.length) c.append(emptyNote("Nothing to show yet", "Search for something you'd like to watch."));
   }
-  async function loadHome() {
+  async function loadHome(fresh) {
     home = null; drawHome();
-    const r = await call("/api/mum/home");
+    const r = await call("/api/mum/home" + (fresh ? "?refresh=1" : ""));
     if (r.status === 401) return;
     home = r.ok ? r.data : { error: r.data?.error || "Try again in a minute." };
     if (!$("q").value.trim()) drawHome();
@@ -175,6 +175,16 @@
     searchTimer = setTimeout(() => search(q), 450);
   });
   $("q").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); clearTimeout(searchTimer); const q = $("q").value.trim(); if (q.length >= 2) search(q); $("q").blur(); } });
+  // Refresh: new picks from what she's watched lately, fresh trending, shuffled so different things come first
+  $("refresh").onclick = async () => {
+    const b = $("refresh"); if (b.disabled) return;
+    b.disabled = true; b.classList.add("spinning");
+    $("q").value = ""; $("clear").hidden = true; searchSeq++;
+    scrollTo({ top: 0, behavior: "smooth" });
+    await loadHome(true);
+    b.disabled = false; b.classList.remove("spinning");
+    if (home && !home.error) toast("Here are some new suggestions.");
+  };
   $("clear").onclick = () => { $("q").value = ""; $("clear").hidden = true; searchSeq++; drawHome(); scrollTo({ top: 0, behavior: "smooth" }); };
 
   // ---------- first-time setup on her phone ----------
