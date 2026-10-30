@@ -4,6 +4,14 @@ compatibility_date = "2026-10-20"
 workers_dev = false
 preview_urls = false
 
+# Autopilot: wake Homebase every 15 minutes to fix stuck downloads (secret AUTOPILOT_TOKEN)
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[kv_namespaces]]
+binding = "AUTOPILOT"
+id = "87e36a93f0f54b989fae4fcd682bcd88"
+
 [[vpc_services]]
 binding = "VPC_SONARR_DANIEL"
 service_id = "01a15918-4999-7aa2-a1b3-0727f807e89a"

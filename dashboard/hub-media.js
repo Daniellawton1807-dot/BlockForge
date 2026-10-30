@@ -4,7 +4,7 @@
    through /api/tv/*. Everything is rendered with textContent, never innerHTML. */
 (() => {
   const { $, el, icon, store, toast, openSheet, closeSheet, sheetOpen, skeleton, rail, api, errorText, gate, TVS, TV_SUFFIX } = Hub;
-  const VIEWS = ["foryou", "upcoming", "library", "downloads"];
+  const VIEWS = ["foryou", "upcoming", "library", "downloads", "autopilot"];
   let view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : store.get("hb_media_view", "foryou");
   if (!VIEWS.includes(view)) view = "foryou";
   let services = [], library = [], forYou = null, forYouError = "", recent = null, calendar = null, calendarAt = 0, downloads = null;
@@ -164,7 +164,9 @@
     if (searching) { $("q").value = ""; $("searchBox").classList.remove("has-text"); searching = false; }
     document.querySelectorAll("#tabs button").forEach(b => { const on = b.dataset.view === v; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
     moveIndicator();
+    document.querySelector("#tabs button.on")?.scrollIntoView({ block: "nearest", inline: "center" });
     clearInterval(dlTimer); dlTimer = setInterval(() => { if (!document.hidden) refreshDownloads(); }, v === "downloads" ? 5000 : 20000);
+    if (v === "autopilot" || v === "downloads") loadAutopilot().then(() => { if (view === "autopilot") apRedraw(); else if (view === "downloads" && !searching) drawDownloads(); });
     draw();
   }
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => setView(b.dataset.view));
@@ -174,6 +176,7 @@
     if (view === "foryou") return drawForYou();
     if (view === "upcoming") return drawUpcoming();
     if (view === "library") return drawLibrary();
+    if (view === "autopilot") return drawAutopilot();
     return drawDownloads();
   }
   const fresh = () => { const v = $("view"); v.replaceChildren(); return v; };
@@ -346,6 +349,7 @@
     const stats = el("div", "hub-stats");
     stats.append(...downloadStats(items).map(([k, v, d, cls]) => stat(k, v, d, cls)));
     v.append(stats);
+    const strip = autopilotStrip(); if (strip) v.append(strip);
     if (!items.length) { v.append(note("Nothing downloading", "Request something from For You or search, and it'll show up here.")); return; }
     for (const [kicker, title, list] of [["IN PROGRESS", "Downloading", active], ["NEEDS ATTENTION", "Blocked or failed", failed], ["DONE", "Recently finished", done]]) {
       const hiddenFailed = (downloads.items || []).filter(item => item.lifecycle === "failed" && dismissedDownloadHistory.has(String(item.id))).length;
@@ -379,7 +383,7 @@
     [i.category, i.service, i.source].filter(Boolean).forEach(x => sub.append(el("span", null, x)));
     info.append(sub);
     if (i.lifecycle !== "failed") info.append(stageTrack(i));
-    if (i.eventDetail && i.lifecycle !== "imported") info.append(el("div", "why", i.eventDetail));
+    if (i.eventDetail && i.lifecycle !== "imported") { const why = el("div", "why", i.reason || i.eventDetail); if (i.reason && i.reason !== i.eventDetail) why.title = i.eventDetail; info.append(why); }
     row.append(el("div", "src " + src[0], src[1]), info);
     const acts = el("div", "acts");
     if (i.lifecycle === "downloading") {
@@ -403,6 +407,213 @@
   }
   function goToDownloads(name) { flashDownload = name || ""; closeSheet(); setView("downloads"); refreshDownloads(); scrollTo({ top: 0, behavior: "smooth" }); }
   const viewDownloads = { label: "View downloads", onClick: () => goToDownloads() };
+
+  // ---------- Autopilot: self-healing downloads and the storage planner ----------
+  // /api/autopilot (rules, last check, log) and /api/storage (drives, forecast, suggestions). Suggestions are
+  // never acted on by themselves: Daniel ticks them, sees the total, and confirms in a sheet.
+  let autopilot = null, autopilotError = "", storage = null, storageError = "", storageAt = 0, apBusy = false;
+  const apSelected = new Map();
+  const ago = d => { const t = Date.parse(d); if (!t) return ""; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "just now" : m < 60 ? m + " min ago" : m < 1440 ? Math.round(m / 60) + " h ago" : dateText(d, { day: "numeric", month: "short" }); };
+  const RULE_ICON = { stalled: "refresh", importBlocked: "download", research: "search" };
+  async function loadAutopilot() {
+    const r = await api("/api/autopilot");
+    if (r.ok) { autopilot = r.data; autopilotError = ""; } else autopilotError = errorText(r, "Couldn't reach Autopilot.");
+    const needs = autopilot?.lastRun?.needsYou?.length || 0;
+    $("apCount").textContent = needs || ""; $("apCount").classList.toggle("warn", needs > 0);
+  }
+  async function loadStorage(force) {
+    if (!force && storage && Date.now() - storageAt < 300000) return;
+    const r = await api("/api/storage");
+    if (r.ok) { storage = r.data; storageError = ""; storageAt = Date.now(); } else storageError = errorText(r, "Couldn't read storage.");
+  }
+  function apRedraw() { if (view === "autopilot" && !searching) { $("view").classList.add("quiet"); drawAutopilot(); } }
+
+  function apSwitch(on, label, onChange) {
+    const b = el("button", "ap-switch" + (on ? " on" : "")); b.type = "button"; b.setAttribute("role", "switch"); b.setAttribute("aria-checked", on); b.setAttribute("aria-label", label);
+    b.append(el("i")); b.onclick = () => onChange(!b.classList.contains("on")); return b;
+  }
+  async function setRule(key, on) {
+    const rules = { [key]: on };
+    autopilot.settings.rules[key] = on; apRedraw();
+    const r = await api("/api/autopilot", { method: "POST", body: { action: "settings", rules } });
+    if (r.ok) autopilot = r.data; else { autopilot.settings.rules[key] = !on; toast(errorText(r, "Couldn't save that."), "error"); }
+    apRedraw();
+  }
+  async function runAutopilotNow() {
+    if (apBusy) return; apBusy = true; apRedraw();
+    const r = await api("/api/autopilot", { method: "POST", body: { action: "run" } });
+    apBusy = false;
+    if (r.ok) { autopilot = r.data; const n = autopilot.lastRun?.fixed || 0, needs = autopilot.lastRun?.needsYou?.length || 0;
+      toast(n ? "Autopilot fixed " + plural(n, "thing") + "." : needs ? "Nothing it could fix by itself; " + needs + " need you." : "All clear. Nothing needed fixing.");
+      if (n) refreshDownloads();
+    } else toast(errorText(r, "Autopilot couldn't finish."), "error");
+    await loadAutopilot(); apRedraw();
+  }
+
+  function drawAutopilot() {
+    const v = fresh();
+    if (!autopilot && !autopilotError) { v.append(skeleton("list", 3)); loadAutopilot().then(apRedraw); }
+    else v.append(autopilotPanel());
+    v.append(storagePanel());
+    if (!storage && !storageError) loadStorage().then(apRedraw);
+    v.append(apSelectionBar());
+  }
+
+  function autopilotPanel() {
+    const box = el("div");
+    if (autopilotError && !autopilot) { box.append(note("Autopilot isn't reachable", autopilotError)); return box; }
+    const { rules, settings, log, lastRun } = autopilot;
+    const ruleKeys = Object.keys(rules), onCount = ruleKeys.filter(k => settings.rules[k]).length;
+    const weekAgo = Date.now() - 7 * 86400000, fixedWeek = log.filter(e => Date.parse(e.at) > weekAgo && e.rule !== "research").length;
+    const searched = log.filter(e => Date.parse(e.at) > weekAgo && e.rule === "research").length, needs = lastRun?.needsYou || [];
+
+    const hero = el("div", "ap-hero" + (onCount ? " on" : ""));
+    const pulse = el("span", "ap-pulse"); pulse.append(icon(onCount ? "check" : "pause"));
+    const text = el("div", "t");
+    text.append(el("div", "kicker", "AUTOPILOT"), el("h3", null, onCount ? onCount === ruleKeys.length ? "Looking after your downloads" : `${onCount} of ${ruleKeys.length} fixes switched on` : "Autopilot is paused"));
+    text.append(el("p", null, lastRun ? "Checks every 15 minutes. Last check " + ago(lastRun.at) + (lastRun.trigger === "manual" ? " (by you)" : "") + "." : "Checks every 15 minutes. It hasn't run yet."));
+    const run = button(apBusy ? "Checking…" : "Check now", "primary", runAutopilotNow, "refresh"); run.disabled = apBusy;
+    hero.append(pulse, text, run); box.append(hero);
+
+    const stats = el("div", "hub-stats");
+    stats.append(stat("Fixed", String(fixedWeek), "In the last 7 days"), stat("Needs you", String(needs.length), needs.length ? "Couldn't be fixed safely" : "Nothing waiting", needs.length ? "warn" : ""),
+      stat("Re-searching", String(lastRun?.waiting || 0), searched ? plural(searched, "search") + " this week" : "Missing episodes and films"),
+      stat("Checked", String(lastRun?.checked ?? "–"), "Downloads in the queue"));
+    box.append(stats);
+
+    if (needs.length) {
+      const s = section("NEEDS YOU", "Autopilot couldn't fix these", plural(needs.length, "item")), list = el("div", "hub-list");
+      for (const n of needs) {
+        const row = el("div", "ap-row warn"), info = el("div", "info");
+        info.append(el("div", "nm", n.title), el("div", "why", n.reason));
+        if (n.detail) { const d = el("div", "sub", n.service + " says: " + n.detail); info.append(d); } else if (n.service) info.append(el("div", "sub", n.service));
+        const ic = el("span", "ap-ic warn"); ic.append(icon("info")); row.append(ic, info); list.append(row);
+      }
+      s.append(list); box.append(s);
+    }
+    if (lastRun?.notes?.length) box.append(Object.assign(el("div", "ap-notes"), { textContent: "Couldn't check everything last time: " + lastRun.notes.join(" · ") }));
+
+    const rs = section("RULES", "What it fixes by itself", onCount + " on"), rlist = el("div", "ap-rules");
+    for (const key of ruleKeys) {
+      const row = el("div", "ap-rule"), info = el("div", "info"), ic = el("span", "ap-ic"); ic.append(icon(RULE_ICON[key] || "check"));
+      info.append(el("div", "nm", rules[key].title), el("div", "sub", rules[key].detail));
+      row.append(ic, info, apSwitch(Boolean(settings.rules[key]), rules[key].title, on => setRule(key, on))); rlist.append(row);
+    }
+    rs.append(rlist); box.append(rs);
+
+    const ls = section("LOG", "What it did", log.length ? plural(log.length, "action") : "");
+    if (!log.length) ls.append(note("Nothing yet", "Fixes and re-searches will be listed here with the reason for each."));
+    else {
+      const list = el("div", "ap-log");
+      for (const e of log.slice(0, 30)) {
+        const row = el("div", "ap-entry " + e.rule), ic = el("span", "ap-ic"); ic.append(icon(RULE_ICON[e.rule] || "check"));
+        const info = el("div", "info"); info.append(el("div", "nm", e.title), el("div", "sub", e.detail));
+        const when = el("div", "when"); when.append(el("span", null, ago(e.at)), el("small", null, e.service || ""));
+        row.append(ic, info, when); list.append(row);
+      }
+      ls.append(list);
+    }
+    box.append(ls);
+    return box;
+  }
+
+  const GROUPS = [["watched", "WATCHED", "Finished by everyone who can see it"], ["unstarted", "NOT STARTED", "Nobody's started these in months"],
+    ["duplicates", "DUPLICATES", "In more than one Sonarr"], ["oversized", "OVERSIZED", "Unusually large files"]];
+  function storagePanel() {
+    const box = el("div", "ap-storage");
+    const s = section("STORAGE", "Storage planner", storage ? "Updated " + ago(storage.updatedAt) : "");
+    box.append(s);
+    if (storageError && !storage) { s.append(note("Couldn't read storage", storageError)); return box; }
+    if (!storage) { s.append(skeleton("list", 2)); return box; }
+    const drives = el("div", "ap-drives"), f = storage.forecast;
+    for (const d of storage.drives) {
+      const pct = d.total ? 100 * d.used / d.total : 0, card = el("div", "ap-drive " + d.kind + (pct >= 90 ? " full" : pct >= 80 ? " high" : ""));
+      const head = el("div", "head"); head.append(el("b", null, d.name), el("span", null, size(d.free) + " free"));
+      const bar = el("div", "bar"), fill = el("i"); fill.style.width = pct.toFixed(1) + "%"; bar.append(fill);
+      const foot = el("div", "foot");
+      foot.append(el("span", null, size(d.used) + " of " + size(d.total) + " used · " + Math.round(pct) + "%"));
+      if (d.kind === "media" && f.perDay > 0) foot.append(el("span", "fc", f.daysLeft > 730 ? "Room for years at this pace" : "Full in about " + (f.daysLeft >= 60 ? Math.round(f.daysLeft / 30) + " months" : f.daysLeft >= 14 ? Math.round(f.daysLeft / 7) + " weeks" : plural(f.daysLeft, "day"))));
+      card.append(head, bar, foot, el("div", "note", d.note)); drives.append(card);
+    }
+    s.append(drives);
+    if (f.perDay > 0) s.append(el("p", "ap-pace", `About ${size(f.perDay)} a day comes in (${size(f.importedBytes)} across ${plural(f.imports, "import")} in the last ${f.windowDays} days).`));
+
+    if (storage.watchData !== "ok") s.append(Object.assign(el("div", "ap-notes"), { textContent: "Couldn't read Jellyfin's watch history from tvbot, so watched and unstarted suggestions are missing." }));
+    const any = GROUPS.some(([k]) => storage.groups[k]?.length);
+    const sg = section("SUGGESTIONS", "What could go", "Never removed automatically");
+    if (!any) sg.append(note("Nothing to suggest", "No finished, forgotten, duplicate or oversized titles right now."));
+    for (const [key, kicker, title] of GROUPS) {
+      const list = storage.groups[key] || [];
+      if (!list.length) continue;
+      const total = list.reduce((n, x) => n + x.size, 0);
+      const g = el("div", "ap-group"), gh = el("div", "ap-group-head");
+      const all = list.every(x => apSelected.has(x.key));
+      const title2 = el("div"); title2.append(el("div", "kicker", kicker), el("b", null, title));
+      const pickAll = button(all ? "Clear" : "Select all", "small", () => { for (const x of list) all ? apSelected.delete(x.key) : apSelected.set(x.key, x); apRedraw(); });
+      gh.append(title2, el("span", "tot", plural(list.length, "title") + " · " + size(total)), pickAll);
+      const rows = el("div", "ap-sugs");
+      for (const x of list) rows.append(suggestionRow(x));
+      g.append(gh, rows); sg.append(g);
+    }
+    box.append(sg);
+    return box;
+  }
+  function suggestionRow(x) {
+    const on = apSelected.has(x.key), row = el("label", "ap-sug" + (on ? " on" : ""));
+    const cb = el("input"); cb.type = "checkbox"; cb.checked = on;
+    cb.onchange = () => { cb.checked ? apSelected.set(x.key, x) : apSelected.delete(x.key); row.classList.toggle("on", cb.checked); updateSelectionBar(); };
+    const poster = el("span", "po"); if (x.posterUrl) poster.style.backgroundImage = bg(x.posterUrl);
+    const info = el("span", "info"); info.append(el("span", "nm", x.title + (x.year ? " (" + x.year + ")" : "")), el("span", "sub", x.reason));
+    const meta = el("span", "meta"); meta.append(el("b", null, size(x.size)), el("small", null, (x.mediaType === "tv" ? "Series" : "Film") + " · " + x.serviceName));
+    row.append(cb, el("span", "box"), poster, info, meta);
+    return row;
+  }
+  function apSelectionBar() {
+    const bar = el("div", "ap-selbar"); bar.id = "apSelBar";
+    const t = el("span", "t"), go = button("Review and remove", "danger", openRemoveSheet, "trash"), clear = button("Clear", "small", () => { apSelected.clear(); apRedraw(); });
+    bar.append(t, clear, go); requestAnimationFrame(updateSelectionBar); return bar;
+  }
+  function updateSelectionBar() {
+    const bar = $("apSelBar"); if (!bar) return;
+    const n = apSelected.size, total = [...apSelected.values()].reduce((s, x) => s + x.size, 0);
+    bar.classList.toggle("show", n > 0);
+    bar.querySelector(".t").textContent = n ? `${plural(n, "title")} selected · frees ${size(total)}` : "";
+  }
+  function openRemoveSheet() {
+    const items = [...apSelected.values()], total = items.reduce((s, x) => s + x.size, 0);
+    if (!items.length) return;
+    openSheet(body => {
+      const wrap = el("div", "ap-confirm");
+      wrap.append(el("div", "kicker", "STORAGE PLANNER"), el("h2", null, `Remove ${plural(items.length, "title")}?`),
+        el("p", null, `This removes them from Sonarr/Radarr and deletes their files, freeing about ${size(total)}. It can't be undone; you'd have to request them again.`));
+      const list = el("div", "ap-confirm-list");
+      for (const x of items) { const r = el("div"); r.append(el("span", null, x.title + (x.year ? " (" + x.year + ")" : "")), el("b", null, size(x.size))); list.append(r); }
+      const acts = el("div", "ap-confirm-acts");
+      const go = armed(button("Remove and delete files", "danger", null, "trash"), "Tap again to delete " + size(total), async () => {
+        const r = await api("/api/storage", { method: "POST", body: { action: "delete", confirm: true, items: items.map(x => ({ serviceKey: x.serviceKey, id: x.id, title: x.title })) } });
+        if (r.ok || r.data?.removed?.length) {
+          const removed = r.data.removed || [];
+          toast(`Removed ${plural(removed.length, "title")}.` + (r.data.failed?.length ? " Couldn't remove: " + r.data.failed.join(", ") : ""), r.data.failed?.length ? "error" : {});
+          apSelected.clear(); closeSheet(); await loadStorage(true); loadBasics?.(); apRedraw();
+        } else toast(errorText(r, "Couldn't remove those."), "error");
+      });
+      acts.append(go, button("Cancel", "", closeSheet));
+      wrap.append(list, acts); body.append(wrap);
+    });
+  }
+
+  // one line on Downloads: what Autopilot did lately, tap through to the Autopilot tab
+  function autopilotStrip() {
+    if (!autopilot) return null;
+    const day = Date.now() - 86400000, fixed = autopilot.log.filter(e => Date.parse(e.at) > day && e.rule !== "research").length, needs = autopilot.lastRun?.needsYou?.length || 0;
+    const on = Object.values(autopilot.settings.rules).some(Boolean);
+    const b = el("button", "ap-strip" + (needs ? " warn" : "")); b.type = "button";
+    const ic = el("span", "ap-ic"); ic.append(icon(needs ? "info" : on ? "check" : "pause"));
+    b.append(ic, el("span", "t", !on ? "Autopilot is paused" : needs ? `Autopilot: ${plural(needs, "download")} need${needs === 1 ? "s" : ""} you` : fixed ? `Autopilot fixed ${plural(fixed, "download")} today` : "Autopilot is watching the queue"),
+      el("span", "s", autopilot.lastRun ? "Checked " + ago(autopilot.lastRun.at) : ""), icon("chevR"));
+    b.onclick = () => { setView("autopilot"); scrollTo({ top: 0, behavior: "smooth" }); };
+    return b;
+  }
 
   // ---------- search: your library first, then everything you could add ----------
   const norm = s => String(s || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, " ").trim();
@@ -790,7 +1001,7 @@
   // ---------- start ----------
   gate({ message: "Sign in to search, request and manage your media.", async onReady() {
     const v = fresh(); v.append(el("div", "hub-skel spot"), skeleton("rail", 8));
-    await loadBasics(); refreshDownloads(); setView(view);
+    await loadBasics(); refreshDownloads(); loadAutopilot(); setView(view);
   } });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && view === "downloads") refreshDownloads(); });
 })();

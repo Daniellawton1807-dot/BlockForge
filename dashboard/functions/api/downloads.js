@@ -1,5 +1,6 @@
 import { loginConfigured, validSession } from "../_utils/downloads-auth.js";
 import { arrCall, arrServiceStatus, arrServices } from "../_utils/arr.js";
+import { plainReason } from "../_utils/autopilot.js";
 const DEFAULT_QBITTORRENT_URL = "https://qb.danielvault.uk";
 const DEFAULT_SABNZBD_URL = "https://sab.danielvault.uk";
 const MAX_ITEMS_PER_SOURCE = 30;
@@ -302,6 +303,7 @@ function applyArr(item, record) {
   if (record.label) item.label = record.label;
   if (stage.lifecycle !== "downloading") { item.lifecycle = stage.lifecycle; item.status = stage.status; item.progress = 100; item.etaSeconds = null; }
   if (record.messages.length && (record.health !== "ok" || stage.lifecycle !== "downloading")) item.eventDetail = record.messages.join(" · ");
+  if (item.eventDetail) item.reason = plainReason(record.messages);
   return item;
 }
 
@@ -435,7 +437,8 @@ export async function onRequest({ env, request }) {
           status: failed ? "Failed" : "Imported",
           lifecycle: failed ? "failed" : "imported",
           eventDate: String(record.date || record.dateAdded || ""),
-          eventDetail: String(record.message || record.data?.message || event).slice(0, 300)
+          eventDetail: String(record.message || record.data?.message || event).slice(0, 300),
+          reason: failed ? plainReason(record.message || record.data?.message || "") : ""
         };
       });
     } catch { return []; }

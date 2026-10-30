@@ -23,6 +23,19 @@ function render(){
  const filtered=services.filter(s=>(s.name+" "+(s.desc||"")+" "+(s.group||"")).toLowerCase().includes(q));
  $("appGrid").innerHTML=filtered.length?filtered.map(s=>card(s)).join(""):'<div class="empty">No applications match your search.</div>';
 }
+// Glances only sees the system disk; when signed in, the Storage tile shows the media drive as Sonarr/Radarr see it
+let mediaDrive=null;
+async function refreshStorage(){
+ try{
+  const res=await fetch("/api/storage?summary=1",{cache:"no-store",credentials:"same-origin"});
+  if(!res.ok)return;
+  const d=await res.json();const m=(d.drives||[]).find(x=>x.kind==="media");if(!m||!(m.total>0))return;
+  mediaDrive=m;const pct=100*m.used/m.total;
+  $("diskValue").innerHTML=Math.round(pct)+'<small>%</small>';$("diskBar").style.width=pct+'%';
+  const left=d.forecast&&d.forecast.daysLeft;
+  $("diskNote").textContent=formatBytes(m.free)+" free of "+formatBytes(m.total)+" · media drive"+(left?" · full in ~"+(left>=60?Math.round(left/30)+" months":Math.round(left/7)+" weeks"):"");
+ }catch{}
+}
 async function refreshMetrics(){
  const endpoint=safeUrl(config.metricsEndpoint);
  if(!endpoint){$("connectionLabel").textContent="Monitoring unavailable";return;}
@@ -32,9 +45,9 @@ async function refreshMetrics(){
   if(!res.ok)throw new Error(d&&typeof d.error==="string"?d.error:"Metrics endpoint returned "+res.status);
   if(!d||typeof d!=="object")throw new Error("Metrics endpoint returned invalid JSON");
   const set=(value,valueId,barId)=>{if(Number.isFinite(Number(value))&&Number(value)>=0&&Number(value)<=100){$(valueId).innerHTML=Math.round(Number(value))+'<small>%</small>';$ (barId).style.width=Number(value)+'%';}};
-  set(d.cpuPercent,"cpuValue","cpuBar");set(d.memoryPercent,"ramValue","ramBar");set(d.diskPercent,"diskValue","diskBar");
+  set(d.cpuPercent,"cpuValue","cpuBar");set(d.memoryPercent,"ramValue","ramBar");if(!mediaDrive)set(d.diskPercent,"diskValue","diskBar");
   if(d.memoryUsedBytes!=null&&d.memoryTotalBytes>0)$("ramNote").textContent=formatBytes(d.memoryUsedBytes)+" / "+formatBytes(d.memoryTotalBytes);
-  if(d.diskUsedBytes!=null&&d.diskTotalBytes>0)$("diskNote").textContent=formatBytes(d.diskUsedBytes)+" / "+formatBytes(d.diskTotalBytes)+(d.diskMount?" · "+d.diskMount:"");
+  if(!mediaDrive&&d.diskUsedBytes!=null&&d.diskTotalBytes>0)$("diskNote").textContent=formatBytes(d.diskUsedBytes)+" / "+formatBytes(d.diskTotalBytes)+(d.diskMount?" · "+d.diskMount:"");
   if(d.uptimeSeconds!=null)$("cpuNote").textContent="Uptime "+formatUptime(d.uptimeSeconds);
   else $("cpuNote").textContent="Updated "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"});
   $("connectionLabel").textContent="Metrics connected";$("onlineNote").textContent="Live hardware metrics";
@@ -106,7 +119,8 @@ function formatBytes(n){if(!Number.isFinite(Number(n))||n<0)return "—";let v=N
 function formatUptime(n){n=Math.max(0,Math.floor(Number(n)||0));const d=Math.floor(n/86400),h=Math.floor(n%86400/3600),m=Math.floor(n%3600/60);return (d?d+"d ":"")+(h+"h "+m+"m");}
 $("search").addEventListener("input",render);
 $("refresh").addEventListener("click",()=>{refreshMetrics();const b=$("refresh");b.textContent="✓";setTimeout(()=>b.textContent="↻",800);});
-render();refreshMetrics();refreshRecentMedia();refreshActivity();
+render();refreshMetrics();refreshStorage();refreshRecentMedia();refreshActivity();
+setInterval(refreshStorage,600000);
 const metricsRefreshInterval=Number(config.refreshIntervalMs);
 if(metricsRefreshInterval>=3000)setInterval(refreshMetrics,Math.min(metricsRefreshInterval,60000));
 setInterval(refreshRecentMedia,300000);
