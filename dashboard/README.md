@@ -1,5 +1,7 @@
 # Homebase homelab dashboard
 
+How the pages, Functions, private bridge and tvbot fit together: see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 A static, responsive dashboard for self-hosted services. This project lives in `dashboard/` to avoid changing the existing BlockForge game files.
 
 ## Deploy
