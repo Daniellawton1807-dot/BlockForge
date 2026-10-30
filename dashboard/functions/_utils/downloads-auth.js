@@ -114,9 +114,37 @@ export async function validSession(request, env) {
 
     const payload = JSON.parse(new TextDecoder().decode(decodeBase64Url(body)));
     const now = Math.floor(Date.now() / 1000);
-    return Number.isSafeInteger(payload.exp) && payload.exp > now && payload.exp <= now + REMEMBER_SECONDS + 60;
+    return !payload.scope && Number.isSafeInteger(payload.exp) && payload.exp > now && payload.exp <= now + REMEMBER_SECONDS + 60;
   } catch {
     return false;
+  }
+}
+
+// The request page for Mum (/mum/): its own cookie, scoped to /api/mum and good for nothing else.
+// Daniel signs in once on her phone; it lasts about a year and renews itself while she uses it.
+const MUM_COOKIE = "homebase_mum";
+const MUM_SECONDS = 395 * 24 * 60 * 60;   // browsers cap cookies at 400 days
+export async function mumCookie(env) {
+  const token = await signedPayload({ exp: Math.floor(Date.now() / 1000) + MUM_SECONDS, scope: "mum" }, String(env.HOMEBASE_DOWNLOADS_SESSION_SECRET));
+  return MUM_COOKIE + "=" + token + "; Path=/api/mum; Max-Age=" + MUM_SECONDS + "; HttpOnly; Secure; SameSite=Strict";
+}
+// returns null (not signed in) or { renew } when the cookie is past its first month and should be re-issued
+export async function mumSession(request, env) {
+  if (!loginConfigured(env)) return null;
+  const entry = (request.headers.get("cookie") || "").split(";").map(part => part.trim()).find(part => part.startsWith(MUM_COOKIE + "="));
+  const token = entry ? entry.slice(MUM_COOKIE.length + 1) : "";
+  if (!token || token.length > 1024) return null;
+  try {
+    const [body, signature, extra] = token.split(".");
+    if (!body || !signature || extra !== undefined) return null;
+    const valid = await crypto.subtle.verify("HMAC", await hmacKey(String(env.HOMEBASE_DOWNLOADS_SESSION_SECRET)), decodeBase64Url(signature), new TextEncoder().encode(body));
+    if (!valid) return null;
+    const payload = JSON.parse(new TextDecoder().decode(decodeBase64Url(body)));
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.scope !== "mum" || !Number.isSafeInteger(payload.exp) || payload.exp <= now || payload.exp > now + MUM_SECONDS + 60) return null;
+    return { renew: payload.exp - now < MUM_SECONDS - 30 * 24 * 60 * 60 };
+  } catch {
+    return null;
   }
 }
 

@@ -11,6 +11,7 @@ No secret values live here or anywhere in this public repo, only the names of Cl
 | `/media/` | `media/index.html`, `hub-media.js` | Media hub: For You, Coming up, Library, Downloads, Autopilot, search, title sheets |
 | `/media/classic/` | `media/classic/index.html`, `media.js` | The previous media page, kept as a fallback |
 | `/remote/` | `remote/index.html`, `remote.js` | TV remote: now playing, transport, commands, D-pad/touchpad |
+| `/mum/` | `mum/index.html`, `mum.js`, `mum.css`, manifest + icons | Mum's request page (not linked anywhere), installed on her Samsung as a home-screen app |
 | shared | `hub.js`, `hub.css` | `window.Hub`: sign-in gate, theme, icons, sheet (closes on Back), toast, `api()`, skeletons, rails |
 
 No build step. **Cache busting is manual:** bump the `?v=` on the `<script>`/`<link>` tags in the HTML when you change a JS/CSS file, or browsers keep the old one.
@@ -29,6 +30,7 @@ All of these except `/api/metrics` need the Homebase session cookie (`functions/
 | `autopilot` | GET rules, last check, log; POST `{action:"run"}` checks now, `{action:"settings", rules}` switches rules |
 | `autopilot/run` | The scheduled run (POST with `x-autopilot-token`, no cookie; the Worker confirms the token) |
 | `storage` | GET drives, fill-up forecast and suggestions (`?summary=1`: drives + forecast only, for the Overview tile); POST `{action:"delete", confirm:true, items}` removes picked titles with their files |
+| `mum/setup`, `home`, `search`, `request` | Mum's page. Own cookie (`homebase_mum`, path `/api/mum`, ~13 months, renews itself), set once by Daniel's sign-in on her phone; it can't open the rest of Homebase |
 | `metrics` | Glances, public by design (Glances only sees the system disk) |
 
 ## The private bridge
@@ -69,6 +71,8 @@ A small Python service on the server (`~/tvbot`, Docker, port 8765) that drives 
 Apple TV over pyatv) and talks to Jellyfin. Routes Homebase uses:
 
 - `GET /api/status?tv=` now playing; `GET /api/foryou` recommendations from watch history (Seerr), with poster and backdrop
+- `GET /api/discover` Seerr trending (or `?q=` a search), trimmed to poster cards; `GET /api/foryou?user=Mum` her picks
+  (only users in config `foryou_users`, default Mum)
 - `GET /api/watchdata` every film/series per Jellyfin user (except Admin): played, % watched, started. Each user only
   sees their own libraries, so "watched by everyone" means everyone who can see it. Cached 10 min. Pages calls it
   directly from `functions/api/storage.js` (bridge `SAFE_PATHS` allows it), not through `/api/tv`
@@ -107,6 +111,14 @@ or "Check now" on the Autopilot tab:
 the forecast is the last 30 days of `downloadFolderImported` sizes. Suggestions (finished by everyone who can see it,
 not started in 90+ days, the same show in two Sonarrs, oversized) skip anything imported in the last 30 days or aired in
 the last 60. Nothing is removed until Daniel ticks titles and confirms in a sheet.
+
+## Mum's request page (`functions/_utils/mum.js`)
+
+Recommended (tvbot `api/foryou?user=Mum`, from her Jellyfin history, which includes Zayah's kids' shows), trending
+(tvbot `api/discover`, Seerr trending) and search (tvbot `api/discover?q=`). Request adds shows to **Sonarr Mum**
+(its `/mum tv` root, her usual quality profile, monitor all, search now) and films to **Radarr** with the
+`/Server/Media/Movies - Mum` root folder. Status per title: request / coming soon / on your TV / "Daniel has this one"
+(a film already in Radarr under Daniel's folder; Radarr can't hold two copies).
 
 ## Checking a change
 
