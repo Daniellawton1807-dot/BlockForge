@@ -11,7 +11,7 @@ const ALLOWED_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 const SAFE_PATHS = Object.freeze({
   arr: new RegExp("^api/v3/[A-Za-z0-9_./?=&%:+-]+$"),
   // tvbot's remote endpoints, the plain-English command endpoint and its poster proxy
-  tvbot: new RegExp("^(api/(status|foryou|locate|playhere|key|type|seek|watchdata|discover)|cmd|img/[A-Za-z0-9]{1,64})(\\?[A-Za-z0-9_.=&%:+-]*)?$")
+  tvbot: new RegExp("^(api/(status|foryou|locate|playhere|key|type|seek|watchdata|discover|mumfilms|sharefilm)|cmd|img/[A-Za-z0-9]{1,64})(\\?[A-Za-z0-9_.=&%:+-]*)?$")
 });
 const AUTH_HEADERS = Object.freeze({ arr: "x-api-key", tvbot: "x-tv-token" });
 const MAX_BODY_BYTES = 1024 * 1024;

@@ -32,7 +32,6 @@
     const status = statuses.get(item.type + ":" + item.tmdb) || item.status;
     if (status === "have") { const s = el("div", "state have"); s.append(svg(TICK), el("span", null, "On your TV")); return s; }
     if (status === "coming") { const s = el("div", "state coming"); s.append(svg(CLOCK), el("span", null, "Coming soon")); return s; }
-    if (status === "elsewhere") return el("div", "state elsewhere", "Daniel has this one");
     const b = el("button", "req", "Request"); b.type = "button";
     b.onclick = event => { event.stopPropagation(); request(item); };
     return b;

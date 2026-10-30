@@ -73,6 +73,7 @@ Apple TV over pyatv) and talks to Jellyfin. Routes Homebase uses:
 - `GET /api/status?tv=` now playing; `GET /api/foryou` recommendations from watch history (Seerr), with poster and backdrop
 - `GET /api/discover` Seerr trending (or `?q=` a search), trimmed to poster cards; `GET /api/foryou?user=Mum` her picks
   (only users in config `foryou_users`, default Mum)
+- `GET /api/mumfilms` folders in Mum's films (and ones being shared); `POST /api/sharefilm {folder}` shares one of Daniel's
 - `GET /api/watchdata` every film/series per Jellyfin user (except Admin): played, % watched, started. Each user only
   sees their own libraries, so "watched by everyone" means everyone who can see it. Cached 10 min. Pages calls it
   directly from `functions/api/storage.js` (bridge `SAFE_PATHS` allows it), not through `/api/tv`
@@ -114,11 +115,15 @@ the last 60. Nothing is removed until Daniel ticks titles and confirms in a shee
 
 ## Mum's request page (`functions/_utils/mum.js`)
 
-Recommended (tvbot `api/foryou?user=Mum`, from her Jellyfin history, which includes Zayah's kids' shows), trending
+Recommended (tvbot `api/foryou?user=Mum`: her Jellyfin history minus Zayah's library and kids' genres, plus anchors
+like The Night Agent, Reacher and Tyler Perry; drama/soap/action/crime boosted, every third pick a film; tuned in
+`FORYOU_PROFILES` in tvbot), trending
 (tvbot `api/discover`, Seerr trending) and search (tvbot `api/discover?q=`). Request adds shows to **Sonarr Mum**
 (its `/mum tv` root, her usual quality profile, monitor all, search now) and films to **Radarr** with the
-`/Server/Media/Movies - Mum` root folder. Status per title: request / coming soon / on your TV / "Daniel has this one"
-(a film already in Radarr under Daniel's folder; Radarr can't hold two copies).
+`/Server/Media/Movies - Mum` root folder. Status per title: request / coming soon / on your TV. A film Daniel already has can't go into Radarr
+twice, so Request asks tvbot (`POST api/sharefilm {folder}`) to hardlink its folder from `Movies - Daniel` into
+`Movies - Mum` (same NTFS drive: instant, no extra space; copies only if a link fails) and rescan her Jellyfin
+films library. tvbot mounts the drive's `Media` folder at `/library` for this. Private films never appear.
 
 ## Checking a change
 

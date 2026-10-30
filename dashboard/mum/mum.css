@@ -52,11 +52,9 @@ svg { width: 24px; height: 24px; fill: currentColor; flex: none; }
 .req .spin { width: 20px; height: 20px; border-radius: 50%; border: 3px solid rgba(255,255,255,.45); border-top-color: #fff; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .state { min-height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 4px 8px; text-align: center; font-weight: 700; font-size: 15px; line-height: 1.2; white-space: nowrap; }
-.state.elsewhere { white-space: normal; font-size: 14px; }
 .state svg { width: 20px; height: 20px; }
 .state.have { background: var(--good-bg); color: var(--good); }
 .state.coming { background: var(--soon-bg); color: var(--soon); }
-.state.elsewhere { background: var(--line); color: var(--muted); }
 .pop { animation: pop .45s ease; }
 @keyframes pop { 40% { transform: scale(1.06); } }
 
