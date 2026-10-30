@@ -69,11 +69,17 @@ export function card(library, x) {
   const tmdb = Number(x.tmdb);
   if (!tmdb || !["tv", "movie"].includes(x.type)) return null;
   const status = statusOf(library, x.type, tmdb);
-  if (status === "hidden") return null;
+  // not out yet (or a private film): requesting it would only sit there failing, so she never sees it
+  if (status === "hidden" || (x.released === false && status === "request")) return null;
+  const text = (v, n = 60) => String(v || "").slice(0, n), num = v => Math.max(0, Math.round(Number(v) || 0));
   return {
     tmdb, type: x.type, title: String(x.title || "").slice(0, 160), year: String(x.year || "").slice(0, 4),
     poster: /^\/[A-Za-z0-9._-]+$/.test(String(x.poster || "")) ? x.poster : "",
     overview: String(x.overview || "").slice(0, 600), rating: Number(x.rating) || 0,
+    genres: (Array.isArray(x.genres) ? x.genres : []).map(g => text(g, 30)).slice(0, 3),
+    network: text(x.network), streaming: (Array.isArray(x.streaming) ? x.streaming : []).map(v => text(v, 40)).slice(0, 2),
+    seasons: num(x.seasons), episodes: num(x.episodes), showStatus: text(x.status, 30), runtime: num(x.runtime),
+    trailer: /^[A-Za-z0-9_-]{6,20}$/.test(String(x.trailer || "")) ? x.trailer : "", tagline: text(x.tagline, 160),
     status
   };
 }

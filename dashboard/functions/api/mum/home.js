@@ -6,8 +6,8 @@ export async function onRequestGet({ request, env }) {
   return mumRoute(request, env, async () => {
     const [library, picks, trending] = await Promise.all([
       mumLibrary(env),
-      tvbot(env, "api/foryou?user=" + MUM_USER).catch(() => []),
-      tvbot(env, "api/discover").catch(() => [])
+      tvbot(env, "api/foryou?details=1&user=" + MUM_USER).catch(() => []),
+      tvbot(env, "api/discover?details=1").catch(() => [])
     ]);
     const cards = list => (Array.isArray(list) ? list : []).map(x => card(library, x)).filter(Boolean);
     const trend = cards(trending);

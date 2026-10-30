@@ -71,7 +71,7 @@ A small Python service on the server (`~/tvbot`, Docker, port 8765) that drives 
 Apple TV over pyatv) and talks to Jellyfin. Routes Homebase uses:
 
 - `GET /api/status?tv=` now playing; `GET /api/foryou` recommendations from watch history (Seerr), with poster and backdrop
-- `GET /api/discover` Seerr trending (or `?q=` a search), trimmed to poster cards; `GET /api/foryou?user=Mum` her picks
+- `GET /api/discover` Seerr trending (or `?q=` a search), trimmed to poster cards (`&details=1` adds genres, network, seasons, status, trailer, released); `GET /api/foryou?user=Mum` her picks
   (only users in config `foryou_users`, default Mum)
 - `GET /api/mumfilms` folders in Mum's films (and ones being shared); `POST /api/sharefilm {folder}` shares one of Daniel's
 - `GET /api/watchdata` every film/series per Jellyfin user (except Admin): played, % watched, started. Each user only
@@ -120,7 +120,10 @@ like The Night Agent, Reacher and Tyler Perry; drama/soap/action/crime boosted, 
 `FORYOU_PROFILES` in tvbot), trending
 (tvbot `api/discover`, Seerr trending) and search (tvbot `api/discover?q=`). Request adds shows to **Sonarr Mum**
 (its `/mum tv` root, her usual quality profile, monitor all, search now) and films to **Radarr** with the
-`/Server/Media/Movies - Mum` root folder. Status per title: request / coming soon / on your TV. A film Daniel already has can't go into Radarr
+`/Server/Media/Movies - Mum` root folder. Cards and the details sheet show genres, network or UK streaming service, seasons/episodes and
+whether a show is returning, ended or cancelled, runtime, and a YouTube trailer (tvbot `details=1` on `api/foryou` and
+`api/discover`, Seerr details cached a day). Titles that aren't out yet (no digital/disc release, or not aired) are
+hidden so nothing unreleased gets requested. Status per title: request / coming soon / on your TV. A film Daniel already has can't go into Radarr
 twice, so Request asks tvbot (`POST api/sharefilm {folder}`) to hardlink its folder from `Movies - Daniel` into
 `Movies - Mum` (same NTFS drive: instant, no extra space; copies only if a link fails) and rescan her Jellyfin
 films library. tvbot mounts the drive's `Media` folder at `/library` for this. Private films never appear.

@@ -8,6 +8,13 @@
   const TICK = "M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z", CLOCK = "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 10.6 3.5 2-1 1.7L11 13V7h2z";
   const poster = path => path ? `url("https://image.tmdb.org/t/p/w342${path}")` : "";
   const kindName = t => t === "tv" ? "Show" : "Film";
+  const PLAY = "M8 5v14l11-7z", TV_ICON = "M21 3H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2h8v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 14H3V5h18z";
+  const LAYERS = "M12 3 2 8l10 5 10-5zm-8.2 9.2L2 13l10 5 10-5-1.8-.8L12 16.2zm0 4L2 17l10 5 10-5-1.8-.8L12 20.2z";
+  const DOT = "M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z";
+  const runtimeText = m => m >= 60 ? Math.floor(m / 60) + "h " + (m % 60 ? (m % 60) + "m" : "") : m + " min";
+  const seasonsText = i => i.seasons ? i.seasons + (i.seasons === 1 ? " season" : " seasons") + (i.episodes ? " · " + i.episodes + " episodes" : "") : "";
+  const STATUS_TEXT = { Returning: "Still going, more episodes coming", Ended: "Finished, the whole story is here", Cancelled: "Cancelled, no more episodes coming",
+    "In production": "New episodes being made" };
 
   let home = null, searchSeq = 0, searchTimer = null, toastTimer = null;
   const statuses = new Map();   // "tv:123" -> status, so a title changes everywhere it appears once requested
@@ -43,7 +50,11 @@
     p.append(el("span", "kind", kindName(item.type)));
     p.onclick = () => openSheet(item);
     const act = el("div", "act"); act.append(action(item));
-    c.append(p, el("div", "t", item.title), el("div", "y", [item.year, kindName(item.type)].filter(Boolean).join(" · ")), act);
+    // under the title: year and where it's from (Netflix, BBC One…), then its genres
+    const from = item.network || item.streaming?.[0] || "";
+    c.append(p, el("div", "t", item.title), el("div", "y", [item.year, from || kindName(item.type)].filter(Boolean).join(" · ")));
+    if (item.genres?.length) c.append(el("div", "g", item.genres.slice(0, 2).join(" · ")));
+    c.append(act);
     return c;
   }
   function refreshCards(item) {
@@ -60,7 +71,6 @@
         : item.type === "tv" ? "Done! " + item.title + " will start appearing on your TV soon." : "Done! " + item.title + " will be on your TV soon.");
     } else toast(r.data?.error || "That didn't work. Try again in a minute.", true);
     refreshCards(item);
-    if ($("sheet").dataset.key === key) fillSheet(item);
   }
 
   // ---------- details sheet (tap a poster) ----------
@@ -68,11 +78,39 @@
     const panel = $("sheet").querySelector(".panel"); panel.replaceChildren();
     const head = el("div", "head"), p = el("div", "poster"); if (item.poster) p.style.backgroundImage = poster(item.poster);
     const info = el("div"); info.append(el("h3", null, item.title), el("div", "meta", [kindName(item.type), item.year, item.rating ? "★ " + item.rating : ""].filter(Boolean).join(" · ")));
+    if (item.genres?.length) { const chips = el("div", "chips"); for (const g of item.genres) chips.append(el("span", null, g)); info.append(chips); }
     head.append(p, info);
+    // the facts: where it's from, how much there is, whether it's still going
+    const facts = el("div", "facts"), fact = (icon, text, cls) => { if (!text) return; const f = el("div", "fact " + (cls || "")); f.append(svg(icon), el("span", null, text)); facts.append(f); };
+    if (item.type === "tv") {
+      fact(TV_ICON, item.network ? "From " + item.network : "");
+      fact(LAYERS, seasonsText(item));
+      fact(DOT, item.showStatus ? (STATUS_TEXT[item.showStatus] || item.showStatus) : "", "st " + (item.showStatus || "").toLowerCase().replace(/\s+/g, "-"));
+    } else {
+      fact(CLOCK, item.runtime ? runtimeText(item.runtime) : "");
+    }
+    if (item.streaming?.length && !(item.type === "tv" && item.streaming[0] === item.network)) fact(TV_ICON, "Also on " + item.streaming.join(" and "));
     const act = el("div", "act"); act.append(action(item));
     const wrap = el("div", "card"); wrap.dataset.key = item.type + ":" + item.tmdb; wrap.append(act);
     const close = el("button", "close", "Close"); close.type = "button"; close.onclick = closeSheet;
-    panel.append(el("div", "grab"), head, el("p", "ov", item.overview || "No description yet."), wrap, close);
+    const ov = el("p", "ov", item.overview || "No description yet.");
+    panel.append(el("div", "grab"), head);
+    if (facts.childNodes.length) panel.append(facts);
+    if (item.tagline) panel.append(el("p", "tag", item.tagline));
+    panel.append(ov, wrap);
+    // trailer at the bottom: tap to play it right here
+    if (item.trailer) {
+      const t = el("button", "trailer"); t.type = "button"; t.append(svg(PLAY), el("span", null, "Watch the trailer"));
+      t.onclick = () => {
+        const box = el("div", "video"), frame = document.createElement("iframe");
+        frame.src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(item.trailer) + "?autoplay=1&playsinline=1&rel=0&modestbranding=1";
+        frame.title = item.title + " trailer"; frame.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"; frame.allowFullscreen = true;
+        frame.referrerPolicy = "strict-origin-when-cross-origin";
+        box.append(frame); t.replaceWith(box); box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      };
+      panel.append(t);
+    }
+    panel.append(close);
   }
   function openSheet(item) {
     const s = $("sheet"); s.dataset.key = item.type + ":" + item.tmdb; fillSheet(item); s.hidden = false; document.body.classList.add("locked");
