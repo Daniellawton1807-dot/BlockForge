@@ -151,7 +151,8 @@
   }
   async function loadHome(fresh) {
     home = null; drawHome();
-    const r = await call("/api/mum/home" + (fresh ? "?refresh=1" : ""));
+    const page = Number(localStorage.getItem("mum_page")) || 0;
+    const r = await call("/api/mum/home?page=" + page + (fresh ? "&refresh=1" : ""));
     if (r.status === 401) return;
     home = r.ok ? r.data : { error: r.data?.error || "Try again in a minute." };
     if (!$("q").value.trim()) drawHome();
@@ -175,12 +176,13 @@
     searchTimer = setTimeout(() => search(q), 450);
   });
   $("q").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); clearTimeout(searchTimer); const q = $("q").value.trim(); if (q.length >= 2) search(q); $("q").blur(); } });
-  // Refresh: new picks from what she's watched lately, fresh trending, shuffled so different things come first
+  // Refresh: the next batch of picks she hasn't seen yet (it remembers where she got to), and fresh trending
   $("refresh").onclick = async () => {
     const b = $("refresh"); if (b.disabled) return;
     b.disabled = true; b.classList.add("spinning");
     $("q").value = ""; $("clear").hidden = true; searchSeq++;
     scrollTo({ top: 0, behavior: "smooth" });
+    try { localStorage.setItem("mum_page", String((Number(localStorage.getItem("mum_page")) || 0) + 1)); } catch {}
     await loadHome(true);
     b.disabled = false; b.classList.remove("spinning");
     if (home && !home.error) toast("Here are some new suggestions.");
