@@ -1,0 +1,13 @@
+/* Small fixes on top of the Netflin theme for Daniel's Jellyfin. Imported from Jellyfin's Custom CSS
+   after the Netflin line:
+     @import url("https://dashboard.danielvault.uk/jellyfin/netflin-tweaks.css");
+   Edit here; no Jellyfin change needed (add ?v=2 etc. to the import only if a browser holds on to an old copy). */
+
+/* Media Bar banner on phones: the info line (year · rating · seasons · genre · certificate) was one
+   unwrappable row, so items wrapped inside themselves and the certificate box overflowed */
+@media (max-width: 700px) {
+  .spec-line { flex-wrap: wrap !important; row-gap: .35em; overflow: hidden; }
+  .spec-line .spec-item, .spec-line .spec-cert { white-space: nowrap !important; flex: none !important; }
+  .spec-line .spec-genre, .spec-line .spec-critics { display: none !important; }
+  .spec-line .spec-cert { line-height: 1.3 !important; padding: 0 .4em !important; }
+}
