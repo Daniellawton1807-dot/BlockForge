@@ -1,0 +1,246 @@
+/* Vaultflix: a Netflix-style theme for Daniel's Jellyfin (10.11 web client, also used by the iPhone/iPad apps).
+   Loaded from Jellyfin → Dashboard → General → Custom CSS with:
+     @import url("https://dashboard.danielvault.uk/jellyfin/vaultflix.css");
+   Pure CSS on top of Jellyfin's dark theme, so removing that line restores the stock look. */
+
+:root {
+  --vf-bg: #0b0b0c;
+  --vf-surface: #161617;
+  --vf-raised: #202022;
+  --vf-line: rgba(255, 255, 255, .08);
+  --vf-text: #ececec;
+  --vf-muted: #9a9a9e;
+  --vf-red: #e50914;
+  --vf-red-hover: #f6121d;
+  --vf-ease: cubic-bezier(.2, .8, .2, 1);
+  --vf-font: "Helvetica Neue", Helvetica, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+/* ---------- base ---------- */
+/* only the root is painted, so Jellyfin's fixed backdrop image (drawn behind the body) can show through */
+html { background-color: var(--vf-bg) !important; }
+body, .skinBody { background: transparent !important; }
+.backgroundContainer, .mainAnimatedPage, .page, .libraryPage { background-color: var(--vf-bg) !important; }
+/* show/film pages: Jellyfin draws the backdrop as one fixed image behind the page, so let it through and
+   shade it the Netflix way (dark from the left and from the bottom) */
+.itemDetailPage, .itemDetailPage.page { background: transparent !important; }
+.backgroundContainer.withBackdrop {
+  background:
+    linear-gradient(90deg, rgba(11, 11, 12, .96) 0%, rgba(11, 11, 12, .78) 30%, rgba(11, 11, 12, .18) 62%, rgba(11, 11, 12, .05) 80%),
+    linear-gradient(0deg, var(--vf-bg) 0%, rgba(11, 11, 12, .65) 30%, transparent 60%) !important;
+}
+.backdropImage { background-position: center 20% !important; }
+body, .skinBody, button, input, select, textarea { font-family: var(--vf-font) !important; }
+body { color: var(--vf-text); -webkit-font-smoothing: antialiased; }
+::selection { background: var(--vf-red); color: #fff; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2a2a2d; border-radius: 10px; border: 2px solid var(--vf-bg); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* pages fade up into place */
+.page:not(.hide) .padded-left, .itemDetailPage:not(.hide) .detailPageWrapperContainer {
+  animation: vf-rise .45s var(--vf-ease) both;
+}
+@keyframes vf-rise { from { opacity: 0; transform: translateY(12px); } }
+
+/* ---------- header: transparent over the content, Netflix-style ---------- */
+.skinHeader, .skinHeader.semiTransparent, .skinHeader-withBackground {
+  background: linear-gradient(180deg, rgba(0, 0, 0, .85) 0%, rgba(0, 0, 0, .45) 60%, transparent 100%) !important;
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+.headerButton, .headerButton .material-icons { color: #e8e8e8 !important; }
+.headerButton:hover { color: #fff !important; background: transparent !important; transform: scale(1.08); transition: transform .2s var(--vf-ease); }
+.pageTitleWithLogo, .pageTitleWithDefaultLogo { filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .6)); }
+
+/* Home / Favourites tabs */
+.emby-tab-button { color: #b3b3b3 !important; font-weight: 600 !important; font-size: 1rem !important; letter-spacing: .01em; padding: .6em 1em !important; transition: color .2s; }
+.emby-tab-button:hover { color: #fff !important; }
+.emby-tab-button-active, .emby-tab-button-active.emby-button { color: #fff !important; }
+.emby-tab-button-active .emby-button-foreground::after {
+  content: ""; display: block; height: 3px; margin: 6px auto 0; width: 60%; border-radius: 3px; background: var(--vf-red);
+}
+.emby-tab-button .emby-button-foreground { border-bottom: 0 !important; }
+.headerTabs .emby-tabs-slider .emby-tab-button-active { border-bottom: 0 !important; }
+
+/* ---------- rows ---------- */
+.homeSectionsContainer { padding-top: 1.5em; }
+.verticalSection { margin-bottom: .6em !important; }
+.sectionTitleContainer { margin-bottom: .2em !important; }
+.sectionTitle, .sectionTitle-cards, h2.sectionTitle {
+  font-family: var(--vf-font) !important; font-size: 1.32rem !important; font-weight: 700 !important;
+  color: #e5e5e5 !important; letter-spacing: .005em; margin: 0 !important;
+}
+.sectionTitleTextButton .material-icons { color: var(--vf-red); }
+.sectionTitleTextButton:hover .sectionTitle { color: #fff !important; }
+/* room for cards to grow without being clipped */
+.emby-scroller { padding-top: 1.2em !important; padding-bottom: 1.8em !important; margin-top: -1em !important; margin-bottom: -1.2em !important; }
+.emby-scrollbuttons-button {
+  background: rgba(20, 20, 20, .7) !important; border-radius: 50% !important; color: #fff !important; transition: background .2s, transform .2s;
+}
+.emby-scrollbuttons-button:hover { background: rgba(229, 9, 20, .9) !important; transform: scale(1.1); }
+
+/* ---------- cards: no frames, Netflix grow on hover ---------- */
+.card { transition: transform .32s var(--vf-ease), z-index 0s .32s; z-index: 1; }
+.cardBox, .cardScalable, .card-focuscontent { border-radius: 6px !important; background: transparent !important; box-shadow: none !important; }
+.cardBox { margin: .5em .3em !important; }
+.cardScalable { overflow: hidden; background: var(--vf-surface) !important; }
+.cardImageContainer, .cardContent { border-radius: 6px !important; background-color: var(--vf-surface) !important; }
+.cardImageIcon { color: #3a3a3d !important; }
+@media (hover: hover) {
+  .card-hoverable:hover { transform: scale(1.09); z-index: 5; transition: transform .32s var(--vf-ease) .12s, z-index 0s; }
+  .card-hoverable:hover .cardScalable { box-shadow: 0 18px 38px rgba(0, 0, 0, .75), 0 0 0 1px rgba(255, 255, 255, .06) !important; }
+}
+.card:focus-visible .cardScalable, .card.show-focus:focus .cardScalable { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* hover controls: a white play disc and quiet round buttons, over a dark fade */
+.cardOverlayContainer {
+  background: linear-gradient(0deg, rgba(0, 0, 0, .78) 0%, rgba(0, 0, 0, .1) 55%, transparent 100%) !important;
+  border-radius: 6px !important; transition: opacity .25s var(--vf-ease) !important;
+}
+.cardOverlayFab-primary {
+  background: #fff !important; color: #111 !important; width: 2.6em !important; height: 2.6em !important;
+  border-radius: 50% !important; box-shadow: 0 6px 18px rgba(0, 0, 0, .5);
+}
+.cardOverlayFab-primary .cardOverlayButtonIcon { color: #111 !important; font-size: 1.7em !important; }
+.cardOverlayButton-br .cardOverlayButton { color: #fff !important; background: rgba(42, 42, 42, .7) !important; border: 1px solid rgba(255, 255, 255, .4) !important; border-radius: 50% !important; margin: 0 .12em !important; padding: .32em !important; }
+.cardOverlayButton-br .cardOverlayButton:hover { border-color: #fff !important; background: rgba(60, 60, 60, .9) !important; }
+.cardOverlayButton-br .cardOverlayButtonIcon { font-size: 1.15em !important; }
+
+/* progress: thin red line along the bottom */
+.itemProgressBar { height: 4px !important; background: rgba(255, 255, 255, .22) !important; border-radius: 0 !important; }
+.itemProgressBarForeground { background: var(--vf-red) !important; border-radius: 0 !important; }
+.innerCardFooter.fullInnerCardFooter { background: transparent !important; padding: 0 !important; }
+
+/* watched tick and counts */
+.playedIndicator, .countIndicator { background: var(--vf-red) !important; color: #fff !important; box-shadow: 0 2px 8px rgba(0, 0, 0, .5); }
+
+/* titles under cards: smaller and quieter, like Netflix's hover captions */
+.cardText { color: var(--vf-muted) !important; font-size: .82rem !important; padding: .15em .2em !important; }
+.cardText-first, .cardText-first a { color: #dcdcdc !important; font-weight: 600 !important; font-size: .9rem !important; }
+.textActionButton:hover { color: #fff !important; text-decoration: none !important; }
+
+/* ---------- show / film pages: backdrop at the top, the details laid over it ---------- */
+/* .itemBackdrop is just a spacer above the logo now; the picture is the fixed page backdrop */
+.itemBackdrop { height: 30vh !important; min-height: 180px; margin: 0 !important; background-size: cover !important; background-position: center 20% !important; position: relative; }
+.detailPageWrapperContainer {
+  margin-top: 0 !important; position: relative;
+  background: linear-gradient(180deg, transparent 0, transparent 32vh, rgba(11, 11, 12, .92) 46vh, var(--vf-bg) 58vh) !important;
+  box-shadow: none !important;
+}
+.detailPagePrimaryContainer, .detailRibbon { background: transparent !important; box-shadow: none !important; }
+
+/* the side-by-side poster block goes; the backdrop carries the page */
+.detailImageContainer { display: none !important; }
+.detailRibbon { padding-left: 4.5% !important; padding-right: 4.5% !important; display: flex !important; flex-direction: column !important; align-items: flex-start !important; height: auto !important; margin-top: 0 !important; }
+.detailLogo:not(.hide) { display: block !important; }
+/* the logo replaces the title text when there is one */
+.detailLogo:not(.hide) ~ .detailPageWrapperContainer .nameContainer .itemName { display: none !important; }
+.layout-desktop .detailRibbon, .layout-tv .detailRibbon { max-width: 60%; }
+.infoWrapper { display: flex !important; flex-direction: column; align-items: flex-start; gap: .4em; }
+.detailLogo {
+  position: relative !important; top: auto !important; left: auto !important; right: auto !important;
+  width: min(34vw, 500px) !important; height: 8.5em !important; margin: 0 0 .6em 4.5% !important;
+  background-position: left bottom !important; background-size: contain !important;
+  filter: drop-shadow(0 4px 18px rgba(0, 0, 0, .75));
+  animation: vf-rise .6s var(--vf-ease) both;
+}
+.itemName.infoText, .nameContainer h1 { font-family: var(--vf-font) !important; font-weight: 800 !important; font-size: clamp(2rem, 3.6vw, 3.4rem) !important; letter-spacing: -.01em; text-shadow: 0 2px 18px rgba(0, 0, 0, .6); text-align: left !important; }
+.nameContainer { text-align: left !important; }
+.nameContainer h3, .parentName { color: #d0d0d0 !important; }
+.itemMiscInfo { justify-content: flex-start !important; flex-wrap: wrap; }
+.itemMiscInfo, .itemMiscInfo .mediaInfoItem { color: #d2d2d2 !important; font-size: .98rem !important; }
+.mediaInfoOfficialRating { border: 1px solid rgba(255, 255, 255, .5) !important; border-radius: 3px !important; padding: .05em .45em !important; background: transparent !important; }
+.starIcon { color: #f5c518 !important; }
+
+/* buttons: white Play pill first, the rest round and outlined */
+.mainDetailButtons { margin: 1em 0 .4em !important; gap: .55em; flex-wrap: wrap; justify-content: flex-start !important; }
+.detailButton {
+  background: rgba(42, 42, 42, .6) !important; border: 2px solid rgba(255, 255, 255, .45) !important; border-radius: 50% !important;
+  width: 2.9em !important; height: 2.9em !important; margin: 0 !important; padding: 0 !important; color: #fff !important;
+  transition: transform .18s var(--vf-ease), border-color .18s, background .18s !important;
+}
+.detailButton:hover { border-color: #fff !important; background: rgba(70, 70, 70, .8) !important; transform: scale(1.06); }
+.detailButton .detailButton-content { padding: 0 !important; display: flex !important; flex-direction: row !important; align-items: center; justify-content: center; gap: .15em; }
+.detailButton-icon { font-size: 1.5em !important; }
+.mainDetailButtons .btnPlay {
+  width: auto !important; border-radius: 6px !important; background: #fff !important; border: 0 !important; color: #111 !important;
+  padding: 0 1.7em 0 1.25em !important; height: 2.9em !important; font-weight: 700 !important;
+}
+.mainDetailButtons .btnPlay .detailButton-icon { color: #111 !important; font-size: 1.9em !important; margin: 0 !important; }
+.mainDetailButtons .btnPlay .detailButton-content::after { content: "Play"; font-size: 1.12rem; font-weight: 700; line-height: 1; }
+.mainDetailButtons .btnPlay .detailButton-text { display: none !important; }
+.mainDetailButtons .btnPlay:hover { background: rgba(255, 255, 255, .82) !important; transform: none; }
+.mainDetailButtons .btnResume .detailButton-content::after { content: "Resume"; }
+.btnUserRating .detailButton-icon.favorite, .btnUserRating[data-isfavorite="true"] .detailButton-icon { }
+.btnUserRating[data-isfavorite="true"] { border-color: var(--vf-red) !important; color: var(--vf-red) !important; }
+
+/* text under the hero */
+.detailPagePrimaryContent { padding-left: 4.5% !important; }
+.overview, .detailPageContent .overview, p.overview { color: #d6d6d6 !important; font-size: 1.06rem !important; line-height: 1.55 !important; max-width: 62ch; }
+.itemGenres, .itemDetailsGroup .label, .detailsGroupItem .label { color: var(--vf-muted) !important; }
+.itemDetailsGroup .content, .itemDetailsGroup a { color: #e2e2e2 !important; }
+.itemTags a, .itemExternalLinks a { color: #bdbdbd !important; font-weight: 500 !important; }
+.itemTags a:hover, .itemExternalLinks a:hover { color: #fff !important; }
+.detailVerticalSection { margin-top: 1.4em !important; }
+
+/* episodes list on a show page */
+.listItem, .listItem-largeImage { border-radius: 8px !important; padding: .7em !important; transition: background .2s; }
+.listItem:hover { background: var(--vf-raised) !important; }
+.listItemImage { border-radius: 6px !important; overflow: hidden; }
+.listItemBodyText.secondary, .listItem .secondary { color: var(--vf-muted) !important; }
+
+/* cast */
+.personCard .cardScalable, .peopleSection .cardScalable { border-radius: 50% !important; }
+.peopleSection .cardImageContainer { border-radius: 50% !important; background-color: var(--vf-raised) !important; }
+
+/* ---------- library grids, drawers, menus, dialogs ---------- */
+.mainDrawer, .MuiDrawer-paper, .navDrawer { background: #0f0f10 !important; border-right: 1px solid var(--vf-line) !important; }
+.navMenuOption:hover, .navMenuOption-selected { background: var(--vf-raised) !important; color: #fff !important; }
+.navMenuOption-selected { box-shadow: inset 3px 0 0 var(--vf-red); }
+.actionSheet, .dialog, .MuiPaper-root, .formDialogHeader, .formDialogFooter { background: #181818 !important; border-radius: 10px !important; }
+.actionSheetMenuItem:hover { background: var(--vf-raised) !important; }
+.button-submit, .raised.button-submit, .btnSubmit { background: var(--vf-red) !important; color: #fff !important; border-radius: 4px !important; }
+.button-submit:hover { background: var(--vf-red-hover) !important; }
+.emby-checkbox:checked + span + .checkboxOutline, .emby-checkbox:checked + .checkboxOutline { background: var(--vf-red) !important; border-color: var(--vf-red) !important; }
+.inputLabelFocused, .selectLabelFocused, .textareaLabelFocused { color: var(--vf-red) !important; }
+.emby-input:focus, .emby-select-withcolor:focus, .emby-textarea:focus { border-color: var(--vf-red) !important; }
+.alphaPicker .alphaPickerButton-selected { background: var(--vf-red) !important; color: #fff !important; }
+.mdl-spinner__layer { border-color: var(--vf-red) !important; }
+
+/* ---------- player: red scrubber ---------- */
+.mdl-slider::-webkit-slider-thumb { background: var(--vf-red) !important; }
+.mdl-slider-background-lower, .sliderBubble { background: var(--vf-red) !important; }
+
+/* ---------- home banner (Media Bar Enhanced plugin), styled to match ---------- */
+#slides-container, .slides-container, .mediaBar, #mediaBar { border-radius: 0 !important; }
+.slide .backdrop-overlay, .slide .gradient-overlay, #slides-container .gradient-overlay {
+  background: linear-gradient(90deg, var(--vf-bg) 0%, rgba(11, 11, 12, .7) 30%, transparent 65%), linear-gradient(0deg, var(--vf-bg) 0%, transparent 40%) !important;
+}
+.slide .play-button, #slides-container .play-button { background: #fff !important; color: #111 !important; border-radius: 6px !important; font-weight: 700 !important; }
+.slide .detail-button, #slides-container .detail-button { background: rgba(109, 109, 110, .7) !important; color: #fff !important; border-radius: 6px !important; }
+.dot.active, .slide-dot.active { background: var(--vf-red) !important; }
+
+/* ---------- phones ---------- */
+@media (max-width: 760px) {
+  /* phones draw the picture on .itemBackdrop itself */
+  .itemBackdrop { height: 46vh !important; min-height: 240px; margin-bottom: -16vh !important; }
+  .itemBackdrop::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, var(--vf-bg) 0%, rgba(11, 11, 12, .55) 35%, transparent 70%); }
+  .detailLogo { position: relative !important; z-index: 2; }
+  .detailPageWrapperContainer { background: transparent !important; z-index: 2; }
+  .backgroundContainer.withBackdrop { background: linear-gradient(0deg, var(--vf-bg) 0%, rgba(11, 11, 12, .7) 45%, rgba(11, 11, 12, .1) 75%) !important; }
+  .backdropImage { background-position: center top !important; background-size: auto 62vh !important; background-repeat: no-repeat !important; }
+  .detailRibbon { padding-left: 5% !important; padding-right: 5% !important; }
+  .detailLogo { width: 70vw !important; height: 5.5em !important; margin-left: 5% !important; }
+  .mainDetailButtons .btnPlay { flex: 1 1 100%; }
+  .nameContainer, .itemMiscInfo, .itemMiscInfo-primary { justify-content: flex-start !important; text-align: left !important; margin-left: 0 !important; }
+  /* more cards across the screen, like the Netflix app */
+  .overflowBackdropCard, .overflowSmallBackdropCard { width: 62vw !important; }
+  .overflowPortraitCard { width: 31vw !important; }
+  .detailSection { margin-top: 0 !important; }
+  .sectionTitle, .sectionTitle-cards { font-size: 1.1rem !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card, .card-hoverable:hover, .page:not(.hide) .padded-left, .itemDetailPage:not(.hide) .detailPageWrapperContainer { transition: none !important; animation: none !important; transform: none !important; }
+}
