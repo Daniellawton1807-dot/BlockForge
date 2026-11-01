@@ -419,7 +419,7 @@
   let autopilot = null, autopilotError = "", storage = null, storageError = "", storageAt = 0, apBusy = false;
   const apSelected = new Map();
   const ago = d => { const t = Date.parse(d); if (!t) return ""; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "just now" : m < 60 ? m + " min ago" : m < 1440 ? Math.round(m / 60) + " h ago" : dateText(d, { day: "numeric", month: "short" }); };
-  const RULE_ICON = { stalled: "refresh", importBlocked: "download", research: "search" };
+  const RULE_ICON = { stalled: "refresh", importBlocked: "download", research: "search", upgrade: "star" };
   async function loadAutopilot() {
     const r = await api("/api/autopilot");
     if (r.ok) { autopilot = r.data; autopilotError = ""; } else autopilotError = errorText(r, "Couldn't reach Autopilot.");

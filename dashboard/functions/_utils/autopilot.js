@@ -13,9 +13,11 @@ const MAX_LOG = 150, MAX_FIXES_PER_RUN = 6, MAX_SEARCHES_PER_SERVICE = 10;
 export const RULES = {
   stalled: { title: "Replace stalled downloads", detail: "A torrent with no progress for a while, or a failed Usenet job, is blocklisted and Sonarr/Radarr look for another release." },
   importBlocked: { title: "Clear stuck imports", detail: "\"Not an upgrade\" is removed from the queue; samples, missing video and suspicious files are blocklisted and replaced. Anything else is listed under Needs you." },
-  research: { title: "Search again for missing episodes", detail: "Monitored episodes and films that aired but never downloaded are searched again after 1 hour, 6 hours and a day, then less often (3 days, then weekly)." }
+  research: { title: "Search again for missing episodes", detail: "Monitored episodes and films that aired but never downloaded are searched again after 1 hour, 6 hours and a day, then less often (3 days, then weekly)." },
+  upgrade: { title: "Upgrade the library overnight", detail: "Each night (3–5 am) up to 10 episodes and 2 films below your quality target are searched for a better copy, a few at a time so downloads never pile up. Anything tried waits three weeks before its next turn." }
 };
-export const DEFAULT_SETTINGS = { rules: { stalled: true, importBlocked: true, research: true }, stallMinutes: 30 };
+export const DEFAULT_SETTINGS = { rules: { stalled: true, importBlocked: true, research: true, upgrade: true }, stallMinutes: 30 };
+const UPGRADE_EPISODES = 10, UPGRADE_FILMS = 2, UPGRADE_RETRY = 21 * 24 * HOUR, UPGRADE_HOURS = [3, 4, 5], UPGRADE_BUSY_QUEUE = 5;
 export const STALL_CHOICES = [15, 30, 60, 120, 240];
 
 // ---------- state in the Worker's KV ----------
@@ -37,6 +39,8 @@ export async function loadState(env) {
       stallMinutes: saved.stallChosen && STALL_CHOICES.includes(Number(saved.stallMinutes)) ? Number(saved.stallMinutes) : DEFAULT_SETTINGS.stallMinutes },
     log: Array.isArray(state.log) ? state.log : [],
     backoff: state.backoff && typeof state.backoff === "object" ? state.backoff : {},
+    upgradeDay: state.upgradeDay || "",
+    upgradeTried: state.upgradeTried && typeof state.upgradeTried === "object" ? state.upgradeTried : {},
     lastRun: state.lastRun || null
   };
 }
@@ -216,6 +220,57 @@ export async function runAutopilot(env, trigger) {
   }
   // forget back-off for things that turned up (or stopped being wanted); keep it when the rule is off or a lookup failed
   if (rules.research && !notes.length) for (const key of Object.keys(state.backoff)) if (!stillMissing.has(key)) delete state.backoff[key];
+
+  // 4. overnight upgrades: a few titles below the quality target each night, worked through over the weeks
+  const london = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" }).formatToParts(new Date(now));
+  const part = type => london.find(x => x.type === type)?.value || "";
+  const today = part("year") + "-" + part("month") + "-" + part("day");
+  if (rules.upgrade && UPGRADE_HOURS.includes(Number(part("hour"))) && state.upgradeDay !== today) {
+    for (const [key, at] of Object.entries(state.upgradeTried)) if (now - at > UPGRADE_RETRY) delete state.upgradeTried[key];
+    if (queue.length > UPGRADE_BUSY_QUEUE) {
+      notes.push("Overnight upgrades skipped: " + queue.length + " downloads already in the queue.");
+    } else {
+      const queued = new Set(queue.map(r => r.service.key + ":" + (r.episodeId ? "e" + r.episodeId : "m" + r.movieId)));
+      const lists = [];
+      for (const service of services) {
+        try {
+          const tv = service.type === "tv";
+          const page = await arrCall(env, service, "api/v3/wanted/cutoff?page=1&pageSize=100&monitored=true" + (tv ? "&sortKey=episodes.airDateUtc&sortDirection=descending&includeSeries=true" : ""));
+          const picks = (Array.isArray(page?.records) ? page.records : [])
+            .map(r => ({ r, key: service.key + ":" + (tv ? "e" : "m") + r.id }))
+            .filter(x => !queued.has(x.key) && !state.upgradeTried[x.key]);
+          lists.push({ service, tv, picks });
+        } catch (error) { notes.push(service.name + ": " + error.message); }
+      }
+      // share the episode budget across the Sonarr instances in turn; films come from Radarr
+      const chosen = new Map();
+      const take = (filter, budget) => {
+        let left = budget, progress = true;
+        while (left > 0 && progress) {
+          progress = false;
+          for (const l of lists.filter(filter)) {
+            const next = l.picks.shift(); if (!next || left <= 0) continue;
+            if (!chosen.has(l)) chosen.set(l, []);
+            chosen.get(l).push(next); left--; progress = true;
+          }
+        }
+      };
+      take(l => l.tv, UPGRADE_EPISODES); take(l => !l.tv, UPGRADE_FILMS);
+      for (const [l, picked] of chosen) {
+        try {
+          await arrCall(env, l.service, "api/v3/command", {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify(l.tv ? { name: "EpisodeSearch", episodeIds: picked.map(p => p.r.id) } : { name: "MoviesSearch", movieIds: picked.map(p => p.r.id) })
+          });
+          for (const p of picked) state.upgradeTried[p.key] = now;
+          const names = picked.map(p => l.tv ? (p.r.series?.title || "Episode") + " S" + String(p.r.seasonNumber).padStart(2, "0") + "E" + String(p.r.episodeNumber).padStart(2, "0") : p.r.title || "Film");
+          log("upgrade", picked.length === 1 ? names[0] : picked.length + (l.tv ? " episodes" : " films"),
+            "Looked for a better copy of " + names.slice(0, 6).join(", ") + (names.length > 6 ? " and " + (names.length - 6) + " more" : "") + ".", l.service);
+        } catch (error) { notes.push(l.service.name + ": " + error.message); }
+      }
+      state.upgradeDay = today;
+    }
+  }
 
   state.log = [...fixed.reverse(), ...state.log];
   state.lastRun = { at, trigger, fixed: fixed.length, checked: queue.length, needsYou: needsYou.slice(0, 30), notes: notes.slice(0, 8), waiting: stillMissing.size };
