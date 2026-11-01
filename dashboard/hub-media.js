@@ -64,9 +64,14 @@
     h.append(left); if (aside) h.append(typeof aside === "string" ? el("span", "aside", aside) : aside); return h;
   }
   function section(kicker, title, aside) { const s = el("section", "hub-section"); s.append(sectionHead(kicker, title, aside)); return s; }
+  // posters load as they come near the screen, not all at once (a big grid on a phone runs out of memory)
+  const lazy = "IntersectionObserver" in window ? new IntersectionObserver(entries => {
+    for (const e of entries) if (e.isIntersecting) { e.target.style.backgroundImage = bg(e.target.dataset.bg); lazy.unobserve(e.target); }
+  }, { rootMargin: "600px 400px" }) : null;
+  function lazyBg(node, url) { if (!lazy) { node.style.backgroundImage = bg(url); return; } node.dataset.bg = url; lazy.observe(node); }
   function tile({ poster, title, sub, badge, badgeClass, rating, progress, onClick }, i = 0) {
     const t = el("button", "hub-tile"); t.type = "button"; t.style.setProperty("--i", i);
-    const art = el("div", "art" + (poster ? "" : " empty"), poster ? null : title); if (poster) art.style.backgroundImage = bg(poster);
+    const art = el("div", "art" + (poster ? "" : " empty"), poster ? null : title); if (poster) lazyBg(art, poster);
     if (badge) art.append(el("span", "hub-badge " + (badgeClass || ""), badge));
     if (rating) { const r = el("span", "rating"); r.append(icon("star"), document.createTextNode(Number(rating).toFixed(1))); art.append(r); }
     if (progress != null) { const p = el("div", "hub-progress"), bar = el("i"); bar.style.width = Math.max(2, Math.min(100, progress)) + "%"; p.append(bar); art.append(p); }

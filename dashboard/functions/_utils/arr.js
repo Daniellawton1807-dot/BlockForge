@@ -108,7 +108,12 @@ export function imageUrl(item, coverType) {
   const value = String(image?.remoteUrl || image?.url || "");
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && ["image.tmdb.org", "artworks.thetvdb.com", "www.thetvdb.com"].includes(url.hostname) ? url.href : "";
+    if (url.protocol !== "https:" || !["image.tmdb.org", "artworks.thetvdb.com", "www.thetvdb.com"].includes(url.hostname)) return "";
+    // Sonarr/Radarr hand out full-size originals (TMDB posters are ~2000x3000, 1.5 MB). A phone showing a
+    // grid of those runs out of memory and Safari kills the page, so ask for the sizes the cards need.
+    if (url.hostname === "image.tmdb.org") url.pathname = url.pathname.replace(/^\/t\/p\/original\//, coverType === "poster" ? "/t/p/w342/" : "/t/p/w1280/");
+    else if (coverType === "poster" && /^\/banners\/v4\/.+\/posters\/[^/]+(?<!_t)\.jpg$/.test(url.pathname)) url.pathname = url.pathname.replace(/\.jpg$/, "_t.jpg");
+    return url.href;
   } catch {
     return "";
   }
