@@ -502,6 +502,16 @@
     for (const key of ruleKeys) {
       const row = el("div", "ap-rule"), info = el("div", "info"), ic = el("span", "ap-ic"); ic.append(icon(RULE_ICON[key] || "check"));
       info.append(el("div", "nm", rules[key].title), el("div", "sub", rules[key].detail));
+      if (key === "stalled") {  // how long a torrent may sit without progress before it's replaced
+        const pick = el("select", "hub-select ap-stall"); pick.setAttribute("aria-label", "Replace a stalled torrent after");
+        for (const m of [15, 30, 60, 120, 240]) { const o = el("option", null, "Replace after " + (m < 60 ? m + " min" : m / 60 + (m === 60 ? " hour" : " hours"))); o.value = m; pick.append(o); }
+        pick.value = String(settings.stallMinutes || 30);
+        pick.onchange = async () => {
+          const r = await api("/api/autopilot", { method: "POST", body: { action: "settings", stallMinutes: Number(pick.value) } });
+          if (r.ok) { autopilot = r.data; toast("Stalled torrents are replaced after " + pick.selectedOptions[0].text.replace("Replace after ", "") + "."); } else toast(errorText(r, "Couldn't save that."), "error");
+        };
+        pick.style.marginTop = "8px"; info.append(pick);
+      }
       row.append(ic, info, apSwitch(Boolean(settings.rules[key]), rules[key].title, on => setRule(key, on))); rlist.append(row);
     }
     rs.append(rlist); box.append(rs);

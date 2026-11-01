@@ -11,11 +11,12 @@ const BACKOFF = [HOUR, 6 * HOUR, 24 * HOUR, 72 * HOUR, 168 * HOUR];   // an hour
 const MAX_LOG = 150, MAX_FIXES_PER_RUN = 6, MAX_SEARCHES_PER_SERVICE = 10;
 
 export const RULES = {
-  stalled: { title: "Replace stalled downloads", detail: "A torrent with no progress for an hour, or a failed Usenet job, is blocklisted and Sonarr/Radarr look for another release." },
+  stalled: { title: "Replace stalled downloads", detail: "A torrent with no progress for a while, or a failed Usenet job, is blocklisted and Sonarr/Radarr look for another release." },
   importBlocked: { title: "Clear stuck imports", detail: "\"Not an upgrade\" is removed from the queue; samples, missing video and suspicious files are blocklisted and replaced. Anything else is listed under Needs you." },
   research: { title: "Search again for missing episodes", detail: "Monitored episodes and films that aired but never downloaded are searched again after 1 hour, 6 hours and a day, then less often (3 days, then weekly)." }
 };
-export const DEFAULT_SETTINGS = { rules: { stalled: true, importBlocked: true, research: true }, stallMinutes: 60 };
+export const DEFAULT_SETTINGS = { rules: { stalled: true, importBlocked: true, research: true }, stallMinutes: 30 };
+export const STALL_CHOICES = [15, 30, 60, 120, 240];
 
 // ---------- state in the Worker's KV ----------
 async function bridge(env, path, init = {}) {
@@ -31,7 +32,9 @@ export async function loadState(env) {
   const state = await response.json().catch(() => ({}));
   const saved = state.settings || {};
   return {
-    settings: { ...DEFAULT_SETTINGS, ...saved, rules: { ...DEFAULT_SETTINGS.rules, ...(saved.rules || {}) } },
+    // a stall time only counts once someone has chosen it in the Autopilot tab (older saves carried the old 60 by default)
+    settings: { ...DEFAULT_SETTINGS, ...saved, rules: { ...DEFAULT_SETTINGS.rules, ...(saved.rules || {}) },
+      stallMinutes: saved.stallChosen && STALL_CHOICES.includes(Number(saved.stallMinutes)) ? Number(saved.stallMinutes) : DEFAULT_SETTINGS.stallMinutes },
     log: Array.isArray(state.log) ? state.log : [],
     backoff: state.backoff && typeof state.backoff === "object" ? state.backoff : {},
     lastRun: state.lastRun || null

@@ -1,5 +1,5 @@
 import { json, loginConfigured, readJsonBody, validRequestOrigin, validSession } from "../_utils/downloads-auth.js";
-import { RULES, loadState, publicState, runAutopilot, saveState } from "../_utils/autopilot.js";
+import { RULES, loadState, publicState, runAutopilot, saveState, STALL_CHOICES } from "../_utils/autopilot.js";
 
 // GET: Autopilot's switches, last check and log. POST {action: "run"} checks now;
 // POST {action: "settings", rules: {stalled, importBlocked, research}} turns rules on or off.
@@ -13,9 +13,10 @@ export async function onRequest({ request, env }) {
     let body;
     try { body = await readJsonBody(request, 2048); } catch { return json({ code: "invalid_request", error: "Could not read the Autopilot action." }, 400); }
     if (body?.action === "run") return json(publicState(await runAutopilot(env, "manual")));
-    if (body?.action === "settings" && body.rules && typeof body.rules === "object") {
+    if (body?.action === "settings") {
       const state = await loadState(env);
-      for (const key of Object.keys(RULES)) if (typeof body.rules[key] === "boolean") state.settings.rules[key] = body.rules[key];
+      if (body.rules && typeof body.rules === "object") for (const key of Object.keys(RULES)) if (typeof body.rules[key] === "boolean") state.settings.rules[key] = body.rules[key];
+      if (STALL_CHOICES.includes(Number(body.stallMinutes))) { state.settings.stallMinutes = Number(body.stallMinutes); state.settings.stallChosen = true; }
       await saveState(env, state);
       return json(publicState(state));
     }
