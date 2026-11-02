@@ -1402,7 +1402,7 @@ html[data-theme="light"] .downloads-section .download-action-menu button{color:#
   body { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
   .sidebar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
-    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px;
     min-height: 0; padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
     border: 0; border-top: 1px solid var(--line);
     background: color-mix(in srgb, #0b101c 88%, transparent);
