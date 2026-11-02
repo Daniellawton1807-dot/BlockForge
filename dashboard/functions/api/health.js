@@ -8,7 +8,6 @@ const SERVICES = {
   "Seerr": "https://seerr.danielvault.uk",
   "SABnzbd": "https://sab.danielvault.uk",
   "qBittorrent": "https://qb.danielvault.uk",
-  "Jellystat": "https://jellystat.danielvault.uk",
   "Jellyfin": "https://jellyfin.danielvault.uk",
   "CasaOS": "https://casa.danielvault.uk",
   "Crafty": "https://minecraft.danielvault.uk"

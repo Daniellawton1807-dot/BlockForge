@@ -14,7 +14,6 @@ window.HOMEBASE_CONFIG = {
     {name:"Seerr",desc:"Media requests",url:"https://seerr.danielvault.uk",icon:"O",tone:"purple",group:"media"},
     {name:"SABnzbd",desc:"Usenet downloads",url:"https://sab.danielvault.uk",icon:"S",tone:"orange",group:"downloads"},
     {name:"qBittorrent",desc:"Torrent downloads",url:"https://qb.danielvault.uk",icon:"qB",tone:"green",group:"downloads"},
-    {name:"Jellystat",desc:"Jellyfin statistics",url:"https://jellystat.danielvault.uk",icon:"J",tone:"blue",group:"media"},
     {name:"Jellyfin",desc:"Your media library",url:"https://jellyfin.danielvault.uk",icon:"J",tone:"blue",group:"media"},
     {name:"CasaOS",desc:"Server app management",url:"https://casa.danielvault.uk",icon:"C",tone:"green",group:"system"},
     {name:"Crafty",desc:"Minecraft server management",url:"https://minecraft.danielvault.uk/panel",icon:"MC",tone:"green",group:"system"}
