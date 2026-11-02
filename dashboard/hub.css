@@ -578,3 +578,44 @@ a.hub-btn { text-decoration: none; }
   .ap-selbar .t { flex: 1; white-space: normal; font-size: 12.5px; }
   .ap-confirm { padding: 22px 18px 18px; }
 }
+
+/* ---------- Overview 2.0 ---------- */
+.ov-summary { margin: -6px 0 22px; color: var(--muted); font-size: 15px; line-height: 1.5; }
+.ov-glance { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.ov-card { display: flex; flex-direction: column; color: inherit; text-decoration: none; min-width: 0; transition: border-color .2s, transform .25s var(--hub-ease); }
+.ov-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); transform: translateY(-2px); }
+.hub-card + .hub-card.ov-card { margin-top: 0; }
+.ov-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.ov-head h3 { margin: 3px 0 0; font-size: 18px; }
+.ov-go { font-size: 12.5px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.ov-card:hover .ov-go { color: var(--text); }
+.ov-body { display: grid; gap: 10px; min-width: 0; }
+.ov-line { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ov-line-txt { flex: 1; min-width: 0; }
+.ov-line-txt b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-line-txt small { display: block; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-quiet { color: var(--muted); font-size: 13.5px; }
+.ov-warn { display: inline-flex; align-items: center; gap: 7px; color: var(--hub-amber); font-size: 13px; font-weight: 700; }
+.ov-warn .hub-ico { width: 16px; height: 16px; }
+.ov-thumb { flex: none; width: 64px; aspect-ratio: 16/9; border-radius: 7px; background: var(--hub-soft) center/cover; }
+.ov-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: color-mix(in srgb, var(--muted) 45%, transparent); }
+.ov-dot.up { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.ov-dot.paused, .ov-dot.idle { background: var(--hub-amber); }
+.ov-dot.idle { box-shadow: none; opacity: .75; }
+.ov-dot.down { background: var(--hub-red); box-shadow: 0 0 8px var(--hub-red); }
+.ov-dot.local { background: transparent; border: 2px solid color-mix(in srgb, var(--muted) 60%, transparent); }
+.ov-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ov-chip { display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px 3px 3px; border-radius: 9px; background: var(--hub-soft); font-size: 12.5px; font-weight: 650; }
+.ov-chip img { width: 22px; height: 22px; border-radius: 5px; image-rendering: pixelated; }
+.ov-server { margin-bottom: 0; }
+.ov-appsearch { margin: 0 0 14px; max-width: 420px; }
+.ov-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.ov-app { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--hub-r); border: 1px solid var(--line); background: var(--card); color: inherit; text-decoration: none; min-width: 0;
+  transition: border-color .2s, transform .2s var(--hub-ease); }
+.ov-app:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); transform: translateY(-2px); }
+.ov-app-ic { flex: none; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 13px; }
+.ov-app-txt { flex: 1; min-width: 0; }
+.ov-app-txt b { display: block; font-size: 14px; }
+.ov-app-txt small { display: block; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 900px) { .ov-glance { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 680px) { .ov-summary { font-size: 14px; margin-bottom: 18px; } .ov-apps { grid-template-columns: minmax(0, 1fr); } }
