@@ -395,6 +395,8 @@
       acts.append(iconButton(paused ? "play" : "pause", paused ? "Resume" : "Pause", "", () => downloadAction(i, paused ? "resume" : "pause")));
       acts.append(armed(iconButton("trash", "Remove", "danger"), "Tap again to remove", () => downloadAction(i, "remove")));
     }
+    // a blocked import, or one Sonarr/Radarr is waiting on: open their manual import right here
+    if ((i.lifecycle === "blocked" || i.lifecycle === "importing") && i.serviceKey && i.downloadId) acts.append(button("Fix import", "small" + (i.lifecycle === "blocked" ? " primary" : ""), () => openImport(i), "list"));
     if (i.lifecycle === "failed") {
       acts.append(button("Replace", "small", () => downloadAction(i, "replace"), "refresh"));
       const dismissed = dismissedDownloadHistory.has(String(i.id));
@@ -405,6 +407,87 @@
     if (acts.childNodes.length) row.append(acts);
     return row;
   }
+  // ---------- manual import: match each file to the right show/episode or film, then import or remove ----------
+  const episodeCache = new Map();
+  async function episodesOf(serviceKey, seriesId) {
+    const key = serviceKey + ":" + seriesId;
+    if (!episodeCache.has(key)) {
+      const r = await api(`/api/media/details?serviceKey=${encodeURIComponent(serviceKey)}&id=${seriesId}`);
+      episodeCache.set(key, r.ok ? (r.data.item.episodes || []).sort((a, b) => a.seasonNumber - b.seasonNumber || a.episodeNumber - b.episodeNumber) : []);
+    }
+    return episodeCache.get(key);
+  }
+  async function openImport(item) {
+    let content;
+    const title = item.label || String(item.name || "Download").replace(/[._]+/g, " ");
+    openSheet(body => {
+      content = el("div", "sh-content"); content.style.paddingTop = "26px";
+      content.append(el("div", "kicker", "FIX IMPORT · " + (item.service || "")), el("h2", "imp-title", title));
+      if (item.reason || item.eventDetail) content.append(el("div", "hub-banner imp-why", item.reason || item.eventDetail));
+      content.append(skeleton("list", 2)); body.append(content);
+    });
+    const r = await api(`/api/media/import?serviceKey=${encodeURIComponent(item.serviceKey)}&downloadId=${encodeURIComponent(item.downloadId)}`);
+    if (!content.isConnected) return;
+    content.querySelector(".hub-list")?.remove();
+    if (!r.ok) { content.append(note("Couldn't read this download", errorText(r, "Sonarr/Radarr didn't answer."))); return; }
+    const tv = r.data.mediaType === "tv", files = r.data.files || [];
+    const own = library.filter(l => l.serviceKey === item.serviceKey).sort((a, b) => a.title.localeCompare(b.title));
+    const picks = [];
+    const sec = sheetSection(files.length ? "FILES IN THIS DOWNLOAD" : "NOTHING TO IMPORT", el("span", "aside", plural(files.length, "file")));
+    sec.style.marginTop = "18px"; content.append(sec);
+    if (!files.length) sec.append(note("No files found", "The download may still be moving, or it was already imported. You can remove it from the queue below."));
+    for (const f of files) {
+      const rejected = f.rejections.filter(x => !/not an upgrade|already/i.test(x));
+      // start unticked only for real samples (named "sample", or flagged exactly "Sample"), not "unable to determine if…"
+      const sample = /(^|[^a-z])sample([^a-z]|$)/i.test(f.name.split("/").pop()) || rejected.some(x => /^sample\.?$/i.test(x.trim()));
+      const pick = { path: f.path, on: !sample, seriesId: f.seriesId, episodeIds: f.episodes?.map(e => e.id) || [], movieId: f.movieId };
+      picks.push(pick);
+      const box = el("div", "imp-file"), head = el("label", "imp-head"), cb = el("input"); cb.type = "checkbox"; cb.checked = pick.on; cb.onchange = () => { pick.on = cb.checked; box.classList.toggle("off", !cb.checked); };
+      const txt = el("div", "imp-txt"); txt.append(el("div", "nm", f.name));
+      const p = el("div", "hub-pills"); [f.quality && pill(f.quality), f.size && pill(size(f.size)), f.releaseGroup && pill(f.releaseGroup)].filter(Boolean).forEach(x => p.append(x)); txt.append(p);
+      for (const why of f.rejections) txt.append(el("div", "why", why));
+      head.append(cb, txt); box.append(head); box.classList.toggle("off", !pick.on);
+      const fields = el("div", "hub-fields");
+      if (tv) {
+        const shows = own.filter(l => l.mediaType === "tv");
+        const epField = el("div");
+        const drawEpisodes = async () => {
+          epField.replaceChildren(); if (!pick.seriesId) return;
+          const eps = await episodesOf(item.serviceKey, pick.seriesId);
+          if (!eps.some(e => pick.episodeIds.includes(e.id))) pick.episodeIds = [];
+          const opts = [["", "Pick the episode…"], ...eps.map(e => [String(e.id), `S${String(e.seasonNumber).padStart(2, "0")}E${String(e.episodeNumber).padStart(2, "0")} · ${e.title || "Episode " + e.episodeNumber}`])];
+          epField.append(select(pick.episodeIds.length > 1 ? `Episodes (${pick.episodeIds.length} detected)` : "Episode", opts, String(pick.episodeIds[0] || ""), v => { pick.episodeIds = v ? [Number(v)] : []; }));
+        };
+        fields.append(select("Show", [["", "Pick the show…"], ...shows.map(l => [String(l.id), l.title])], String(pick.seriesId || ""), v => { pick.seriesId = Number(v) || null; pick.episodeIds = []; drawEpisodes(); }), epField);
+        drawEpisodes();
+      } else {
+        const films = own.filter(l => l.mediaType === "movie");
+        fields.append(select("Film", [["", "Pick the film…"], ...films.map(l => [String(l.id), l.title + (l.year ? ` (${l.year})` : "")])], String(pick.movieId || ""), v => { pick.movieId = Number(v) || null; }));
+      }
+      box.append(fields); sec.append(box);
+    }
+
+    const foot = el("div", "sh-foot"), bl = el("label", "imp-bl"), blc = el("input"); blc.type = "checkbox"; blc.checked = true;
+    bl.append(blc, el("span", null, "Blocklist this release when removing"));
+    const remove = armed(button("Remove", "danger", null, "trash"), "Tap again to remove", async () => {
+      const x = await api("/api/media/import", { method: "POST", body: { action: "remove", serviceKey: item.serviceKey, queueId: item.queueId, blocklist: blc.checked } });
+      toast(x.ok ? x.data.message : errorText(x, "Couldn't remove it."), x.ok ? {} : "error");
+      if (x.ok) { closeSheet(); setTimeout(refreshDownloads, 1500); }
+    });
+    const go = button("Import", "primary", async () => {
+      const chosen = picks.filter(p => p.on);
+      if (!chosen.length) { toast("Tick at least one file to import.", "error"); return; }
+      if (chosen.some(p => tv ? !p.seriesId || !p.episodeIds.length : !p.movieId)) { toast(tv ? "Pick the show and episode for each ticked file." : "Pick the film for each ticked file.", "error"); return; }
+      go.disabled = true; go.lastChild.textContent = "Importing…";
+      const x = await api("/api/media/import", { method: "POST", body: { action: "import", serviceKey: item.serviceKey, downloadId: item.downloadId, files: chosen.map(p => tv ? { path: p.path, seriesId: p.seriesId, episodeIds: p.episodeIds } : { path: p.path, movieId: p.movieId }) } });
+      toast(x.ok ? x.data.message : errorText(x, "The import didn't go through."), x.ok ? {} : "error");
+      if (x.ok) { closeSheet(); setTimeout(refreshDownloads, 3000); } else { go.disabled = false; go.lastChild.textContent = "Import"; }
+    }, "download");
+    if (!files.length) go.disabled = true;
+    foot.append(bl, el("span", "spacer"), item.queueId ? remove : el("span"), go); foot.querySelector(".spacer").style.flex = "1";
+    content.append(foot);
+  }
+
   async function downloadAction(item, action) {
     const r = await api("/api/downloads", { method: "POST", body: { action, source: item.source, id: item.id, name: item.name, torrentHash: item.torrentHash, nzoId: item.nzoId } });
     toast(r.ok ? { pause: "Paused.", resume: "Resumed.", remove: "Removed from the queue.", replace: "Looking for a different release." }[action] : errorText(r, "That didn't work."), r.ok ? {} : "error");

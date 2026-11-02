@@ -312,6 +312,7 @@ function applyArr(item, record) {
   if (!stage) return item;
   item.stage = stage.stage;
   item.service = record.service.name;
+  item.serviceKey = record.service.key; item.queueId = record.id;  // for Homebase's manual import
   if (record.label) item.label = record.label;
   if (stage.lifecycle !== "downloading") { item.lifecycle = stage.lifecycle; item.status = stage.status; item.progress = 100; item.etaSeconds = null; }
   if (record.messages.length && (record.health !== "ok" || stage.lifecycle !== "downloading")) item.eventDetail = record.messages.join(" · ");
