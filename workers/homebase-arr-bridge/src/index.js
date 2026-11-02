@@ -1,3 +1,4 @@
+import { push } from "./push.js";
 const SERVICES = Object.freeze({
   "sonarr-daniel": { binding: "VPC_SONARR_DANIEL", port: 8989, kind: "arr" },
   "sonarr-mum": { binding: "VPC_SONARR_MUM", port: 8990, kind: "arr" },
@@ -63,6 +64,9 @@ export default {
 
   async fetch(request, env) {
     const method = request.method.toUpperCase();
+    if (request.headers.get("x-homebase-service") === "push") {
+      return push(request, env, new URL(request.url).pathname.replace(/^\/+/, ""));
+    }
     if (request.headers.get("x-homebase-service") === "autopilot") {
       return autopilot(request, env, new URL(request.url).pathname.replace(/^\/+/, ""));
     }

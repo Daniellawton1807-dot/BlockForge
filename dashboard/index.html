@@ -4,9 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b1020">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Homebase">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Homebase — Homelab</title>
 <link rel="stylesheet" href="style.css?v=homebase-ov2-1">
-<link rel="stylesheet" href="hub.css?v=homebase-ov2-1">
+<link rel="stylesheet" href="hub.css?v=homebase-push-1">
 </head>
 <body>
 <div class="layout">
@@ -49,6 +55,11 @@
     </div>
   </div>
 
+  <section class="hub-section" id="ovNotify" hidden>
+    <div class="hub-section-head"><div><div class="kicker">ON YOUR PHONE</div><h3>Notifications</h3></div><span class="aside" id="ovNotifyState"></span></div>
+    <div class="hub-card ov-notify" id="ovNotifyBody"></div>
+  </section>
+
   <section class="hub-section">
     <div class="hub-section-head"><div><div class="kicker">THE SERVER</div><h3>Health</h3></div><span class="aside" id="ovUpdated"></span></div>
     <div class="hub-stats ov-server" id="ovServer"></div>
@@ -64,7 +75,7 @@
 </main>
 </div>
 <script src="config.js?v=homebase-ov2-2"></script>
-<script src="hub.js?v=homebase-hub-toast-1"></script>
-<script src="overview.js?v=homebase-ov2-1"></script>
+<script src="hub.js?v=homebase-push-1"></script>
+<script src="overview.js?v=homebase-push-1"></script>
 </body>
 </html>

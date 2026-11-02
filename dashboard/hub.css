@@ -639,3 +639,9 @@ a.hub-btn { text-decoration: none; }
 .imp-file select { width: 100%; min-width: 0; }
 .sh-foot:has(.imp-bl) { flex-wrap: wrap; row-gap: 10px; }
 @media (max-width: 680px) { .sh-foot .imp-bl { flex: 1 1 100%; } .sh-foot:has(.imp-bl) .spacer { display: none; } .sh-foot:has(.imp-bl) .hub-btn { flex: 1; } }
+
+/* notifications card on the Overview */
+.ov-notify { padding: 18px 20px; }
+.ov-notify-list { display: grid; gap: 2px; }
+.ov-notify-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.ov-notify-row:first-child { border-top: 0; padding-top: 0; }

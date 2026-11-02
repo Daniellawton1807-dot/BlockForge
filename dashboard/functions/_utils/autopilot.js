@@ -3,6 +3,7 @@
 // Media hub. Settings, the action log and the re-search back-off live in the Worker's KV, reached
 // over the private ARR_BRIDGE binding. It never deletes library files: it only removes queue items.
 import { arrCall, arrServiceStatus, arrServices } from "./arr.js";
+import { notify } from "./notify.js";
 
 const BRIDGE = "ARR_BRIDGE";
 const DEFAULT_QBITTORRENT_URL = "https://qb.danielvault.uk";
@@ -41,6 +42,7 @@ export async function loadState(env) {
     backoff: state.backoff && typeof state.backoff === "object" ? state.backoff : {},
     upgradeDay: state.upgradeDay || "",
     upgradeTried: state.upgradeTried && typeof state.upgradeTried === "object" ? state.upgradeTried : {},
+    push: state.push && typeof state.push === "object" ? state.push : {},
     lastRun: state.lastRun || null
   };
 }
@@ -271,6 +273,9 @@ export async function runAutopilot(env, trigger) {
       state.upgradeDay = today;
     }
   }
+
+  // phone notifications for anything new since the last pass (never lets a push problem stop Autopilot)
+  try { await notify(env, state, { services, queue, needsYou }); } catch (error) { notes.push("Notifications: " + error.message); }
 
   state.log = [...fixed.reverse(), ...state.log];
   state.lastRun = { at, trigger, fixed: fixed.length, checked: queue.length, needsYou: needsYou.slice(0, 30), notes: notes.slice(0, 8), waiting: stillMissing.size };

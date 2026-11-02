@@ -2,7 +2,7 @@
    Public (always): server load (Glances via /api/metrics), app health (/api/health), the app list (config.js).
    After sign-in: the three TVs, downloads + Autopilot, tonight's episodes, Minecraft, and the real drives. */
 (() => {
-  const { $, el, icon, api, gate, TVS } = Hub;
+  const { $, el, icon, api, gate, TVS, store, toast, errorText } = Hub;
   const cfg = window.HOMEBASE_CONFIG || { services: [] };
   const GB = 1073741824;
   const size = b => { b = Number(b) || 0; return b >= 1024 * GB ? (b / 1024 / GB).toFixed(1) + " TB" : Math.round(b / GB) + " GB"; };
@@ -148,7 +148,65 @@
     if (r.ok) { drives = r.data.drives || []; drives.forecast = r.data.forecast; paintServer(); }
   }
 
-  function loadPrivate() { loadTvs(); loadDownloads(); loadTonight(); loadMinecraft(); loadDrives(); }
+  // ---------- notifications on this device ----------
+  const PUSH_ORDER = ["ready", "requests", "attention", "disk", "minecraft"];
+  const keyBytes = k => Uint8Array.from(atob(k.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((k.length + 3) % 4)), c => c.charCodeAt(0));
+  const deviceName = () => /iPhone/.test(navigator.userAgent) ? "iPhone" : /iPad/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ? "iPad" : /Android/.test(navigator.userAgent) ? "Android phone" : /Mac/.test(navigator.platform) ? "Mac" : "Computer";
+  async function loadNotify() {
+    const sec = $("ovNotify"), box = $("ovNotifyBody"), state = $("ovNotifyState"); sec.hidden = false; box.replaceChildren();
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const installed = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    if (!("serviceWorker" in navigator && "PushManager" in window && "Notification" in window)) {
+      state.textContent = "Not available here";
+      box.append(ios && !installed
+        ? el("p", "ov-quiet", "On iPhone, notifications only work once Homebase is on your Home Screen: tap Share, then Add to Home Screen, then open Homebase from its new icon and turn them on here.")
+        : el("p", "ov-quiet", "This browser can't show notifications."));
+      return;
+    }
+    const info = await api("/api/push");
+    if (!info.ok) { state.textContent = ""; box.append(el("p", "ov-quiet", errorText(info, "Notifications aren't available right now."))); return; }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    const id = store.get("hb_push_id", ""), me = (info.data.devices || []).find(d => d.id === id);
+    if (!sub || !me) {
+      state.textContent = "Off on this device";
+      box.append(el("p", "ov-quiet", "Get a notification when something you asked for is ready, Mum requests something, a download needs you, the media drive fills up or the Minecraft server stops."));
+      const on = el("button", "hub-btn primary"); on.type = "button"; on.append(icon("bell"), el("span", null, "Turn on notifications"));
+      on.onclick = async () => {
+        on.disabled = true;
+        try {
+          if (await Notification.requestPermission() !== "granted") { toast("Notifications are blocked for Homebase in this browser's settings.", "error"); on.disabled = false; return; }
+          sub = sub || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(info.data.publicKey) });
+          const r = await api("/api/push", { method: "POST", body: { action: "subscribe", subscription: sub.toJSON(), name: deviceName() } });
+          if (!r.ok) throw new Error(errorText(r, "Couldn't save this device."));
+          store.set("hb_push_id", r.data.id); toast("Notifications are on for this " + deviceName() + "."); loadNotify();
+        } catch (error) { toast(error.message || "Couldn't turn notifications on.", "error"); on.disabled = false; }
+      };
+      const row = el("div", "sh-actions"); row.style.marginTop = "12px"; row.append(on); box.append(row);
+      return;
+    }
+    state.textContent = "On for this " + me.name + ((info.data.devices || []).length > 1 ? ` · ${info.data.devices.length} devices` : "");
+    const list = el("div", "ov-notify-list");
+    for (const key of PUSH_ORDER) {
+      const label = info.data.types?.[key]; if (!label) continue;
+      const on = me.prefs?.[key] !== false, rowEl = el("div", "ov-notify-row"), sw = el("button", "ap-switch" + (on ? " on" : ""));
+      sw.type = "button"; sw.setAttribute("role", "switch"); sw.setAttribute("aria-checked", on); sw.setAttribute("aria-label", label); sw.append(el("i"));
+      sw.onclick = async () => {
+        const next = !sw.classList.contains("on"); sw.classList.toggle("on", next); sw.setAttribute("aria-checked", next);
+        const r = await api("/api/push", { method: "POST", body: { action: "prefs", id: me.id, prefs: { [key]: next } } });
+        if (!r.ok) { sw.classList.toggle("on", !next); toast(errorText(r, "Couldn't save that."), "error"); }
+      };
+      rowEl.append(el("span", null, label), sw); list.append(rowEl);
+    }
+    box.append(list);
+    const test = el("button", "hub-btn small"); test.type = "button"; test.append(icon("bell"), el("span", null, "Send a test"));
+    test.onclick = async () => { const r = await api("/api/push", { method: "POST", body: { action: "test", id: me.id } }); toast(r.ok ? (r.data.sent ? "Sent. It should arrive in a few seconds." : "The test didn't go through. Try turning notifications off and on again here.") : errorText(r, "Couldn't send a test."), r.ok && r.data.sent ? {} : "error"); };
+    const off = el("button", "hub-btn small ghost"); off.type = "button"; off.append(el("span", null, "Turn off on this device"));
+    off.onclick = async () => { await api("/api/push", { method: "POST", body: { action: "unsubscribe", id: me.id } }); try { await sub.unsubscribe(); } catch {} store.set("hb_push_id", ""); toast("Notifications are off for this device."); loadNotify(); };
+    const row = el("div", "sh-actions"); row.style.marginTop = "14px"; row.append(test, off); box.append(row);
+  }
+
+  function loadPrivate() { loadTvs(); loadDownloads(); loadTonight(); loadMinecraft(); loadDrives(); loadNotify(); }
   gate({ message: "Sign in to see your TVs, downloads, tonight's episodes and the Minecraft server.", onReady() {
     loadPrivate();
     setInterval(() => { if (!document.hidden) { loadTvs(); loadDownloads(); loadMinecraft(); } }, 20000);

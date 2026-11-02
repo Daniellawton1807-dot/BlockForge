@@ -162,6 +162,9 @@ window.Hub = (() => {
     });
   }
 
+  // the service worker only shows notifications (it caches nothing); needed for the Home Screen app and push
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+
   const TVS = { "living room": "Living Room TV", "mum": "Mum's TV", "daniels tv": "Daniel's TV" };
   const TV_SUFFIX = { "living room": " in the living room", "mum": " on mum's tv", "daniels tv": " on daniel's tv" };
   return { $, el, icon, store, toast, openSheet, closeSheet, sheetOpen, skeleton, rail, api, errorText, gate, TVS, TV_SUFFIX };
