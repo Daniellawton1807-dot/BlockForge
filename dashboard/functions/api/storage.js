@@ -9,7 +9,7 @@ import { arrDelete } from "../_utils/autopilot.js";
 const DAY = 86400 * 1000, GB = 1024 ** 3;
 const WATCHED_IDLE_DAYS = 14, UNSTARTED_DAYS = 90, BIG_MOVIE = 40 * GB, BIG_EPISODE = 8 * GB;
 
-async function watchData(env) {
+export async function watchData(env) {
   const token = String(env.TVBOT_TOKEN || "").trim(), bridge = env.ARR_BRIDGE;
   if (!token || !bridge) return null;
   try {

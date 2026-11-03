@@ -11,15 +11,22 @@
 <meta name="apple-mobile-web-app-title" content="Homebase">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Weekly report — Homebase</title>
-<link rel="stylesheet" href="../style.css?v=homebase-rp-1">
+<link rel="stylesheet" href="../style.css?v=homebase-rp-2">
 <link rel="stylesheet" href="../hub.css?v=homebase-push-1">
 <style>
-  .rp-row { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .rp-row { display: flex; align-items: center; row-gap: 8px; gap: 10px; padding: 11px 0; border-top: 1px solid var(--line); font-size: 14px; }
   .rp-row:first-child { border-top: 0; }
   .rp-l { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .rp-r { color: var(--muted); font-size: 13px; white-space: nowrap; }
   .rp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
   .rp-dot.up { background: var(--green); } .rp-dot.down { background: var(--hub-amber); }
+  .rp-sub { display: block; width: 100%; flex-basis: 100%; margin-top: -6px; color: var(--muted); font-size: 12px; }
+  .rp-row { flex-wrap: wrap; }
+  .rp-bar { height: 10px; border-radius: 99px; background: var(--hub-soft-2); overflow: hidden; margin: 4px 0 8px; }
+  .rp-bar i { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+  .rp-link { display: inline-block; margin-top: 8px; font-size: 13px; font-weight: 650; color: var(--accent); text-decoration: none; }
+  .hub-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 760px) { .hub-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .rp-empty { color: var(--muted); font-size: 14px; margin: 4px 0; }
   .rp-grid { display: grid; align-items: start; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
   @media (max-width: 760px) { .rp-grid { grid-template-columns: 1fr; } }
@@ -62,8 +69,10 @@
     <p class="aside" id="rpRange" style="margin:0 0 14px"></p>
     <div class="hub-stats" id="rpStats"></div>
     <div class="rp-grid">
-      <section class="hub-card"><div class="kicker">ARRIVED</div><h3>Most added</h3><div id="rpTop"></div></section>
+      <section class="hub-card"><div class="kicker">ARRIVED</div><h3>New this week</h3><div id="rpNew"></div></section>
+      <section class="hub-card"><div class="kicker">WATCHING</div><h3>What the family watched</h3><div id="rpWatched"></div></section>
       <section class="hub-card"><div class="kicker">AUTOPILOT</div><h3>What it fixed</h3><div id="rpFixes"></div></section>
+      <section class="hub-card"><div class="kicker">STORAGE</div><h3>Media drive</h3><div id="rpDisk"></div></section>
       <section class="hub-card"><div class="kicker">RIGHT NOW</div><h3>Apps</h3><div id="rpServices"></div></section>
     </div>
   </div>
@@ -71,6 +80,6 @@
 </main>
 </div>
 <script src="../hub.js?v=homebase-push-1"></script>
-<script src="../report.js?v=homebase-rp-1"></script>
+<script src="../report.js?v=homebase-rp-2"></script>
 </body>
 </html>

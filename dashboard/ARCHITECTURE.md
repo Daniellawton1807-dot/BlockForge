@@ -30,7 +30,7 @@ All of these except `/api/metrics` need the Homebase session cookie (`functions/
 | `tv/[[path]]` | The TV remote, proxied to tvbot via the bridge. Allowed: GET `api/status`, `api/foryou`, `api/locate`, `img/{id}`; POST `api/key`, `api/type`, `api/seek`, `api/playhere`, `cmd` |
 | `autopilot` | GET rules, last check, log; POST `{action:"run"}` checks now, `{action:"settings", rules}` switches rules |
 | `autopilot/run` | The scheduled run (POST with `x-autopilot-token`, no cookie; the Worker confirms the token) |
-| `report` | GET: last 7 days of imports (Sonarr/Radarr history), Autopilot log counts, media-drive forecast. Read-only |
+| `report` | GET: last 7 days of imports (Sonarr/Radarr history), who watched what (tvbot watchdata), Autopilot log, media-drive forecast and cleanup size. Read-only |
 | `storage` | GET drives, fill-up forecast and suggestions (`?summary=1`: drives + forecast only, for the Overview tile); POST `{action:"delete", confirm:true, items}` removes picked titles with their files |
 | `mum/setup`, `home`, `search`, `request` | Mum's page. Own cookie (`homebase_mum`, path `/api/mum`, ~13 months, renews itself), set once by Daniel's sign-in on her phone; it can't open the rest of Homebase |
 | `metrics` | Glances, public by design (Glances only sees the system disk) |
