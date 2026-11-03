@@ -4,7 +4,7 @@ import { json, loginConfigured, readJsonBody, validRequestOrigin, validSession }
 // the protected TVBOT_TOKEN Pages secret; the browser only ever sees this same-origin route.
 const ARR_BRIDGE_BINDING = "ARR_BRIDGE";
 const ROUTES = {
-  GET: new Set(["api/status", "api/foryou", "api/locate", "api/minecraft", "img"]),
+  GET: new Set(["api/status", "api/foryou", "api/locate", "api/minecraft", "api/sessions", "img"]),
   POST: new Set(["api/key", "api/type", "api/seek", "api/playhere", "api/minecraft", "cmd"])
 };
 

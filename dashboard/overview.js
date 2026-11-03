@@ -143,6 +143,31 @@
       b.append(chips);
     }
   }
+  const METHODS = { DirectPlay: ["Direct play", "good"], DirectStream: ["Direct stream", "info"], Transcode: ["Transcoding", "warn"] };
+  const REASONS = { ContainerNotSupported: "container", VideoCodecNotSupported: "video codec", AudioCodecNotSupported: "audio codec", SubtitleCodecNotSupported: "subtitles", VideoBitrateNotSupported: "bitrate", ContainerBitrateExceedsLimit: "bitrate", AudioChannelsNotSupported: "audio channels", AudioProfileNotSupported: "audio profile", VideoProfileNotSupported: "video profile", VideoLevelNotSupported: "video level", RefFramesNotSupported: "ref frames", DirectPlayError: "playback error" };
+  const mins = s => Math.round(s / 60);
+  async function loadWatching() {
+    const r = await api("/api/tv/api/sessions"), b = body("ovWatch"); b.replaceChildren();
+    if (!r.ok) { b.append(quiet("Couldn't reach Jellyfin.")); $("ovWatchCount").textContent = ""; return; }
+    const list = r.data.sessions || [], heavy = list.filter(s => s.transcode && s.transcode.what.includes("video") && !s.transcode.hw).length;
+    $("ovWatchCount").textContent = list.length ? plural(list.length, "stream") : "";
+    if (!list.length) { b.append(quiet("Nobody's watching Jellyfin right now.")); return; }
+    for (const s of list) {
+      const th = el("span", "ov-thumb"); th.style.backgroundImage = `url("/api/tv/img/${encodeURIComponent(s.id)}")`;
+      const [label, tone] = METHODS[s.method] || [s.method, "info"], t = s.transcode;
+      const badge = el("span", "ov-badge " + tone + (t && t.what.includes("video") && !t.hw ? " heavy" : ""), label);
+      const detail = [s.paused ? "Paused" : null, [s.title, s.subtitle].filter(Boolean).join(" · ")].filter(Boolean).join(" · ");
+      const row = line(detail, `${s.user} · ${s.device || s.client}` + (s.runtime ? ` · ${mins(s.position)} of ${mins(s.runtime)} min` : ""), th);
+      row.classList.add("ov-watch-row"); row.append(badge);
+      if (t) {
+        const why = [...new Set(t.reasons.map(x => REASONS[x] || x.replace(/NotSupported$/, "").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase()))];
+        const note = el("small", "ov-watch-note", `Converting ${t.what.join(" and ")}${t.hw ? " with " + t.hw : " in software"}` + (t.kbps ? ` · ${(t.kbps / 1000).toFixed(1)} Mbps` : "") + (why.length ? ` · because of ${why.join(", ")}` : ""));
+        row.querySelector(".ov-line-txt").append(note);
+      }
+      b.append(row);
+    }
+    if (heavy) { const w = el("div", "ov-warn"); w.append(icon("info"), el("span", null, plural(heavy, "stream") + " " + (heavy === 1 ? "is" : "are") + " transcoding video in software, which can load the CPU")); b.append(w); }
+  }
   async function loadDrives() {
     const r = await api("/api/storage?summary=1");
     if (r.ok) { drives = r.data.drives || []; drives.forecast = r.data.forecast; paintServer(); }
@@ -206,10 +231,10 @@
     const row = el("div", "sh-actions"); row.style.marginTop = "14px"; row.append(test, off); box.append(row);
   }
 
-  function loadPrivate() { loadTvs(); loadDownloads(); loadTonight(); loadMinecraft(); loadDrives(); loadNotify(); }
+  function loadPrivate() { loadTvs(); loadDownloads(); loadTonight(); loadMinecraft(); loadWatching(); loadDrives(); loadNotify(); }
   gate({ message: "Sign in to see your TVs, downloads, tonight's episodes and the Minecraft server.", onReady() {
     loadPrivate();
-    setInterval(() => { if (!document.hidden) { loadTvs(); loadDownloads(); loadMinecraft(); } }, 20000);
+    setInterval(() => { if (!document.hidden) { loadTvs(); loadDownloads(); loadMinecraft(); loadWatching(); } }, 20000);
   } });
   loadMetrics(); loadHealth(); paintServer(); paintApps();
   setInterval(() => { if (!document.hidden) loadMetrics(); }, 15000);
