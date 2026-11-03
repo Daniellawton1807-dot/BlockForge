@@ -10,6 +10,7 @@ No secret values live here or anywhere in this public repo, only the names of Cl
 | `/` | `index.html`, `app.js`, `polish.js`, `style.css` | Overview: Glances metrics, activity feed, app grid |
 | `/media/` | `media/index.html`, `hub-media.js` | Media hub: For You, Coming up, Library, Downloads, Autopilot, search, title sheets |
 | `/media/classic/` | `media/classic/index.html`, `media.js` | The previous media page, kept as a fallback |
+| `/report/` | `report/index.html`, `report.js` | Weekly report: added, Autopilot fixes, disk forecast, app health (`/api/report`, `/api/health`) |
 | `/remote/` | `remote/index.html`, `remote.js` | TV remote: now playing, transport, commands, D-pad/touchpad |
 | `/mum/` | `mum/index.html`, `mum.js`, `mum.css`, manifest + icons | Mum's request page (not linked anywhere), installed on her Samsung as a home-screen app |
 | shared | `hub.js`, `hub.css` | `window.Hub`: sign-in gate, theme, icons, sheet (closes on Back), toast, `api()`, skeletons, rails |
@@ -29,6 +30,7 @@ All of these except `/api/metrics` need the Homebase session cookie (`functions/
 | `tv/[[path]]` | The TV remote, proxied to tvbot via the bridge. Allowed: GET `api/status`, `api/foryou`, `api/locate`, `img/{id}`; POST `api/key`, `api/type`, `api/seek`, `api/playhere`, `cmd` |
 | `autopilot` | GET rules, last check, log; POST `{action:"run"}` checks now, `{action:"settings", rules}` switches rules |
 | `autopilot/run` | The scheduled run (POST with `x-autopilot-token`, no cookie; the Worker confirms the token) |
+| `report` | GET: last 7 days of imports (Sonarr/Radarr history), Autopilot log counts, media-drive forecast. Read-only |
 | `storage` | GET drives, fill-up forecast and suggestions (`?summary=1`: drives + forecast only, for the Overview tile); POST `{action:"delete", confirm:true, items}` removes picked titles with their files |
 | `mum/setup`, `home`, `search`, `request` | Mum's page. Own cookie (`homebase_mum`, path `/api/mum`, ~13 months, renews itself), set once by Daniel's sign-in on her phone; it can't open the rest of Homebase |
 | `metrics` | Glances, public by design (Glances only sees the system disk) |
