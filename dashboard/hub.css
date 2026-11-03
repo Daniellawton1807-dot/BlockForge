@@ -626,6 +626,12 @@ a.hub-btn { text-decoration: none; }
 .ov-app-txt b { display: block; font-size: 14px; }
 .ov-app-txt small { display: block; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 900px) { .ov-glance { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) {
+  .ov-watch-row { flex-wrap: wrap; row-gap: 8px; }
+  .ov-watch-row .ov-line-txt { flex: 1 1 calc(100% - 76px); }
+  .ov-watch-row .ov-line-txt b, .ov-watch-row .ov-line-txt small { white-space: normal; }
+  .ov-watch-row .ov-badge { margin-left: 76px; }
+}
 @media (max-width: 680px) { .ov-summary { font-size: 14px; margin-bottom: 18px; } .ov-apps { grid-template-columns: minmax(0, 1fr); } }
 
 /* manual import sheet */
