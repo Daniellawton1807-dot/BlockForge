@@ -101,6 +101,7 @@
     });
     summary.playing = playing; paintSummary();
   }
+  const left = s => s >= 3600 ? Math.floor(s / 3600) + "h " + Math.round(s % 3600 / 60) + "m left" : Math.max(1, Math.round(s / 60)) + " min left";
   async function loadDownloads() {
     const [d, a] = await Promise.all([api("/api/downloads"), api("/api/autopilot")]);
     const b = body("ovDl"); b.replaceChildren();
@@ -112,7 +113,7 @@
     summary.downloading = active.length; summary.attention = stuck + needs; paintSummary();
     if (!active.length) b.append(quiet(stuck + needs ? "Nothing downloading." : "Nothing downloading. All quiet."));
     for (const i of active.slice(0, 3)) {
-      const row = line(i.label || String(i.name || "").replace(/[._]+/g, " "), i.lifecycle === "importing" ? i.status || "Importing" : Math.round(Number(i.progress) || 0) + "%" + (/paused/i.test(i.status || "") ? " · paused" : ""));
+      const row = line(i.label || String(i.name || "").replace(/[._]+/g, " "), i.lifecycle === "importing" ? i.status || "Importing" : Math.round(Number(i.progress) || 0) + "%" + (/paused/i.test(i.status || "") ? " · paused" : i.etaSeconds > 0 ? " · " + left(i.etaSeconds) : ""));
       if (i.lifecycle === "downloading") { const bl = bar(i.progress); bl.style.marginTop = "6px"; row.querySelector(".ov-line-txt").append(bl); }
       b.append(row);
     }
