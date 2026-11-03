@@ -1,0 +1,72 @@
+/* Homebase "Cinema" look: warm charcoal, amber accent, serif headings, gentle motion.
+   Loaded after style.css and hub.css on every page, so it only re-themes: colours, type and animation. */
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap");
+
+:root {
+  --bg: #110e0c; --panel: #1a1613; --card: #1a1613; --line: #2f2822;
+  --text: #f4ece3; --muted: #b5a798; --accent: #e8a15a; --green: #7ed6a0;
+  --hub-grad: linear-gradient(120deg, #e8a15a, #c4693a);
+  --hub-amber: #f0b45e;
+  --cin-serif: Fraunces, Georgia, "Times New Roman", serif;
+  --cin-ease: cubic-bezier(.2, .8, .2, 1);
+}
+html[data-theme="light"] {
+  --bg: #f7f1e9; --panel: #fffaf4; --card: #fffaf4; --line: #e3d8ca;
+  --text: #2a211b; --muted: #6f6256; --accent: #b8621f; --green: #1f8a57;
+}
+
+body { background: radial-gradient(ellipse at 78% -8%, #3a1f14 0, transparent 46%), radial-gradient(ellipse at 0% 100%, #231710 0, transparent 40%), var(--bg); }
+html[data-theme="light"] body { background: radial-gradient(ellipse at 78% -8%, #f3dcc3 0, transparent 46%), var(--bg); }
+.sidebar { background: #0d0a09; border-color: var(--line); }
+html[data-theme="light"] .sidebar { background: #fbf5ec; }
+.logo { background: linear-gradient(135deg, #e8a15a, #c4693a) !important; color: #110e0c !important; }
+.nav.active { box-shadow: inset 2px 0 var(--accent); }
+.nav:hover, .nav.active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+html[data-theme="light"] .nav:hover, html[data-theme="light"] .nav.active { background: #f3e2cf; color: #4a2b12; }
+.kicker, .nav-title { color: var(--muted); }
+.nav { color: #bfb2a4; }
+.nav:hover, .nav.active { color: #fff; }
+html[data-theme="light"] .nav { color: #6f6256; }
+.nav.active span { color: var(--accent); }
+
+h1, .topbar h1, .hub-head h3, .hub-section-head h3, .hub-card h3, .ov-head h3, .hub-gate h2 { font-family: var(--cin-serif); letter-spacing: -.015em; }
+.topbar h1 { font-size: clamp(28px, 4vw, 38px); }
+
+/* surfaces: flatter, warmer, with a lift on hover */
+.hub-card, .hub-stat, .download-card, .ov-app, .download-login, .hub-gate { background: var(--card); border-color: var(--line); }
+.download-login, .download-card { background-image: none; }
+.hub-card { border-radius: 22px; }
+.hub-card.ov-card:hover, .ov-app:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.hub-btn:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+.hub-btn.primary, .download-login-button { background: var(--accent); color: #110e0c; border-color: transparent; }
+
+/* motion: things rise in once, bars fill, the page glows slowly */
+@keyframes cin-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes cin-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes cin-zoom { from { transform: scale(1) translate(0, 0); } to { transform: scale(1.1) translate(-1.5%, -1%); } }
+.main > *, .hub-section, .ov-glance > *, .hub-stats > *, .ov-apps > * { animation: cin-rise .7s var(--cin-ease) both; }
+.ov-glance > :nth-child(2), .hub-stats > :nth-child(2), .ov-apps > :nth-child(2) { animation-delay: .06s; }
+.ov-glance > :nth-child(3), .hub-stats > :nth-child(3), .ov-apps > :nth-child(3) { animation-delay: .12s; }
+.ov-glance > :nth-child(4), .hub-stats > :nth-child(4), .ov-apps > :nth-child(4) { animation-delay: .18s; }
+.ov-glance > :nth-child(n+5), .hub-stats > :nth-child(n+5), .ov-apps > :nth-child(n+5) { animation-delay: .24s; }
+.hub-bar > i, .hub-bar > span, .ov-bar > i, [class*="bar-fill"], .rp-bar i { transform-origin: left; animation: cin-fill 1.2s var(--cin-ease) .3s both; }
+
+/* Overview hero */
+.cin-hero { position: relative; overflow: hidden; border-radius: 26px; margin: 0 0 22px; min-height: 280px; display: flex; align-items: flex-end; background: #1d1612; isolation: isolate; }
+.cin-hero { --cin-fallback: radial-gradient(ellipse at 70% 30%, #c4693a 0, #6b3322 38%, #2a1710 74%, #110e0c 100%); }
+.cin-hero .bg { position: absolute; inset: -4%; background: var(--cin-fallback) center / cover; z-index: -2; animation: cin-zoom 22s ease-in-out infinite alternate; }
+.cin-hero::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(17,14,12,.1), rgba(17,14,12,.9)), linear-gradient(90deg, rgba(17,14,12,.85) 8%, transparent 70%); }
+.cin-hero .body { padding: 34px; max-width: 640px; color: #f4ece3; }
+.cin-hero .k { font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #e8a15a; }
+.cin-hero h2 { margin: 8px 0 6px; font: 700 clamp(30px, 5vw, 54px)/1.04 var(--cin-serif); letter-spacing: -.02em; }
+.cin-hero p { margin: 0; color: #dccfc1; font-size: 15px; }
+.cin-hero .track { height: 4px; border-radius: 4px; background: rgba(255,255,255,.22); margin: 16px 0 20px; max-width: 420px; overflow: hidden; }
+.cin-hero .track i { display: block; height: 100%; background: #e8a15a; border-radius: 4px; transform-origin: left; animation: cin-fill 1.4s var(--cin-ease) .4s both; }
+.cin-hero .go { display: inline-flex; align-items: center; min-height: 46px; padding: 0 24px; border-radius: 99px; background: #f4ece3; color: #110e0c; font-weight: 650; text-decoration: none; transition: transform .2s; }
+.cin-hero .go:hover { transform: scale(1.04); }
+@media (max-width: 680px) { .cin-hero { min-height: 240px; border-radius: 22px; } .cin-hero .body { padding: 22px; } }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+.side-bottom .server { background: #17120f; border-color: var(--line); }
+html[data-theme="light"] .side-bottom .server { background: #f3e9dc; }
+.side-bottom p { color: var(--muted); }

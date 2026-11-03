@@ -13,6 +13,7 @@ No secret values live here or anywhere in this public repo, only the names of Cl
 | `/report/` | `report/index.html`, `report.js` | Weekly report: added, Autopilot fixes, disk forecast, app health (`/api/report`, `/api/health`) |
 | `/remote/` | `remote/index.html`, `remote.js` | TV remote: now playing, transport, commands, D-pad/touchpad |
 | `/mum/` | `mum/index.html`, `mum.js`, `mum.css`, manifest + icons | Mum's request page (not linked anywhere), installed on her Samsung as a home-screen app |
+| shared | `cinema.css` | The "Cinema" look (warm charcoal, amber accent, serif headings, rise-in animation), loaded after `hub.css`; also the Overview hero (`#ovHero`, filled by `overview.js`) |
 | shared | `hub.js`, `hub.css` | `window.Hub`: sign-in gate, theme, icons, sheet (closes on Back), toast, `api()`, skeletons, rails |
 
 No build step. **Cache busting is manual:** bump the `?v=` on the `<script>`/`<link>` tags in the HTML when you change a JS/CSS file, or browsers keep the old one.

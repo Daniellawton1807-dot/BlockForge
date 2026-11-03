@@ -100,6 +100,18 @@
       b.append(line(TVS[k], p ? (p.paused ? "Paused · " : "") + [p.title, p.subtitle].filter(Boolean).join(" · ") : r.ok ? (r.data.online ? "On, nothing playing" : "Off") : "Couldn't reach it", dot));
     });
     summary.playing = playing; paintSummary();
+    hero(keys, res);
+  }
+  // the big card at the top: what's on a TV right now, else a calm "nothing playing"
+  function hero(keys, res) {
+    const i = res.findIndex(r => r.ok && r.data.playing), p = i >= 0 ? res[i].data.playing : null;
+    $("ovHeroK").textContent = p ? (p.paused ? "Paused" : "Now playing") + " · " + TVS[keys[i]] : "Tonight";
+    $("ovHeroT").textContent = p ? p.title || "Playing" : "Nothing playing";
+    $("ovHeroS").textContent = p ? [p.subtitle, p.runtime > 0 ? left(Math.max(0, p.runtime - p.position)) : ""].filter(Boolean).join(" · ") : "The TVs are idle. Pick something to watch.";
+    const track = $("ovHeroTrack"); track.hidden = !(p && p.runtime > 0);
+    if (!track.hidden) track.firstElementChild.style.width = Math.min(100, Math.round(p.position / p.runtime * 100)) + "%";
+    $("ovHeroGo").textContent = p ? "Open the remote" : "Browse the media hub"; $("ovHeroGo").href = p ? "/remote/" : "/media/";
+    $("ovHeroBg").style.backgroundImage = p ? `url("/api/tv/img/${encodeURIComponent(p.backdrop || p.thumb)}"), var(--cin-fallback)` : "";
   }
   const left = s => s >= 3600 ? Math.floor(s / 3600) + "h " + Math.round(s % 3600 / 60) + "m left" : Math.max(1, Math.round(s / 60)) + " min left";
   async function loadDownloads() {
