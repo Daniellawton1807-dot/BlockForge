@@ -232,6 +232,14 @@
     const row = el("div", "sh-actions"); row.style.marginTop = "14px"; row.append(test, off); box.append(row);
   }
 
+  // the notifications section can be folded away; the choice is remembered on this device
+  function paintNotifyFold() {
+    const hidden = store.get("hb_notify_hidden", "") === "1", btn = $("ovNotifyToggle");
+    $("ovNotifyBody").hidden = hidden; btn.textContent = hidden ? "Show" : "Hide"; btn.setAttribute("aria-expanded", String(!hidden));
+  }
+  $("ovNotifyToggle").onclick = () => { store.set("hb_notify_hidden", store.get("hb_notify_hidden", "") === "1" ? "" : "1"); paintNotifyFold(); };
+  paintNotifyFold();
+
   function loadPrivate() { loadTvs(); loadDownloads(); loadTonight(); loadMinecraft(); loadWatching(); loadDrives(); loadNotify(); }
   gate({ message: "Sign in to see your TVs, downloads, tonight's episodes and the Minecraft server.", onReady() {
     loadPrivate();

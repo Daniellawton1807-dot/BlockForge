@@ -676,3 +676,5 @@ a.hub-btn { text-decoration: none; }
   .fy-hint { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .hub-btn.busy .hub-ico { animation: none; } }
+
+.ov-notify-head { display: flex; align-items: center; gap: 8px; }
