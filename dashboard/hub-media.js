@@ -7,7 +7,7 @@
   const VIEWS = ["foryou", "upcoming", "library", "downloads", "autopilot"];
   let view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : store.get("hb_media_view", "foryou");
   if (!VIEWS.includes(view)) view = "foryou";
-  let services = [], library = [], forYou = null, forYouError = "", recent = null, calendar = null, calendarAt = 0, downloads = null;
+  let services = [], library = [], forYou = null, forYouBusy = false, forYouError = "", recent = null, calendar = null, calendarAt = 0, downloads = null;
   let libFilter = store.get("hb_lib_filter", "all"), libSort = store.get("hb_lib_sort", "added"), upFilter = "all";
   let searching = false, searchTimer, searchSeq = 0, remoteResults = null, remoteError = "";
   let dlTimer = null, spotTimer = null, flashDownload = "", dlShape = "", showDismissedDownloads = false;
@@ -198,7 +198,8 @@
       fresh();
     }
     const picks = forYou.map(f => ({ mediaType: f.type, tmdbId: Number(f.tmdb), title: f.title, year: Number(f.year) || null, overview: f.overview, posterUrl: tmdb(f.poster),
-      backdropUrl: tmdb(f.backdrop, "w1280"), rating: Number(f.rating) || 0, because: f.because || [] })).filter(p => !inLibrary(p));
+      backdropUrl: tmdb(f.backdrop, "w1280"), rating: Number(f.rating) || 0, because: f.because || [], fromForYou: true })).filter(p => !inLibrary(p));
+    v.append(forYouBar());
 
     if (picks.length) v.append(spotlight(picks.filter(p => p.backdropUrl).slice(0, 5)));
     else v.append(note(forYouError ? "Recommendations aren't available" : "Nothing new to suggest", forYouError || "Watch a few things and check back. Picks come from what you've watched lately."));
@@ -224,6 +225,55 @@
       s.append(rail(list.map((p, i) => pickTile(p, i, false)))); v.append(s);
     }
     if (extra.length) { const s = section("PICKED FOR YOU", "More you might like", plural(extra.length, "pick")); s.append(grid(extra, (p, i) => pickTile(p, i, true))); v.append(s); }
+  }
+  function forYouBar() {
+    const bar = el("div", "fy-bar"), left = el("div", "fy-hint", "Open a pick to hide it or mark it watched. Refresh swaps in new ideas.");
+    const refresh = button("Refresh picks", "small", async () => {
+      if (forYouBusy) return; forYouBusy = true; refresh.disabled = true; refresh.classList.add("busy"); refresh.lastChild.textContent = "Finding new picks…";
+      const r = await api("/api/tv/api/foryou?shuffle=1");
+      forYouBusy = false;
+      if (!r.ok || !Array.isArray(r.data)) { toast(errorText(r, "Couldn't refresh your picks."), "error"); refresh.disabled = false; refresh.classList.remove("busy"); refresh.lastChild.textContent = "Refresh picks"; return; }
+      forYou = r.data; forYouError = ""; if (view === "foryou" && !searching) { draw(); scrollTo({ top: 0, behavior: "smooth" }); }
+    }, "refresh");
+    const manage = button("Hidden & watched", "small ghost", openForYouMarks, "list");
+    const right = el("div", "fy-btns"); right.append(manage, refresh); bar.append(left, right); return bar;
+  }
+  // send a verdict on one pick to tvbot, then drop it from the page
+  async function markPick(p, action, done) {
+    const r = await api("/api/tv/api/feedback", { method: "POST", body: { action, tmdb: String(p.tmdbId), type: p.mediaType, title: p.title } });
+    if (!r.ok) { toast(errorText(r, "Couldn't save that."), "error"); return false; }
+    if (forYou) forYou = forYou.filter(f => Number(f.tmdb) !== Number(p.tmdbId));
+    done?.(); if (view === "foryou" && !searching) draw();
+    toast(action === "watched" ? `Marked ${p.title} as watched. Picks will lean on it.` : `Won't recommend ${p.title} again.`, { action: { label: "Undo", onClick: async () => {
+      await api("/api/tv/api/feedback", { method: "POST", body: { action: "undo", tmdb: String(p.tmdbId), type: p.mediaType, title: p.title } });
+      forYou = null; if (view === "foryou" && !searching) draw();
+    } } });
+    return true;
+  }
+  async function openForYouMarks() {
+    let box;
+    openSheet(body => { body.append(el("div", "sh-content")); box = body.firstChild; box.append(el("div", "kicker", "FOR YOU"), el("h2", null, "Hidden & watched"), skeleton("list", 3)); });
+    const r = await api("/api/tv/api/feedback");
+    if (!box.isConnected) return;
+    box.replaceChildren(el("div", "kicker", "FOR YOU"), el("h2", null, "Hidden & watched"));
+    if (!r.ok) { box.append(note("Couldn't load your list", errorText(r, "tvbot didn't answer."))); return; }
+    const groups = [["Marked as watched", "These shape your picks.", r.data.watched || []], ["Never recommend", "Hidden from For You.", r.data.hidden || []]];
+    if (!groups.some(g => g[2].length)) box.append(note("Nothing yet", "Open a pick in For You to hide it or mark it as watched."));
+    for (const [title, sub, list] of groups) {
+      if (!list.length) continue;
+      const s = sheetSection(title.toUpperCase(), el("span", "aside", sub)); s.classList.add("fy-marks");
+      for (const m of list) {
+        const row = el("div", "fy-mark"); row.append(el("span", null, m.title || (m.type + " " + m.tmdb)));
+        row.append(button("Undo", "small ghost", async e => {
+          const b = e.currentTarget; b.disabled = true;
+          const x = await api("/api/tv/api/feedback", { method: "POST", body: { action: "undo", tmdb: m.tmdb, type: m.type, title: m.title } });
+          if (!x.ok) { b.disabled = false; toast(errorText(x, "Couldn't undo that."), "error"); return; }
+          row.remove(); forYou = null; if (view === "foryou" && !searching) draw();
+        }));
+        s.append(row);
+      }
+      box.append(s);
+    }
   }
   const pickTile = (p, i, why) => tile({ poster: p.posterUrl, title: p.title, sub: why && p.because[0] ? "Because you watched " + p.because[0] : [p.year, typeName(p.mediaType)].filter(Boolean).join(" · "),
     rating: p.rating >= 6 ? p.rating : null, onClick: () => openRequest(p) }, i);
@@ -781,6 +831,11 @@
         pills: [item.year && pill(String(item.year)), item.rating && pill(item.rating.toFixed(1), "", "star"), ...(item.genres || []).slice(0, 2).map(g => pill(g)), pill("Not in your library", "warn")] });
       if (item.because?.length) { const k = el("div", "kicker", "Because you watched " + item.because.join(", ")); k.style.marginBottom = "8px"; content.append(k); }
       content.append(overview(item.overview));
+      if (item.fromForYou) {
+        const acts = el("div", "fy-verdict");
+        acts.append(button("Already watched", "small", () => markPick(item, "watched", closeSheet), "check"), button("Don't recommend again", "small ghost", () => markPick(item, "hide", closeSheet), "close"));
+        content.append(acts);
+      }
       if (!choices.length) { const n = note(tv ? "No Sonarr is connected" : "Radarr isn't connected", "Homebase can't add this until it's back."); n.style.marginTop = "16px"; content.append(n); return; }
 
       const pick = { serviceKey: (tv ? choices.find(s => s.key === "sonarr-daniel") : null)?.key || choices[0].key, monitorType: "all" };
