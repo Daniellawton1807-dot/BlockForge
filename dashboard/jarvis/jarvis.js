@@ -70,6 +70,7 @@
     if (v.status) setStatus(v.status);
     if (v.log) { log = v.log; if (sheetKind === "log") renderSheet(); }
     if (v.address) address = v.address;
+    loadAcks();
     setMode(v.mode || "idle");
     setPending(v.pending);
   }
@@ -133,8 +134,8 @@
       case "action":
         pushLog(e);
         if (e.tier >= 2) openAction(e);
-        // only the device that gave the command speaks, and only if the action is taking a moment
-        if (e.tier >= 2 && turnOpen && !ackTimer) ackTimer = setTimeout(() => { if (turnOpen) say("Right away, " + address + "."); }, 1200);
+        // only the device that gave the command speaks, and it speaks before the action happens
+        if (e.tier >= 2 && turnOpen) acknowledge();
         break;
       case "step": pushLog(e); addStep(e.text); break;
       case "result": pushLog(e); if (e.tier >= 2 && !e.needs_confirmation) finishAction(e); break;
@@ -156,7 +157,25 @@
   const SILENCE = "data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiJrDCQBTcu3UrAIwUdkRgQbFAZC1CQEwTJ9mjRvBA4UOLD8nKVOWfh+UlK3z/177OXrfOdKl7pyn3Xf//WreyTRUoAWgBgkOAGbZHBgG1OF6zM82DWbZaUmMBptgQhGjsyYqc9ae9XFz280948NMBWInljyzsNRFLPWdnZGWrddDsjK1unuSrVN9jJsK8KuQtQCtMBjCEtImISdNKJOopIpBFpNSMbIHCSRpRR5iakjTiyzLhchUUBwCgyKiweBv/7UsQbg8isVNoMPMjAAAA0gAAABEVFGmgqK////9bP/6XCykxBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqq";
   const player = new Audio();
   let speaking = false, voiceOn = store.get("jarvis.voice") !== "off", unlocked = false, speechQueue = [], speechToken = 0;
-  let address = "sir", ackTimer = null, turnOpen = false;
+  let address = "sir", turnOpen = false, acked = false, ackClips = [], ackNext = 0, ackLoading = false;
+  const ACK_LINES = ["Right away", "Certainly", "At once"];
+  /* Clips fetched ahead, so the acknowledgement plays with no trip to the server. They're cached there, so this costs nothing after the first time. */
+  async function loadAcks() {
+    if (ackLoading || ackClips.length || !voiceOn) return;
+    ackLoading = true;
+    for (const line of ACK_LINES) {
+      const r = await api("tts", { text: line + ", " + address + "." });
+      if (!r.ok) return;
+      const audio = await fetch("/api/jarvis/tts/" + r.data.id).catch(() => null);
+      if (audio && audio.ok) ackClips.push(URL.createObjectURL(await audio.blob()));
+    }
+  }
+  function acknowledge() {
+    if (acked || !voiceOn || !ackClips.length) return;
+    acked = true;
+    speechQueue.unshift({ clip: ackClips[ackNext++ % ackClips.length] });
+    if (!speaking) nextSpeech();
+  }
   function unlockAudio() {
     if (unlocked || speaking) return;
     unlocked = true;
@@ -179,8 +198,9 @@
     setSpeaking(false);
   }
   async function nextSpeech() {
-    const text = speechQueue.shift();
-    if (!text) {
+    const item = speechQueue.shift();
+    const text = item && item.clip ? null : item;
+    if (!item) {
       setSpeaking(false);
       // a spoken question gets a spoken answer: listen once for yes or no
       if (pendingTool && spokeLast) startListening();
@@ -188,6 +208,12 @@
     }
     setSpeaking(true);
     const token = ++speechToken;
+    if (item.clip) {
+      player.onended = player.onerror = () => { if (token === speechToken) nextSpeech(); };
+      player.src = item.clip;
+      player.play().catch(() => { if (token === speechToken) nextSpeech(); });
+      return;
+    }
     const r = await api("tts", { text });
     if (token !== speechToken) return;
     if (!r.ok) return browserVoice(text, token, r.data.error);
@@ -228,8 +254,8 @@
     if (r.ok) say(r.data.text);
     else $("said").textContent = r.data.error || "That didn't go through.";
   }
-  function openTurn() { turnOpen = true; clearTimeout(ackTimer); ackTimer = null; }
-  function closeTurn() { turnOpen = false; clearTimeout(ackTimer); ackTimer = null; }
+  function openTurn() { turnOpen = true; acked = false; }
+  function closeTurn() { turnOpen = false; }
   $("confirmYes").addEventListener("click", () => answer(true));
   $("confirmNo").addEventListener("click", () => answer(false));
 
@@ -344,7 +370,7 @@
      The wake word models run on this device. Audio only leaves it as a recorded command, after the wake word or a tap on the mic.
      Browsers stop the mic when the tab is hidden or the phone locks, so hands-free needs the page open and the screen on. */
   // In 80 ms blocks. Detection lags the words, so about two seconds before it are kept, or "Hey Jarvis, what's the weather" would lose its start.
-  const PREROLL_BLOCKS = 28, REARM_BLOCKS = 6, QUICK_BLOCKS = 12, END_SILENCE_BLOCKS = 10, NO_SPEECH_BLOCKS = 62, MAX_BLOCKS = 150, MIN_SPEECH_BLOCKS = 3;
+  const PREROLL_BLOCKS = 28, REARM_BLOCKS = 6, QUICK_BLOCKS = 12, END_SILENCE_BLOCKS = 8, NO_SPEECH_BLOCKS = 62, MAX_BLOCKS = 150, MIN_SPEECH_BLOCKS = 3;
   const WAKE_COOLDOWN_MS = 2500, SPEECH_FLOOR = 0.012, SPEECH_OVER_NOISE = 3, NOISE_CAP = 0.05;
   const WAKE_WORD = /\b(?:j[ae]rv[iu]s|javis)\b[\s,.!?:;-]*/ig;
   const JUST_STOP = /^(stop|be quiet|quiet|shut up|never mind|nevermind|cancel)\W*$/i;
