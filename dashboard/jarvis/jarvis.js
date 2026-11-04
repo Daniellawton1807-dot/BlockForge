@@ -930,8 +930,8 @@
     let stream, ctx;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
-      ctx = new AudioContext({ sampleRate: 16000 });
-      await ctx.audioWorklet.addModule("wake-capture.js?v=1");
+      ctx = new AudioContext();  // the device's own rate: forcing 16 kHz can restart its audio hardware, which you can hear
+      await ctx.audioWorklet.addModule("wake-capture.js?v=2");
       const node = new AudioWorkletNode(ctx, "wake-capture", { numberOfOutputs: 0 });
       ctx.createMediaStreamSource(stream).connect(node);
       node.port.onmessage = e => onBlock(e.data);
