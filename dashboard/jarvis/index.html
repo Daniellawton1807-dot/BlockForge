@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#020c13">
+<meta name="robots" content="noindex">
+<title>J.A.R.V.I.S.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="jarvis.css?v=1">
+</head>
+<body data-mode="idle">
+
+<section id="gate" class="gate" hidden>
+  <form id="gateForm" class="gate-card">
+    <h1>J.A.R.V.I.S.</h1>
+    <p id="gateNote" class="gate-note" role="status">Authenticating</p>
+    <div id="loginFields" hidden>
+      <label>Homebase username<input id="user" autocomplete="username"></label>
+      <label>Password<input id="pass" type="password" autocomplete="current-password"></label>
+    </div>
+    <div id="pinFields" hidden>
+      <label>Jarvis PIN<input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="12"></label>
+    </div>
+    <button id="gateGo" type="submit">Continue</button>
+  </form>
+</section>
+
+<div id="app" class="app" hidden>
+  <header class="head">
+    <div class="brand">
+      <small>VAULT / HOME SERVER</small>
+      <h1>J.A.R.V.I.S.</h1>
+      <small>PERSONAL COMMAND SYSTEM</small>
+    </div>
+    <div class="link"><i id="linkDot"></i><span id="linkText">CONNECTING</span></div>
+    <div class="clock"><b id="clock">--:--</b><small id="date"></small></div>
+  </header>
+
+  <main class="hud">
+    <div class="col left">
+      <section class="panel"><h2>COMPUTE<em>01</em></h2>
+        <div class="row-big"><b id="cpu">--</b><small>CPU LOAD</small></div>
+        <svg class="spark" id="cpuSpark" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><polyline/></svg>
+        <small class="sub">PROCESSOR ACTIVITY / LIVE</small>
+      </section>
+      <section class="panel"><h2>MEMORY<em>02</em></h2>
+        <div class="ringrow"><div class="ring" id="memRing"><svg viewBox="0 0 60 60"><circle class="t" cx="30" cy="30" r="25"/><circle class="v" cx="30" cy="30" r="25" pathLength="100"/></svg><span></span></div>
+          <div><b id="memUsed">--</b><small id="memOf"></small></div></div>
+      </section>
+      <section class="panel"><h2>STORAGE<em>03</em></h2>
+        <div class="ringrow"><div class="ring" id="diskRing"><svg viewBox="0 0 60 60"><circle class="t" cx="30" cy="30" r="25"/><circle class="v" cx="30" cy="30" r="25" pathLength="100"/></svg><span></span></div>
+          <div><b id="diskFree">--</b><small>GIB FREE / SYSTEM DISK</small></div></div>
+      </section>
+    </div>
+
+    <div class="core">
+      <div class="core-title">SYSTEM REACTOR</div>
+      <div class="core-sub" id="coreSub">Awaiting telemetry</div>
+      <div class="reactor" aria-hidden="true">
+        <svg viewBox="0 0 400 400">
+          <g class="brackets"><path d="M60 40H22V22M340 40h38V22M60 360H22v18M340 360h38v18" transform="translate(0 0)"/></g>
+          <g class="ticks" id="ticks"></g>
+          <circle class="r r0" cx="200" cy="200" r="168"/>
+          <g class="spin s1"><circle class="arc a1" cx="200" cy="200" r="156" pathLength="360" stroke-dasharray="70 40 26 224"/></g>
+          <g class="spin s2"><circle class="arc a2" cx="200" cy="200" r="134" pathLength="360" stroke-dasharray="24 60 90 186"/></g>
+          <g class="spin s3"><circle class="arc a3" cx="200" cy="200" r="116" pathLength="360" stroke-dasharray="110 30 20 200"/></g>
+          <circle class="r r1" cx="200" cy="200" r="104"/>
+          <circle class="face" cx="200" cy="200" r="100"/>
+          <circle class="load" id="loadArc" cx="200" cy="200" r="145" pathLength="100" stroke-dasharray="0 100" transform="rotate(-90 200 200)"/>
+        </svg>
+        <div class="reactor-read">
+          <small id="modeLabel">COMPUTE ACTIVITY</small>
+          <div class="big"><b id="coreCpu">--</b><i>%</i></div>
+          <hr>
+          <small>PROCESSOR LOAD</small>
+          <small class="amber" id="coreTemp"></small>
+        </div>
+      </div>
+      <div class="telemetry" id="telemetry">TELEMETRY / CONNECTING</div>
+      <p class="said" id="said" role="status" aria-live="polite"></p>
+    </div>
+
+    <div class="col right">
+      <section class="panel"><h2>MINECRAFT<em>04</em></h2>
+        <div class="ringrow"><div class="ring amber" id="mcRing"><svg viewBox="0 0 60 60"><circle class="t" cx="30" cy="30" r="25"/><circle class="v" cx="30" cy="30" r="25" pathLength="100"/></svg><span></span></div>
+          <div><b class="amber-text" id="mcState">--</b><small id="mcWho">MAIN WORLD</small></div></div>
+      </section>
+      <section class="panel"><h2>NETWORK I/O<em>05</em></h2>
+        <div class="row-big"><b id="netDown">--</b><small>KIB/S DOWN</small></div>
+        <svg class="spark" id="netSpark" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><polyline/></svg>
+        <div class="sub split"><span id="netUp"></span><span class="green" id="netName"></span></div>
+      </section>
+      <section class="panel"><h2>SESSION<em>06</em></h2>
+        <div class="row-big"><b id="uptime">--</b></div>
+        <small class="sub">UPTIME / HOME SERVER</small>
+      </section>
+    </div>
+  </main>
+
+  <nav class="dock">
+    <button data-sheet="tvs"><span><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/></svg></span><b>TVS</b><small id="dockTv">Now playing</small></button>
+    <button data-sheet="minecraft"><span><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></span><b>MINECRAFT</b><small>Server status</small></button>
+    <button data-sheet="log"><span><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg></span><b>ACTIVITY</b><small>Every action</small></button>
+    <button id="signOut"><span><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg></span><b>LOCK</b><small>Ask for the PIN</small></button>
+  </nav>
+
+  <form class="command" id="commandForm">
+    <input id="command" autocomplete="off" maxlength="500" placeholder="Give Jarvis a command" aria-label="Command">
+    <button type="submit">SEND</button>
+  </form>
+</div>
+
+<aside id="sheet" class="sheet" hidden>
+  <header><h2 id="sheetTitle"></h2><button id="sheetClose" aria-label="Close">×</button></header>
+  <div id="sheetBody"></div>
+</aside>
+
+<div id="confirm" class="confirm" hidden role="alertdialog" aria-labelledby="confirmText">
+  <div>
+    <h2>CONFIRMATION REQUIRED</h2>
+    <p id="confirmText"></p>
+    <div class="confirm-go"><button id="confirmNo">CANCEL</button><button id="confirmYes" class="danger">PROCEED</button></div>
+  </div>
+</div>
+
+<script src="jarvis.js?v=1"></script>
+</body>
+</html>

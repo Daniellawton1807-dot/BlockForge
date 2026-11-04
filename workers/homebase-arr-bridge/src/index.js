@@ -50,6 +50,33 @@ async function autopilot(request, env, path) {
   return json({ error: "That autopilot operation is not supported." }, 400);
 }
 
+// Jarvis: the Pages Function has already checked the Homebase sign-in. Only this Worker holds JARVIS_TOKEN.
+const JARVIS_PATHS = new RegExp("^(state|events|pin|chat|confirm|img/[A-Za-z0-9]{1,64})$");
+async function jarvis(request, env, path) {
+  const method = request.method.toUpperCase();
+  if (!["GET", "POST"].includes(method)) return json({ error: "Method not allowed." }, 405);
+  if (!JARVIS_PATHS.test(path)) return json({ error: "Not available." }, 404);
+  if (!env.JARVIS_TOKEN || !env.VPC_JARVIS) return json({ error: "Jarvis is not set up on the bridge." }, 503);
+  const body = method === "POST" ? await request.arrayBuffer() : undefined;
+  if (body && body.byteLength > 16384) return json({ error: "Request body is too large." }, 413);
+  const headers = new Headers({
+    "x-jarvis-token": env.JARVIS_TOKEN,
+    "x-jarvis-session": request.headers.get("x-jarvis-session") || "",
+    "accept": request.headers.get("accept") || "application/json"
+  });
+  if (body) headers.set("content-type", "application/json");
+  let upstream;
+  try {
+    upstream = await env.VPC_JARVIS.fetch(new Request("http://192.168.8.150:8770/api/" + path, { method, headers, body }));
+  } catch {
+    return json({ error: "Jarvis is unavailable." }, 503);
+  }
+  const out = new Headers({ "cache-control": upstream.headers.get("cache-control") || "no-store" });
+  const type = upstream.headers.get("content-type");
+  if (type) out.set("content-type", type);
+  return new Response(upstream.body, { status: upstream.status, headers: out });
+}
+
 export default {
   async scheduled(event, env, ctx) {
     if (!env.AUTOPILOT_TOKEN) return;
@@ -66,6 +93,9 @@ export default {
     const method = request.method.toUpperCase();
     if (request.headers.get("x-homebase-service") === "push") {
       return push(request, env, new URL(request.url).pathname.replace(/^\/+/, ""));
+    }
+    if (request.headers.get("x-homebase-service") === "jarvis") {
+      return jarvis(request, env, new URL(request.url).pathname.replace(/^\/+/, ""));
     }
     if (request.headers.get("x-homebase-service") === "autopilot") {
       return autopilot(request, env, new URL(request.url).pathname.replace(/^\/+/, ""));

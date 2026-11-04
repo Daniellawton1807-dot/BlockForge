@@ -13,6 +13,7 @@ No secret values live here or anywhere in this public repo, only the names of Cl
 | `/report/` | `report/index.html`, `report.js` | Weekly report: added, Autopilot fixes, disk forecast, app health (`/api/report`, `/api/health`) |
 | `/remote/` | `remote/index.html`, `remote.js` | TV remote: now playing, transport, commands, D-pad/touchpad |
 | `/mum/` | `mum/index.html`, `mum.js`, `mum.css`, manifest + icons | Mum's request page (not linked anywhere), installed on her Samsung as a home-screen app |
+| `/jarvis/` | `jarvis/index.html`, `jarvis.js`, `jarvis.css` | Jarvis, Daniel's voice assistant. Its own look and own app, deliberately not linked from the nav |
 | shared | `cinema.css` | The "Cinema" look (warm charcoal, amber accent, serif headings, rise-in animation), loaded after `hub.css`; also the Overview hero (`#ovHero`, filled by `overview.js`) |
 | shared | `hub.js`, `hub.css` | `window.Hub`: sign-in gate, theme, icons, sheet (closes on Back), toast, `api()`, skeletons, rails |
 
@@ -34,6 +35,7 @@ All of these except `/api/metrics` need the Homebase session cookie (`functions/
 | `report` | GET: last 7 days of imports (Sonarr/Radarr history), who watched what (tvbot watchdata), Autopilot log, media-drive forecast and cleanup size. Read-only |
 | `storage` | GET drives, fill-up forecast and suggestions (`?summary=1`: drives + forecast only, for the Overview tile); POST `{action:"delete", confirm:true, items}` removes picked titles with their files |
 | `mum/setup`, `home`, `search`, `request` | Mum's page. Own cookie (`homebase_mum`, path `/api/mum`, ~13 months, renews itself), set once by Daniel's sign-in on her phone; it can't open the rest of Homebase |
+| `jarvis/[[path]]` | Jarvis's API, via the bridge (`x-homebase-service: jarvis`). Streams `events`. Jarvis also needs its own PIN |
 | `metrics` | Glances, public by design (Glances only sees the system disk) |
 
 ## The private bridge
@@ -47,6 +49,7 @@ Home services are never exposed to the internet for Homebase. Pages calls the Wo
 | `VPC_SONARR_DANIEL` / `_MUM` / `_EXTRA` | Sonarr | 8989 / 8990 / 8991 |
 | `VPC_RADARR` | Radarr | 7878 |
 | `VPC_TVBOT` (`homebase-tvbot`) | tvbot | 8765 |
+| `VPC_JARVIS` (`homebase-jarvis`) | Jarvis | 8770 |
 
 The Worker also has a KV namespace `AUTOPILOT` (`homebase-autopilot`) and a cron trigger every 15 minutes, see Autopilot below.
 
@@ -60,6 +63,8 @@ cd workers/homebase-arr-bridge && npx wrangler deploy   # needs CLOUDFLARE_API_T
 
 Pages itself deploys automatically from `main` (branches get preview URLs, but previews have no secrets,
 so sign-in doesn't work there).
+
+Jarvis's code is on the server in `~/vault-claude/jarvis` (see `PROGRESS.md` there), not in this repo. Its token is the Worker secret `JARVIS_TOKEN`, so it isn't a Pages secret.
 
 ## Cloudflare secrets (Pages, production)
 

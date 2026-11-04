@@ -32,3 +32,8 @@ service_id = "01a15919-2937-76b2-a245-3f1dfc725909"
 [[vpc_services]]
 binding = "VPC_TVBOT"
 service_id = "01a1891d-e23e-7202-9f78-5112942ddb45"
+
+# Jarvis on the server, port 8770 (Workers VPC service "homebase-jarvis"; secret JARVIS_TOKEN).
+[[vpc_services]]
+binding = "VPC_JARVIS"
+service_id = "01a1a6c0-cf6a-7713-b01f-9039650edbef"
