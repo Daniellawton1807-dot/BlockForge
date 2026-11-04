@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="jarvis.css?v=6">
+<link rel="stylesheet" href="jarvis.css?v=7">
 </head>
 <body data-mode="idle">
 
@@ -28,6 +28,10 @@
   </form>
 </section>
 
+<div id="ambient" class="ambient" aria-hidden="true"></div>
+<div id="sweep" class="sweep" aria-hidden="true"></div>
+<div id="toast" class="toast" hidden role="status"></div>
+
 <div id="app" class="app" hidden>
   <header class="head">
     <div class="brand">
@@ -36,6 +40,7 @@
       <small>PERSONAL COMMAND SYSTEM</small>
     </div>
     <div class="link"><i id="linkDot"></i><span id="linkText">CONNECTING</span></div>
+    <div class="mini" id="mini" aria-hidden="true"></div>
     <div class="clock"><b id="clock">--:--</b><small id="date"></small></div>
   </header>
 
@@ -132,6 +137,6 @@
   </div>
 </div>
 
-<script src="jarvis.js?v=10"></script>
+<script src="jarvis.js?v=11"></script>
 </body>
 </html>

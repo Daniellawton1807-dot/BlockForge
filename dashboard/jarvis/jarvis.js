@@ -73,9 +73,11 @@
     loadAcks();
     setMode(v.mode || "idle");
     setPending(v.pending);
-    if (v.view && !$("stage").childElementCount) renderView(v.view);
+    // only a view this page hasn't seen, or closing one would have it come back on the next reconnect
+    if (v.view && v.view_at !== seenView) { seenView = v.view_at; renderView(v.view); }
   }
 
+  let seenView = null;
   function stopLive() { if (abort) abort.abort(); abort = null; clearInterval(pollTimer); pollTimer = null; setLink(false); }
 
   /* Live events over a streamed fetch (EventSource can't send the session header). If the stream can't hold, poll instead. */
@@ -140,13 +142,18 @@
         break;
       case "step": pushLog(e); addStep(e.text); break;
       case "result": pushLog(e); break;
+      case "web": webLive(e); break;
       case "wait": if (turnOpen) say("One moment, " + address + "."); break;
       case "timer": pushLog(e); $("said").textContent = e.text; say(e.text); break;
     }
   }
   function showReply(r) {
     const type = r.view && r.view.type;
-    $("said").textContent = type === "notice" || type === "error" ? "" : r.text;
+    seenView = r.view_at || seenView;
+    $("said").textContent = ["notice", "error", "web", "media", "home"].includes(type) ? "" : r.text;
+    $("stage").classList.remove("stale");
+    if (type !== "notice") hideToast();
+    if (!r.view && r.awaiting_confirmation) return;  // a question stays over whatever's on screen
     renderView(r.view);
   }
   function pushLog(e) { log.push(e); if (log.length > 100) log.shift(); if (sheetKind === "log") renderSheet(); }
@@ -207,7 +214,8 @@
   }
   async function nextSpeech() {
     const item = speechQueue.shift();
-    const text = item && item.clip ? null : item;
+    const text = item && item.clip ? null : item && item.text ? item.text : item;
+    if (item && item.before) item.before();
     if (!item) {
       setSpeaking(false);
       // a spoken command that ends in a question gets a spoken answer: listen by itself
@@ -269,6 +277,10 @@
     askedBack = /\?\s*$/.test(data.text || "");
     if (data.quiet && acked) return;
     say(data.text);
+    if (data.view && data.view.type === "web" && data.view.mode === "walk" && voiceOn) {
+      data.view.points.forEach((p, i) => { speechQueue.push({ text: p.text, before: () => showPoint(i) }); });
+      if (!speaking) nextSpeech();
+    }
     if (!voiceOn && spokeLast && (askedBack || pendingTool || data.awaiting_confirmation)) { askedBack = false; startListening(); }
   }
   $("confirmYes").addEventListener("click", () => answer(true));
@@ -311,6 +323,7 @@
         push(netHistory, s.network.down); spark("netSpark", netHistory);
       }
       $("uptime").textContent = s.uptime || "--";
+      if (s.memory && s.storage) $("mini").textContent = "CPU " + num(s.cpu) + "%   MEM " + num(s.memory.percent) + "%   DISK " + num(s.storage.percent) + "%";
     }
     const mc = status.minecraft;
     if (mc) {
@@ -363,44 +376,107 @@
     }
   }
 
-  /* The response stage: each reply says what it wants shown, and this draws it. Text only, never HTML from data. */
-  let noticeTimer = null;
-  function clearStage() {
-    clearTimeout(noticeTimer);
+  /* Scenes. Each reply says what it wants shown, and the whole page rearranges for it: the side panels slide out, the reactor flies to
+     wherever that scene leaves room, and the content takes the page. Text only, never HTML from data. */
+  const SCENES = { report: "report", weather: "weather", media: "cinema", options: "wall", table: "reading", sections: "reading", suggestions: "reading", error: "alert", web: "web" };
+  const CALM = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const HOME_AFTER_MS = 300000;
+  let noticeTimer = null, sceneTimer = null, cineTimer = null, webState = null, walkTimer = null, ambientKey = "";
+
+  function setScene(name) {
+    const body = document.body, was = body.dataset.scene || "";
+    if (was === (name || "")) return;
+    const reactor = document.querySelector(".reactor"), from = reactor.getBoundingClientRect();
+    if (name) body.dataset.scene = name; else delete body.dataset.scene;
+    const to = reactor.getBoundingClientRect();
+    if (CALM.matches || !from.width || !to.width) return;
+    // the reactor really travels: from where it was to wherever this scene puts it
+    reactor.animate([{ transform: `translate(${from.left - to.left}px,${from.top - to.top}px) scale(${from.width / to.width})` }, { transform: "none" }], { duration: 800, easing: "cubic-bezier(.2,.9,.25,1)" });
+    $("sweep").animate([{ top: "0", opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 0.7, offset: 0.8 }, { top: "100%", opacity: 0 }], { duration: 800, easing: "ease-in-out" });
+  }
+  function keepScene() {
+    clearTimeout(sceneTimer);
+    if (document.body.dataset.scene) sceneTimer = setTimeout(() => { if (speaking || recording) keepScene(); else goHome(); }, HOME_AFTER_MS);
+  }
+  document.addEventListener("pointerdown", () => keepScene());
+  function emptyStage() {
+    clearInterval(cineTimer); clearInterval(walkTimer);
+    webState = null;
     const stage = $("stage");
     stage.hidden = true; stage.replaceChildren(); stage.className = "stage";
-    document.body.classList.remove("staged");
   }
-  function openStage(title, kind) {
-    clearStage();
+  function goHome() {
+    emptyStage(); setAmbient(); setScene(null);
+    clearTimeout(sceneTimer);
+  }
+  function openStage(title, scene) {
+    emptyStage();
     const stage = $("stage");
-    stage.hidden = false; document.body.classList.add("staged");
-    if (kind) stage.classList.add("is-" + kind);
+    stage.hidden = false;
+    setScene(scene);
     if (title !== null) stage.append(stageHead(title));
+    keepScene();
     return stage;
   }
   function stageHead(title) {
     const head = el("div", "stage-head");
     head.append(el("h3", "", title));
     const close = el("button", "stage-close", "×");
-    close.type = "button"; close.setAttribute("aria-label", "Close"); close.addEventListener("click", clearStage);
+    close.type = "button"; close.setAttribute("aria-label", "Close"); close.addEventListener("click", () => { $("said").textContent = ""; goHome(); });
     head.append(close);
     return head;
   }
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && $("sheet").hidden && $("confirm").hidden) goHome(); });
+
+  /* What's behind the page: a title's backdrop, or the sky */
+  function setAmbient(kind, key) {
+    const box = $("ambient");
+    if (ambientKey === (key || "") && key) return;
+    ambientKey = key || "";
+    if (!kind) { box.className = "ambient"; setTimeout(() => { if (!ambientKey) box.replaceChildren(); }, 700); return; }
+    box.className = "ambient on " + kind;
+    return box;
+  }
+  async function setBackdrop(id) {
+    if (!id) return;
+    const key = "B" + id;
+    const box = setAmbient("backdrop", key);
+    if (!box) return;
+    const res = await fetch("/api/jarvis/img/" + encodeURIComponent(key), { headers: { "x-jarvis-session": session } }).catch(() => null);
+    if (!res || !res.ok || ambientKey !== key) return;
+    const layer = el("div", "backdrop");
+    layer.style.backgroundImage = `url(${URL.createObjectURL(await res.blob())})`;
+    while (box.childElementCount > 1) box.firstElementChild.remove();
+    box.append(layer);
+  }
+  function setSky(kind, night) {
+    const box = setAmbient("sky k-" + kind + (night ? " night" : ""), "sky-" + kind + night);
+    if (box) { box.replaceChildren(); ["cloud c1", "cloud c2", "cloud c3", "fall"].forEach(c => box.append(el("i", c))); }
+  }
+
   async function loadImage(img, id) {
     const res = await fetch("/api/jarvis/img/" + encodeURIComponent(id), { headers: { "x-jarvis-session": session } }).catch(() => null);
     if (res && res.ok) img.src = URL.createObjectURL(await res.blob()); else img.remove();
   }
   const poster = (id, alt) => { const img = el("img"); img.alt = alt || ""; loadImage(img, id); return img; };
   const STATES = { good: ["✓", "Healthy"], warn: ["!", "Watch"], bad: ["✕", "Problem"] };
+  const RING = '<svg viewBox="0 0 60 60" aria-hidden="true"><circle class="t" cx="30" cy="30" r="25"/><circle class="v" cx="30" cy="30" r="25" pathLength="100"/></svg>';
 
   function drawTile(c, i) {
     const t = el("div", "tile " + (c.state || ""));
-    t.style.animationDelay = i * 40 + "ms";
-    t.append(el("small", "", c.label), el("b", "", c.value));
-    if (c.detail) t.append(el("span", "more", c.detail));
-    if (typeof c.percent === "number") { const m = el("div", "meter"), f = el("i"); f.style.width = Math.max(0, Math.min(100, c.percent)) + "%"; m.append(f); t.append(m); }
-    if (STATES[c.state] && c.state !== "good") { const p = el("span", "pill " + c.state); p.textContent = STATES[c.state][0] + " " + STATES[c.state][1]; t.append(p); }
+    t.style.animationDelay = i * 45 + "ms";
+    const words = el("div", "words");
+    words.append(el("small", "", c.label), el("b", "", c.value));
+    if (c.detail) words.append(el("span", "more", c.detail));
+    if (STATES[c.state] && c.state !== "good") { const p = el("span", "pill " + c.state); p.textContent = STATES[c.state][0] + " " + STATES[c.state][1]; words.append(p); }
+    t.append(words);
+    if (typeof c.percent === "number") {
+      const ring = el("div", "gauge");
+      ring.innerHTML = RING;
+      const value = Math.max(0, Math.min(100, c.percent));
+      requestAnimationFrame(() => { ring.querySelector(".v").style.strokeDasharray = value + " 100"; });
+      t.append(ring);
+    }
     return t;
   }
   function drawFigures(chart) {
@@ -421,7 +497,7 @@
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", `${chart.title}, from ${Math.min(...vals)} to ${Math.max(...vals)} ${chart.unit || ""}`);
     [lo, (lo + hi) / 2, hi].forEach(v => { make("line", { class: "grid", x1: L, x2: W - R, y1: y(v), y2: y(v) }); make("text", { class: "axis", x: L - 6, y: y(v) + 3, "text-anchor": "end" }, Math.round(v) + (chart.unit || "")); });
-    chart.labels.forEach((l, i) => { if (i % 6 === 0) make("text", { class: "axis", x: x(i), y: H - 5, "text-anchor": "middle" }, l + ":00"); });
+    chart.labels.forEach((l, i) => { if (i % 6 === 0) make("text", { class: "axis", x: Math.max(L + 14, x(i)), y: H - 5, "text-anchor": "middle" }, l + ":00"); });
     const pts = vals.map((v, i) => x(i).toFixed(1) + "," + y(v).toFixed(1)).join(" ");
     make("polygon", { class: "area", points: `${x(0)},${y(lo)} ${pts} ${x(vals.length - 1)},${y(lo)}` });
     make("polyline", { class: "line", points: pts });
@@ -458,83 +534,293 @@
     return box;
   }
 
+  /* Weather across the whole page, under its own sky */
+  const SKY_ICONS = {
+    clear: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.3 5.3 7 7M17 17l1.7 1.7M5.3 18.7 7 17M17 7l1.7-1.7"/>',
+    moon: '<path d="M19.5 14.2A8 8 0 0 1 9.8 4.5a8 8 0 1 0 9.7 9.7z"/>',
+    part: '<circle cx="8" cy="8" r="3"/><path d="M8 2v1.5M2 8h1.5M3.8 3.8l1 1M12.2 3.8l-1 1"/><path d="M8 19h9a3.6 3.6 0 0 0 .4-7.2A5 5 0 0 0 8 12.5 3.3 3.3 0 0 0 8 19z"/>',
+    cloud: '<path d="M7 18.5h10a4 4 0 0 0 .5-8A5.6 5.6 0 0 0 6.7 11 3.8 3.8 0 0 0 7 18.5z"/>',
+    fog: '<path d="M7 13h10a3.6 3.6 0 0 0 .4-7.2A5 5 0 0 0 7.7 7 3.1 3.1 0 0 0 7 13zM4 16.5h16M6.5 20h11"/>',
+    rain: '<path d="M7 14.5h10a3.8 3.8 0 0 0 .4-7.6A5.3 5.3 0 0 0 7.2 8 3.3 3.3 0 0 0 7 14.5zM8.5 17.5l-1 3M12.5 17.5l-1 3M16.5 17.5l-1 3"/>',
+    snow: '<path d="M7 14.5h10a3.8 3.8 0 0 0 .4-7.6A5.3 5.3 0 0 0 7.2 8 3.3 3.3 0 0 0 7 14.5z"/><path d="M8 18.5h.01M12 20.5h.01M16 18.5h.01" stroke-width="2.4"/>',
+    storm: '<path d="M7 13.5h10a3.8 3.8 0 0 0 .4-7.6A5.3 5.3 0 0 0 7.2 7 3.3 3.3 0 0 0 7 13.5zM13 13l-2.5 4h3L11 21.5"/>'
+  };
+  function skyIcon(kind, night) {
+    const icon = el("span", "skyicon");
+    icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ((night && kind === "clear" ? SKY_ICONS.moon : SKY_ICONS[kind]) || SKY_ICONS.cloud) + "</svg>";
+    return icon;
+  }
+  function renderWeather(v, stage) {
+    setSky(v.now.kind, v.now.night);
+    const hero = el("div", "wx-hero"), big = el("div", "wx-now"), head = el("div", "wx-place");
+    big.append(skyIcon(v.now.kind, v.now.night), el("b", "", v.now.temp + "°"));
+    head.append(el("h3", "", v.place), el("p", "", v.now.sky + "  ·  feels like " + v.now.feels + "°"));
+    const tiles = el("div", "wx-tiles");
+    [["High", v.days[0].high + "°"], ["Low", v.days[0].low + "°"], ["Rain", v.days[0].rain + "%"], ["Wind", v.now.wind + " mph"], ["Humidity", v.now.humidity + "%"], ["Sun", v.sunrise + " – " + v.sunset]]
+      .forEach(([a, b], i) => { const t = el("div", "wx-tile"); t.style.animationDelay = 120 + i * 40 + "ms"; t.append(el("small", "", a), el("b", "", b)); tiles.append(t); });
+    hero.append(big, head, tiles);
+    const close = stageHead("").querySelector("button"); close.classList.add("floating");
+    const hours = el("div", "wx-hours");
+    v.hours.forEach((h, i) => {
+      const c = el("div", "wx-hour" + (i === 0 ? " now" : "")); c.style.animationDelay = 200 + i * 18 + "ms";
+      c.append(el("small", "", i === 0 ? "NOW" : h.hour + ":00"), skyIcon(h.kind, h.night), el("b", "", h.temp + "°"));
+      c.append(el("span", "wet", h.rain >= 10 ? h.rain + "%" : " "));
+      hours.append(c);
+    });
+    const lower = el("div", "wx-lower"), charts = el("div", "wx-charts"), days = el("div", "wx-days");
+    v.charts.forEach(c => charts.append(drawChart(c)));
+    const floor = Math.min(...v.days.map(d => d.low)), span = Math.max(1, Math.max(...v.days.map(d => d.high)) - floor);
+    days.append(el("h4", "", "SEVEN DAYS"));
+    v.days.forEach((d, i) => {
+      const r = el("div", "wx-day"), bar = el("div", "range"), fill = el("i");
+      fill.style.left = (d.low - floor) / span * 100 + "%"; fill.style.width = Math.max(4, (d.high - d.low) / span * 100) + "%";
+      bar.append(fill);
+      const name = i === 0 ? "Today" : new Date(d.date + "T12:00").toLocaleDateString("en-GB", { weekday: "short" });
+      r.append(el("span", "day", name), skyIcon(d.kind), el("span", "wet", d.rain >= 10 ? d.rain + "%" : ""), el("span", "lo", d.low + "°"), bar, el("span", "hi", d.high + "°"));
+      days.append(r);
+    });
+    lower.append(charts, days);
+    stage.append(close, hero, hours, lower);
+  }
+
+  /* A title on screen: cinema, with its backdrop behind the whole page */
+  function renderCinema(v, stage) {
+    const [main, ...others] = v.items, clock = s => { const m = Math.floor((s || 0) / 60); return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0"); };
+    setBackdrop(main.backdrop || main.image);
+    const hero = el("div", "cine"), txt = el("div", "cine-text");
+    if (main.image) hero.append(poster(main.image, main.title));
+    txt.append(el("small", "", (main.paused ? "PAUSED ON " : "NOW PLAYING ON ") + String(main.tv || "").toUpperCase()), el("h2", "", main.title));
+    if (main.subtitle) txt.append(el("p", "cine-sub", main.subtitle));
+    if (main.overview) txt.append(el("p", "cine-over", main.overview));
+    if (main.runtime) {
+      const bar = el("div", "meter big"), fill = el("i"), when = el("span", "cine-time");
+      let at = main.position || 0;
+      const draw = () => { fill.style.width = Math.min(100, at / main.runtime * 100) + "%"; when.textContent = clock(at) + " of " + clock(main.runtime); };
+      draw(); bar.append(fill); txt.append(bar, when);
+      if (!main.paused) cineTimer = setInterval(() => { at += 15; draw(); }, 15000);
+    }
+    hero.append(txt);
+    stage.append(hero);
+    others.forEach(m => {
+      const row = el("div", "mediarow"), t = el("div", "txt");
+      if (m.image) row.append(poster(m.image, m.title));
+      t.append(el("small", "", String(m.tv || "").toUpperCase()), el("b", "", m.title));
+      if (m.subtitle) t.append(el("span", "", m.subtitle));
+      row.append(t); stage.append(row);
+    });
+  }
+
+  /* Options as a wall of posters; whichever you're on lights the page behind it */
+  function renderWall(v, stage) {
+    const grid = el("div", "wall");
+    const lead = v.items.find(o => o.image);
+    if (lead) setBackdrop(lead.image); else setAmbient();
+    v.items.forEach((o, i) => {
+      const b = el("button", "opt" + (o.image ? " art" : "")); b.type = "button"; b.style.animationDelay = i * 70 + "ms";
+      const txt = el("span", "txt");
+      txt.append(el("b", "", o.label));
+      if (o.detail) txt.append(el("small", "", o.detail));
+      if (o.progress) { const bar = el("span", "meter"), f = el("i"); bar.style.display = "block"; f.style.width = o.progress + "%"; bar.append(f); txt.append(bar); }
+      if (o.image) b.append(poster(o.image, ""));
+      b.append(el("span", "num", String(i + 1)), txt);
+      if (o.image) { const lit = () => setBackdrop(o.image); b.addEventListener("pointerenter", lit); b.addEventListener("focus", lit); }
+      b.addEventListener("click", () => { spokeLast = false; sendCommand(o.label, { option_set: v.id, option: i }); });
+      grid.append(b);
+    });
+    stage.append(grid, el("p", "hint", 'Tap one, or say "the second one".'));
+  }
+
   function renderView(v) {
-    if (!v) return clearStage();
-    const clock = s => { const m = Math.floor((s || 0) / 60); return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0"); };
+    if (!v || v.type === "home") return goHome();
+    if (v.type === "notice") return showNotice(v);
+    const scene = SCENES[v.type];
+    if (!scene) return;
+    setAmbient();
     if (v.type === "report") {
-      const stage = openStage(v.title);
+      const stage = openStage(v.title, scene);
       if (v.cards && v.cards.length) { const g = el("div", "cards"); v.cards.forEach((c, i) => g.append(drawTile(c, i))); stage.append(g); }
-      (v.charts || []).forEach(c => stage.append(drawChart(c)));
-    } else if (v.type === "media") {
-      const stage = openStage("Now playing");
-      v.items.forEach(m => {
-        const row = el("div", "mediarow"), txt = el("div", "txt");
-        if (m.image) row.append(poster(m.image, m.title));
-        txt.append(el("small", "", String(m.tv || "").toUpperCase()), el("b", "", m.title));
-        if (m.subtitle) txt.append(el("span", "", m.subtitle));
-        if (m.runtime) { const bar = el("div", "meter"), f = el("i"); f.style.width = Math.min(100, (m.position || 0) / m.runtime * 100) + "%"; bar.append(f); txt.append(bar, el("span", "", (m.paused ? "Paused · " : "") + clock(m.position) + " of " + clock(m.runtime))); }
-        row.append(txt); stage.append(row);
-      });
-    } else if (v.type === "options") {
-      const stage = openStage(v.title), grid = el("div", "optgrid");
-      v.items.forEach((o, i) => {
-        const b = el("button", "opt"); b.type = "button"; b.style.animationDelay = i * 50 + "ms";
-        const txt = el("span", "txt"), name = el("b", "", o.label);
-        txt.append(name); if (o.detail) txt.append(el("small", "", o.detail));
-        if (o.progress) { const bar = el("span", "meter"), f = el("i"); bar.style.display = "block"; f.style.width = o.progress + "%"; bar.append(f); txt.append(bar); }
-        b.append(el("span", "num", String(i + 1)));
-        if (o.image) b.append(poster(o.image, ""));
-        b.append(txt);
-        b.addEventListener("click", () => { spokeLast = false; sendCommand(o.label, { option_set: v.id, option: i }); });
-        grid.append(b);
-      });
-      stage.append(grid, el("p", "hint", 'Tap one, or say "the second one".'));
-    } else if (v.type === "notice") {
-      const stage = openStage(null, "notice"), n = el("div", "notice"), p = el("p", "", v.title || v.text);
-      n.append(el("span", "tick", "✓"));
-      if (v.image) n.append(poster(v.image, ""));
-      if (v.subtitle) p.append(el("span", "", v.subtitle));
-      n.append(p); stage.append(n);
-      noticeTimer = setTimeout(clearStage, 6000);
-    } else if (v.type === "error") {
-      const stage = openStage(null, "error"), head = el("div", "errhead"), close = stageHead("").querySelector("button");
+      if (v.charts && v.charts.length) { const g = el("div", "chartgrid"); v.charts.forEach(c => g.append(drawChart(c))); stage.append(g); }
+    } else if (v.type === "weather") renderWeather(v, openStage(null, scene));
+    else if (v.type === "media") {
+      const stage = openStage(null, scene), close = stageHead("").querySelector("button");
+      close.classList.add("floating"); stage.append(close);
+      renderCinema(v, stage);
+    } else if (v.type === "options") renderWall(v, openStage(v.title, scene));
+    else if (v.type === "error") {
+      const stage = openStage(null, scene), box = el("div", "alertbox"), head = el("div", "errhead"), close = stageHead("").querySelector("button");
       head.append(el("i", "", "!"), el("h3", "", v.title), close);
-      stage.append(head);
-      const part = (label, text) => { const d = el("p", "diag"); d.append(el("small", "", label), document.createTextNode(text)); stage.append(d); };
+      box.append(head);
+      const part = (label, text) => { const d = el("p", "diag"); d.append(el("small", "", label), document.createTextNode(text)); box.append(d); };
       part("WHAT HAPPENED", v.what);
       if (v.why) part("LIKELY CAUSE", v.why);
-      if (v.tips && v.tips.length) { const u = el("ul", "tips"); v.tips.forEach(t => u.append(el("li", "", t))); stage.append(el("small", "", "WHAT TO TRY"), u); }
+      if (v.tips && v.tips.length) { const u = el("ul", "tips"); v.tips.forEach(t => u.append(el("li", "", t))); box.append(el("small", "", "WHAT TO TRY"), u); }
       const again = el("button", "act", "TRY AGAIN"); again.type = "button";
       again.addEventListener("click", () => { spokeLast = false; sendCommand("try again"); });
-      stage.append(again);
+      box.append(again); stage.append(box);
     } else if (v.type === "table") {
-      const stage = openStage(v.title), scroll = el("div", "scrollx"), table = el("table", "compare");
+      const stage = openStage(v.title, scene), scroll = el("div", "scrollx"), table = el("table", "compare");
       if (v.columns && v.columns.length) { const tr = el("tr"); v.columns.forEach(c => tr.append(el("th", "", c))); table.append(tr); }
       v.rows.forEach(r => { const tr = el("tr"); r.forEach(c => tr.append(el("td", "", c))); table.append(tr); });
       scroll.append(table); stage.append(scroll);
       if (v.verdict) stage.append(el("p", "verdict", v.verdict));
     } else if (v.type === "sections") {
-      const stage = openStage(v.title);
-      v.sections.forEach((s, i) => { const d = el("details", "part"); d.open = i === 0; d.append(el("summary", "", s.heading), el("p", "", s.body)); stage.append(d); });
+      const stage = openStage(v.title, scene), wide = window.innerWidth > 1000;
+      v.sections.forEach((s, i) => { const d = el("details", "part"); d.open = wide || i === 0; d.style.animationDelay = i * 70 + "ms"; d.append(el("summary", "", s.heading), el("p", "", s.body)); stage.append(d); });
     } else if (v.type === "suggestions") {
-      const stage = openStage(v.title), list = el("div", "sugg");
+      const stage = openStage(v.title, scene), list = el("div", "sugg");
       v.items.forEach((s, i) => {
-        const c = el("div", "sug"); c.style.animationDelay = i * 50 + "ms"; c.append(el("b", "", s.title));
+        const c = el("div", "sug"); c.style.animationDelay = i * 70 + "ms"; c.append(el("b", "", s.title));
         if (s.detail) c.append(el("span", "", s.detail));
         if (s.command) { const go = el("button", "act", "DO THIS"); go.type = "button"; go.addEventListener("click", () => { spokeLast = false; sendCommand(s.command); }); c.append(go); }
         list.append(c);
       });
       stage.append(list);
-    } else clearStage();
+    } else if (v.type === "web") {
+      webState = null;
+      webLive({ ...v, stage: "done", status: "" });
+    }
   }
 
-  /* Live steps while an action runs */
+  /* The web: a browser you can watch, beside what Jarvis makes of it */
+  const WEB_FIELDS = ["query", "status", "url", "site", "frame", "hero", "results", "answer", "facts", "points", "read", "mode", "stage"];
+  function webLive(e) {
+    const starting = e.stage === "searching" || !webState;
+    if (starting) { emptyStage(); $("said").textContent = ""; hideToast(); setAmbient(); webState = { results: [], points: [], facts: [], answer: "", index: 0 }; }
+    WEB_FIELDS.forEach(k => { if (e[k] !== undefined) webState[k] = e[k]; });
+    webState.live = e.stage !== "done";
+    if (e.stage === "searching" && turnOpen) acknowledge();
+    drawWeb();
+    if (e.stage === "done" && webState.mode === "walk" && webState.points.length) startWalk();
+  }
+  function webCommand(text) { spokeLast = false; sendCommand(text, { keep: true }); }
+  function drawWeb() {
+    const w = webState, stage = $("stage");
+    let root = stage.querySelector(".web");
+    if (!root) {
+      stage.hidden = false; stage.replaceChildren();
+      setScene("web"); keepScene();
+      stage.append(stageHead(""));
+      root = el("div", "web");
+      const browser = el("div", "browser"), bar = el("div", "bar"), view = el("div", "view");
+      bar.append(el("span", "lamp"), el("span", "addr"));
+      [["▲", "Scroll up", "scroll up"], ["▼", "Scroll down", "scroll down"], ["←", "Go back", "go back"]].forEach(([t, name, cmd]) => {
+        const b = el("button", "ctl", t); b.type = "button"; b.setAttribute("aria-label", name); b.addEventListener("click", () => webCommand(cmd)); bar.append(b);
+      });
+      const out = el("a", "ctl out", "↗"); out.target = "_blank"; out.rel = "noopener noreferrer"; out.setAttribute("aria-label", "Open this page in a new tab"); bar.append(out);
+      view.append(el("div", "scan"), el("p", "caption"));
+      browser.append(bar, view);
+      root.append(browser, el("div", "side"));
+      stage.append(root);
+    }
+    stage.querySelector(".stage-head h3").textContent = w.query ? "WEB  /  " + w.query : "WEB";
+    root.dataset.mode = w.live ? "live" : w.mode || "answer";
+    root.classList.toggle("busy", w.live);
+    root.querySelector(".addr").textContent = w.live && w.status ? w.status : w.url ? w.url.replace(/^https?:\/\/(www\.)?/, "") : "";
+    const out = root.querySelector(".out");
+    if (/^https?:\/\//.test(w.url || "")) { out.href = w.url; out.hidden = false; } else out.hidden = true;
+    root.querySelector(".browser").hidden = !w.frame && !w.live;
+    setFrame(w.mode === "walk" && w.points[w.index] && !w.live ? w.points[w.index].frame || w.frame : w.frame);
+    drawWebSide(root.querySelector(".side"));
+    setCaption();
+  }
+  function setCaption() {
+    const w = webState, c = $("stage").querySelector(".caption");
+    if (!c) return;
+    const text = !w.live && w.mode === "walk" && w.points[w.index] ? w.points[w.index].text : "";
+    c.textContent = text; c.hidden = !text;
+  }
+  async function setFrame(id) {
+    const view = $("stage").querySelector(".view");
+    if (!view || !id || view.dataset.frame === id) return;
+    view.dataset.frame = id;
+    const res = await fetch("/api/jarvis/img/" + encodeURIComponent(id), { headers: { "x-jarvis-session": session } }).catch(() => null);
+    if (!res || !res.ok || view.dataset.frame !== id) return;
+    const img = el("img", "frame");
+    img.alt = "What the browser sees";
+    img.src = URL.createObjectURL(await res.blob());
+    img.onload = () => { view.querySelectorAll("img.frame").forEach(o => { if (o !== img) setTimeout(() => { URL.revokeObjectURL(o.src); o.remove(); }, 400); }); };
+    view.prepend(img);
+    img.style.zIndex = view.querySelectorAll("img.frame").length;
+  }
+  function drawWebSide(side) {
+    const w = webState;
+    side.replaceChildren();
+    if (w.live && !w.results.length) side.append(el("p", "status", w.status || "Searching the web"));
+    if (w.live && w.results.length) side.append(el("p", "status", w.status));
+    if (!w.live && w.answer) {
+      if (w.hero && w.mode !== "walk") side.append(poster(w.hero, ""));
+      side.append(el("p", "answer", w.answer));
+    }
+    if (!w.live && w.facts.length) {
+      const g = el("div", "facts");
+      w.facts.forEach((f, i) => { const t = el("div", "fact"); t.style.animationDelay = i * 60 + "ms"; t.append(el("small", "", f.label), el("b", "", f.value)); g.append(t); });
+      side.append(g);
+    }
+    if (!w.live && w.mode === "walk" && w.points.length) {
+      const list = el("ol", "points");
+      w.points.forEach((p, i) => {
+        const li = el("li"), b = el("button", "pt" + (i === w.index ? " on" : ""), p.text);
+        b.type = "button"; b.setAttribute("aria-current", String(i === w.index));
+        b.addEventListener("click", () => { clearInterval(walkTimer); stopSpeech(); showPoint(i); say(p.text); });
+        li.append(b); list.append(li);
+      });
+      side.append(list);
+    }
+    if (!w.live && w.mode === "answer" && w.url) {
+      const go = el("button", "act", "GO THROUGH THE PAGE"); go.type = "button"; go.addEventListener("click", () => webCommand("go through it")); side.append(go);
+    }
+    if (w.results.length) {
+      side.append(el("h4", "", "SOURCES"));
+      const list = el("div", "sources");
+      w.results.forEach((r, i) => {
+        const b = el("button", "src" + (i === w.read ? " on" : "")), txt = el("span", "txt");
+        b.type = "button"; b.style.animationDelay = i * 60 + "ms";
+        txt.append(el("b", "", r.title), el("small", "", r.site));
+        if (r.snippet && w.mode !== "walk") txt.append(el("span", "snip", r.snippet));
+        b.append(el("span", "num", String(i + 1)), txt);
+        b.addEventListener("click", () => webCommand("open result " + (i + 1)));
+        list.append(b);
+      });
+      side.append(list);
+    }
+  }
+  function showPoint(i) {
+    if (!webState || !webState.points[i]) return;
+    webState.index = i;
+    setFrame(webState.points[i].frame || webState.frame);
+    setCaption();
+    if (window.innerWidth <= 1000) $("stage").scrollTo({ top: 0, behavior: "smooth" });  // on a phone the browser sits above the list
+    $("stage").querySelectorAll(".pt").forEach((b, n) => { b.classList.toggle("on", n === i); b.setAttribute("aria-current", String(n === i)); if (n === i && window.innerWidth > 1000) b.scrollIntoView({ block: "nearest" }); });
+  }
+  function startWalk() {
+    clearInterval(walkTimer);
+    showPoint(0);
+    if (voiceOn) return;  // with the voice on, each point appears as it's spoken
+    let at = 0;
+    walkTimer = setInterval(() => { if (!webState || ++at >= webState.points.length) return clearInterval(walkTimer); showPoint(at); }, 7000);
+  }
+
+  /* Small news, over whatever's showing: a live action and its steps, or a tick */
+  const toast = () => $("toast");
+  function hideToast() { clearTimeout(noticeTimer); toast().hidden = true; toast().replaceChildren(); toast().className = "toast"; }
+  function showNotice(v) {
+    hideToast();
+    const n = el("div", "notice"), p = el("p", "", v.title || v.text);
+    n.append(el("span", "tick", "✓"));
+    if (v.image) n.append(poster(v.image, ""));
+    if (v.subtitle) p.append(el("span", "", v.subtitle));
+    n.append(p); toast().append(n); toast().hidden = false; toast().classList.add("is-notice");
+    noticeTimer = setTimeout(hideToast, 6000);
+  }
   function openAction(e) {
-    const stage = openStage(label(e.tool)), work = el("div", "work"), track = el("div", "track");
-    track.append(el("i")); work.append(track, el("ul", "steps")); stage.append(work);
+    hideToast();
+    const work = el("div", "work"), track = el("div", "track");
+    track.append(el("i"));
+    work.append(el("h3", "", label(e.tool)), track, el("ul", "steps"));
+    toast().append(work); toast().hidden = false;
   }
   function addStep(text) {
-    const list = $("stage").querySelector(".steps");
+    const list = toast().querySelector(".steps");
     if (!list) return;
     list.querySelectorAll("li").forEach(li => { li.className = "past"; });
     list.append(el("li", "current", text));
@@ -751,14 +1037,19 @@
     sendCommand(text);
   });
   async function sendCommand(text, extra) {
-    stopListening(); stopSpeech(); openTurn(); clearStage();
-    const r = await api("chat", { text, ...extra });
+    const { keep, ...more } = extra || {};
+    stopListening(); stopSpeech(); openTurn(); hideToast();
+    clearInterval(walkTimer);
+    // what's on screen stays, dimmed, until there's something to replace it, so the page never jumps home and back
+    if (!keep) $("stage").classList.add("stale");
+    const r = await api("chat", { text, scene: document.body.dataset.scene || "", narrow: window.innerWidth < 700, ...more });
     closeTurn();
     if (r.ok) speakReply(r.data);
+    if (!r.ok) $("stage").classList.remove("stale");
     if (!r.ok && r.status !== 401) $("said").textContent = r.data.error || "That didn't go through.";
     else if (r.ok && !live) { showReply(r.data); setPending(r.data.awaiting_confirmation ? { tool: r.data.tool, question: r.data.text } : null); }
   }
-  $("signOut").addEventListener("click", () => { stopListening(); stopSpeech(); stopCapture(); wakeStatus(""); session = ""; store.del("jarvis.session"); stopLive(); closeSheet(); showGate("pin", "Locked. Enter your PIN."); });
+  $("signOut").addEventListener("click", () => { stopListening(); stopSpeech(); stopCapture(); wakeStatus(""); session = ""; store.del("jarvis.session"); stopLive(); closeSheet(); goHome(); showGate("pin", "Locked. Enter your PIN."); });
 
   /* clock and static reactor ticks */
   function tick() {
