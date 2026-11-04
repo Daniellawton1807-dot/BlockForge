@@ -11,3 +11,6 @@
 /jarvis/*
   ! Permissions-Policy
   Permissions-Policy: camera=(), microphone=(self), geolocation=()
+
+/jarvis/oww/*
+  Cache-Control: public, max-age=604800

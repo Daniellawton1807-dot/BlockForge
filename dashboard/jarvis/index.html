@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="jarvis.css?v=3">
+<link rel="stylesheet" href="jarvis.css?v=4">
 </head>
 <body data-mode="idle">
 
@@ -80,6 +80,7 @@
         </div>
       </div>
       <div class="telemetry" id="telemetry">TELEMETRY / CONNECTING</div>
+      <div class="wakestate" id="wakeState" hidden></div>
       <p class="said" id="said" role="status" aria-live="polite"></p>
       <div class="voicewarn" id="voiceWarn" hidden></div>
     </div>
@@ -105,6 +106,7 @@
     <button data-sheet="tvs"><span><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/></svg></span><b>TVS</b><small id="dockTv">Now playing</small></button>
     <button data-sheet="minecraft"><span><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></span><b>MINECRAFT</b><small>Server status</small></button>
     <button data-sheet="log"><span><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg></span><b>ACTIVITY</b><small>Every action</small></button>
+    <button id="wakeToggle" aria-pressed="false"><span><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span><b>LISTEN</b><small id="wakeLabel">Off</small></button>
     <button id="voiceToggle" aria-pressed="true"><span><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 010 7"/></svg></span><b>VOICE</b><small id="voiceState">On</small></button>
     <button id="signOut"><span><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg></span><b>LOCK</b><small>Ask for the PIN</small></button>
   </nav>
@@ -129,6 +131,6 @@
   </div>
 </div>
 
-<script src="jarvis.js?v=3"></script>
+<script src="jarvis.js?v=4"></script>
 </body>
 </html>

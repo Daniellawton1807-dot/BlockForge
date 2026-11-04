@@ -1,0 +1,5 @@
+Wake word files for Jarvis, run entirely in the browser.
+
+ort.wasm.min.js, ort-wasm-simd-threaded.*: ONNX Runtime Web 1.20.1, Microsoft, MIT licence.
+melspectrogram.onnx, embedding_model.onnx, hey_jarvis_v0.1.onnx: openWakeWord v0.5.1 by David Scripka,
+https://github.com/dscripka/openWakeWord, Creative Commons BY-NC-SA 4.0 (non-commercial).
