@@ -649,7 +649,7 @@
     const lead = v.items.find(o => o.image);
     if (lead) setBackdrop(lead.image); else setAmbient();
     v.items.forEach((o, i) => {
-      const b = el("button", "opt" + (o.image ? " art" : "")); b.type = "button"; b.style.animationDelay = i * 70 + "ms";
+      const b = el("button", "opt" + (o.image ? " art" : "")); b.type = "button"; b.style.animationDelay = Math.min(i, 12) * 70 + "ms";
       const txt = el("span", "txt");
       txt.append(el("b", "", o.label));
       if (o.detail) txt.append(el("small", "", o.detail));
@@ -1111,6 +1111,7 @@
     spokeLast = false;
     sendCommand(text);
   });
+  $("stopAll").addEventListener("click", () => { spokeLast = false; sendCommand("stop everything", { keep: true }); });
   async function sendCommand(text, extra) {
     const { keep, ...more } = extra || {};
     stopListening(); stopSpeech(); openTurn(); hideToast();
@@ -1119,6 +1120,7 @@
     if (!keep) $("stage").classList.add("stale");
     const r = await api("chat", { text, scene: document.body.dataset.scene || "", narrow: window.innerWidth < 700, ...more });
     closeTurn();
+    if (r.ok && r.data.stopped) return;  // the stop's own reply says so
     if (r.ok) speakReply(r.data);
     if (!r.ok) $("stage").classList.remove("stale");
     if (!r.ok && r.status !== 401) $("said").textContent = r.data.error || "That didn't go through.";

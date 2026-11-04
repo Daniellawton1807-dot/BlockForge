@@ -79,6 +79,7 @@ small{font-size:.72rem;letter-spacing:.14em;color:var(--dim)}
 .mic[aria-pressed=true]{background:#0b3a33}.mic[aria-pressed=true] svg{stroke:var(--green)}
 .command input{flex:1;min-width:0;padding:12px 14px;background:none;border:0;outline:0;font-size:1.05rem}
 .command input::placeholder{color:var(--dim)}
+.command .stopall{padding:0 12px;display:grid;place-items:center}.stopall svg{width:16px;height:16px;fill:none;stroke:var(--amber);stroke-width:1.8}.stopall:hover svg,.stopall:focus-visible svg{fill:var(--amber)}
 .command button{padding:0 18px;font:500 .66rem var(--head);letter-spacing:.2em;color:var(--cy);border-left:1px solid var(--line)}
 /* The response stage: what Jarvis has to show, under a reactor that makes room for it */
 @keyframes rise{from{transform:translateY(10px);opacity:0}}
@@ -240,6 +241,7 @@ body[data-scene]{--rs:112px;--padl:0px;--padr:0px;overflow:hidden}
 [data-scene] .dock button{min-width:0}[data-scene] .dock span{width:38px;height:38px}[data-scene] .dock svg{width:17px;height:17px}[data-scene] .dock b,[data-scene] .dock small{display:none}
 [data-scene] .command{position:fixed;z-index:4;left:50%;bottom:12px;width:min(560px,44vw);margin:0;transform:translateX(-50%);background:#031a25ee}
 [data-scene] .command input{padding:9px 12px}
+[data-scene=weather] .said:empty~.stage,[data-scene=race] .said:empty~.stage{padding-top:72px}
 /* where each scene puts the reactor */
 body[data-scene=weather],body[data-scene=web],body[data-scene=race]{--padr:124px}
 [data-scene=weather] .reactor,[data-scene=web] .reactor,[data-scene=race] .reactor{top:4px;right:18px}
@@ -452,6 +454,7 @@ a.srctitle:hover,a.srctitle:focus-visible{color:var(--cy2);text-decoration:under
   .chartgrid,.wx-lower{grid-template-columns:1fr}
   .wx-tile b{white-space:normal;font-size:.92rem}
   .stage-close.floating{margin-right:68px}
+  [data-scene=weather] .said:empty~.stage,[data-scene=race] .said:empty~.stage{padding-top:0}
   .wx-hero{grid-template-columns:1fr;gap:8px;padding-right:0}
   .wx-tiles{justify-self:stretch;width:100%}
   .wx-now b{font-size:5rem}.wx-now .skyicon{width:62px;height:62px}
