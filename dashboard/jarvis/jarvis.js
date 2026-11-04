@@ -554,16 +554,18 @@
     setSky(v.now.kind, v.now.night);
     const hero = el("div", "wx-hero"), big = el("div", "wx-now"), head = el("div", "wx-place");
     big.append(skyIcon(v.now.kind, v.now.night), el("b", "", v.now.temp + "°"));
-    head.append(el("h3", "", v.place), el("p", "", v.now.sky + "  ·  feels like " + v.now.feels + "°"));
+    head.append(el("h3", "", v.place + (v.label ? "  /  " + v.label : "")), el("p", "", v.now.sky + "  ·  " + (v.label ? "low of " + v.now.low + "°" : "feels like " + v.now.feels + "°")));
     const tiles = el("div", "wx-tiles");
-    [["High", v.days[0].high + "°"], ["Low", v.days[0].low + "°"], ["Rain", v.days[0].rain + "%"], ["Wind", v.now.wind + " mph"], ["Humidity", v.now.humidity + "%"], ["Sun", v.sunrise + " – " + v.sunset]]
+    const shown = v.days[v.focus || 0];
+    [["High", shown.high + "°"], ["Low", shown.low + "°"], ["Rain", shown.rain + "%"], ["Wind", v.now.wind + " mph"], v.now.humidity != null ? ["Humidity", v.now.humidity + "%"] : ["Day", new Date(shown.date + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })], ["Sun", v.sunrise + " – " + v.sunset]]
       .forEach(([a, b], i) => { const t = el("div", "wx-tile"); t.style.animationDelay = 120 + i * 40 + "ms"; t.append(el("small", "", a), el("b", "", b)); tiles.append(t); });
     hero.append(big, head, tiles);
     const close = stageHead("").querySelector("button"); close.classList.add("floating");
     const hours = el("div", "wx-hours");
     v.hours.forEach((h, i) => {
-      const c = el("div", "wx-hour" + (i === 0 ? " now" : "")); c.style.animationDelay = 200 + i * 18 + "ms";
-      c.append(el("small", "", i === 0 ? "NOW" : h.hour + ":00"), skyIcon(h.kind, h.night), el("b", "", h.temp + "°"));
+      const isNow = i === 0 && !v.label;
+      const c = el("div", "wx-hour" + (isNow ? " now" : "")); c.style.animationDelay = 200 + i * 18 + "ms";
+      c.append(el("small", "", isNow ? "NOW" : h.hour + ":00"), skyIcon(h.kind, h.night), el("b", "", h.temp + "°"));
       c.append(el("span", "wet", h.rain >= 10 ? h.rain + "%" : " "));
       hours.append(c);
     });
@@ -572,7 +574,7 @@
     const floor = Math.min(...v.days.map(d => d.low)), span = Math.max(1, Math.max(...v.days.map(d => d.high)) - floor);
     days.append(el("h4", "", "SEVEN DAYS"));
     v.days.forEach((d, i) => {
-      const r = el("div", "wx-day"), bar = el("div", "range"), fill = el("i");
+      const r = el("div", "wx-day" + (v.label && i === v.focus ? " on" : "")), bar = el("div", "range"), fill = el("i");
       fill.style.left = (d.low - floor) / span * 100 + "%"; fill.style.width = Math.max(4, (d.high - d.low) / span * 100) + "%";
       bar.append(fill);
       const name = i === 0 ? "Today" : new Date(d.date + "T12:00").toLocaleDateString("en-GB", { weekday: "short" });
@@ -714,7 +716,8 @@
   }
 
   /* The web: a browser you can watch, beside what Jarvis makes of it */
-  const WEB_FIELDS = ["hide_page", "query", "status", "url", "site", "frame", "hero", "results", "answer", "facts", "points", "read", "mode", "stage"];
+  let trailOpen = false;
+  const WEB_FIELDS = ["trail", "summary", "standing", "standing_text", "hide_page", "query", "status", "url", "site", "frame", "hero", "results", "answer", "facts", "points", "read", "mode", "stage"];
   function webLive(e) {
     const starting = e.stage === "searching" || !webState;
     if (starting) { emptyStage(); $("said").textContent = ""; hideToast(); setAmbient(); webState = { results: [], points: [], facts: [], answer: "", index: 0 }; }
@@ -776,14 +779,59 @@
     view.prepend(img);
     img.style.zIndex = view.querySelectorAll("img.frame").length;
   }
+  /* Sources are only ever those the server found: a [2] in an answer becomes a link to source 2, and anything else stays plain text */
+  function citedText(text, results, cls) {
+    const p = el("p", cls);
+    String(text || "").split(/(\[\d+\])/).forEach(part => {
+      const n = /^\[(\d+)\]$/.exec(part), source = n && results[Number(n[1]) - 1];
+      if (!source || !/^https?:\/\//.test(source.url)) { if (!n) p.append(document.createTextNode(part)); return; }
+      const a = el("a", "cite", n[1]);
+      a.href = source.url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.title = source.title; a.setAttribute("aria-label", "Source " + n[1] + ": " + source.title);
+      p.append(a);
+    });
+    return p;
+  }
+  function sourceCard(r, i, w) {
+    const card = el("div", "src" + (i === w.read ? " on" : "")), txt = el("div", "txt"), head = el("div", "srchead");
+    card.style.animationDelay = i * 60 + "ms";
+    if (/^https:\/\//.test(r.favicon || "")) {
+      const icon = el("img", "fav"); icon.alt = ""; icon.loading = "lazy"; icon.referrerPolicy = "no-referrer"; icon.onerror = () => icon.remove(); icon.src = r.favicon;
+      head.append(icon);
+    }
+    head.append(el("small", "", r.site));
+    const title = el(/^https?:\/\//.test(r.url) ? "a" : "b", "srctitle", r.title);
+    if (title.tagName === "A") { title.href = r.url; title.target = "_blank"; title.rel = "noopener noreferrer"; }
+    txt.append(head, title);
+    if (r.snippet && w.mode !== "walk") txt.append(el("span", "snip", r.snippet));
+    const here = el("button", "here", "VIEW HERE"); here.type = "button"; here.setAttribute("aria-label", "Open " + r.site + " here");
+    here.addEventListener("click", () => webCommand("open result " + (i + 1)));
+    card.append(el("span", "num", String(i + 1)), txt, here);
+    return card;
+  }
+  function drawTrail(w, side) {
+    if (!w.trail || !w.trail.length) return;
+    const d = el("details", "trail"), list = el("ol");
+    d.open = Boolean(w.live || trailOpen);
+    d.addEventListener("toggle", () => { if (!w.live) trailOpen = d.open; });
+    d.append(el("summary", "", w.live ? "RESEARCH" : "RESEARCH  /  " + (w.summary || "")));
+    w.trail.forEach(t => { const li = el("li", t.kind); li.append(el("span", "", t.text)); list.append(li); });
+    d.append(list); side.append(d);
+  }
   function drawWebSide(side) {
     const w = webState;
     side.replaceChildren();
-    if (w.live && !w.results.length) side.append(el("p", "status", w.status || "Searching the web"));
-    if (w.live && w.results.length) side.append(el("p", "status", w.status));
+    if (w.live) {
+      const panel = el("div", "research"), track = el("div", "track");
+      track.append(el("i"));
+      panel.append(el("p", "status", w.status || "Searching the web"));
+      if (w.query) panel.append(el("p", "asking", w.query));
+      panel.append(track);
+      side.append(panel);
+    }
     if (!w.live && w.answer) {
       if (w.hero && w.mode !== "walk") side.append(poster(w.hero, ""));
-      side.append(el("p", "answer", w.answer));
+      side.append(citedText(w.answer, w.results, "answer"));
+      if (w.standing_text) side.append(el("span", "standing " + (w.standing || ""), ({ confirmed: "✓ ", disputed: "! ", unclear: "? " }[w.standing] || "") + w.standing_text));
     }
     if (!w.live && w.facts.length) {
       const g = el("div", "facts");
@@ -800,23 +848,16 @@
       });
       side.append(list);
     }
-    if (!w.live && w.mode === "answer" && w.url) {
+    if (!w.live && w.mode === "answer" && w.results.length && !w.frameless) {
       const go = el("button", "act", w.hide_page ? "SHOW THE PAGE" : "GO THROUGH THE PAGE"); go.type = "button"; go.addEventListener("click", () => webCommand("go through it")); side.append(go);
     }
     if (w.results.length) {
       side.append(el("h4", "", "SOURCES"));
       const list = el("div", "sources");
-      w.results.forEach((r, i) => {
-        const b = el("button", "src" + (i === w.read ? " on" : "")), txt = el("span", "txt");
-        b.type = "button"; b.style.animationDelay = i * 60 + "ms";
-        txt.append(el("b", "", r.title), el("small", "", r.site));
-        if (r.snippet && w.mode !== "walk") txt.append(el("span", "snip", r.snippet));
-        b.append(el("span", "num", String(i + 1)), txt);
-        b.addEventListener("click", () => webCommand("open result " + (i + 1)));
-        list.append(b);
-      });
+      w.results.forEach((r, i) => list.append(sourceCard(r, i, w)));
       side.append(list);
     }
+    drawTrail(w, side);
   }
   function showPoint(i) {
     if (!webState || !webState.points[i]) return;
