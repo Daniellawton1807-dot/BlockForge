@@ -48,6 +48,7 @@ small{font-size:.72rem;letter-spacing:.14em;color:var(--dim)}
 .spin{transform-origin:200px 200px;animation:spin 38s linear infinite}.s2{animation-duration:62s;animation-direction:reverse}.s3{animation-duration:24s}
 [data-mode=thinking] .spin{animation-duration:3s}[data-mode=thinking] .s2{animation-duration:4.5s}[data-mode=thinking] .s3{animation-duration:2s}
 [data-mode=thinking] .arc,[data-mode=thinking] .big b{stroke:var(--amber);color:var(--amber)}
+[data-mode=listening] .spin{animation-duration:14s}[data-mode=listening] .arc,[data-mode=listening] .big b{stroke:var(--green);color:var(--green)}
 [data-mode=speaking] .spin{animation-duration:9s}[data-mode=speaking] .s2{animation-duration:13s}[data-mode=speaking] .s3{animation-duration:6s}
 [data-mode=speaking] .a1{animation:pulse 1.1s ease-in-out infinite}
 @keyframes pulse{50%{stroke-width:6;stroke-opacity:.7}}
@@ -71,6 +72,9 @@ small{font-size:.72rem;letter-spacing:.14em;color:var(--dim)}
 .dock b{font:500 .62rem var(--head);letter-spacing:.16em}.dock small{font-family:var(--body);font-size:.82rem;letter-spacing:0}
 .command{display:flex;max-width:680px;width:100%;margin:6px auto 0;border:1px solid #1d5566;background:#031a25cc;border-radius:4px}
 .command:focus-within{border-color:var(--cy);box-shadow:0 0 12px #22d3ee44}
+.mic{flex:none;width:48px;display:grid;place-items:center;border-right:1px solid var(--line)}
+.mic svg{width:22px;height:22px;fill:none;stroke:var(--cy);stroke-width:1.6;stroke-linecap:round}
+.mic[aria-pressed=true]{background:#0b3a33}.mic[aria-pressed=true] svg{stroke:var(--green)}
 .command input{flex:1;min-width:0;padding:12px 14px;background:none;border:0;outline:0;font-size:1.05rem}
 .command input::placeholder{color:var(--dim)}
 .command button{padding:0 18px;font:500 .66rem var(--head);letter-spacing:.2em;color:var(--cy);border-left:1px solid var(--line)}

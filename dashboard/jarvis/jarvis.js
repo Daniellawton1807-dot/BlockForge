@@ -142,12 +142,12 @@
   }
   function pushLog(e) { log.push(e); if (log.length > 100) log.shift(); if (sheetKind === "log") renderSheet(); }
 
-  let serverMode = "idle";
+  let serverMode = "idle", hearing = false;
   function setMode(mode) { serverMode = mode; showMode(); }
   function showMode() {
-    const mode = serverMode === "thinking" ? "thinking" : speaking ? "speaking" : "idle";
+    const mode = hearing ? "listening" : serverMode === "thinking" ? "thinking" : speaking ? "speaking" : "idle";
     document.body.dataset.mode = mode;
-    $("modeLabel").textContent = { thinking: "THINKING", speaking: "SPEAKING", idle: "COMPUTE ACTIVITY" }[mode];
+    $("modeLabel").textContent = { listening: "LISTENING", thinking: "THINKING", speaking: "SPEAKING", idle: "COMPUTE ACTIVITY" }[mode];
   }
 
   /* Speech. One audio element is unlocked by the first tap or key, because browsers block sound started any other way.
@@ -179,7 +179,12 @@
   }
   async function nextSpeech() {
     const text = speechQueue.shift();
-    if (!text) return setSpeaking(false);
+    if (!text) {
+      setSpeaking(false);
+      // a spoken question gets a spoken answer: listen once for yes or no
+      if (pendingTool && spokeLast) startListening();
+      return;
+    }
     setSpeaking(true);
     const token = ++speechToken;
     const r = await api("tts", { text });
@@ -216,7 +221,7 @@
   }
   async function answer(yes) {
     const tool = pendingTool; setPending(null);
-    stopSpeech(); openTurn();
+    stopListening(); stopSpeech(); openTurn();
     const r = await api("confirm", { tool, yes });
     closeTurn();
     if (r.ok) say(r.data.text);
@@ -334,19 +339,56 @@
     if (e.ok) panelTimer = setTimeout(closeSheet, 7000);
   }
 
-  $("commandForm").addEventListener("submit", async e => {
+  /* Speaking a command, with the browser's own recognition (free; the browser maker hears the audio). */
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const SPEECH_ERRORS = {
+    "not-allowed": "Microphone access is blocked for this site.",
+    "service-not-allowed": "This browser doesn't allow speech recognition. Type your command instead.",
+    "network": "This browser's speech recognition isn't available. Type your command instead.",
+    "audio-capture": "No microphone found."
+  };
+  let recognition = null, spokeLast = false;
+  function setHearing(on) { hearing = on; $("mic").setAttribute("aria-pressed", String(on)); showMode(); }
+  function stopListening() { if (recognition) { const r = recognition; recognition = null; r.onend = r.onresult = r.onerror = null; r.abort(); } setHearing(false); }
+  function startListening() {
+    if (!Recognition) { $("said").textContent = "This browser doesn't support speech recognition. Type your command instead."; return; }
+    stopSpeech(); stopListening();
+    const r = recognition = new Recognition();
+    r.lang = "en-GB"; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+    let finalText = "";
+    r.onresult = e => {
+      const heard = Array.from(e.results).map(x => x[0].transcript).join("").trim();
+      $("said").textContent = heard;
+      if (e.results[e.results.length - 1].isFinal) finalText = heard;
+    };
+    r.onerror = e => { if (SPEECH_ERRORS[e.error]) $("said").textContent = SPEECH_ERRORS[e.error]; };
+    r.onend = () => {
+      if (recognition !== r) return;
+      recognition = null; setHearing(false);
+      if (finalText) { spokeLast = true; sendCommand(finalText); }
+    };
+    setHearing(true); $("said").textContent = "";
+    try { r.start(); } catch { recognition = null; setHearing(false); }
+  }
+  $("mic").addEventListener("click", () => { if (hearing) stopListening(); else startListening(); });
+
+  $("commandForm").addEventListener("submit", e => {
     e.preventDefault();
     const box = $("command"), text = box.value.trim();
     if (!text) return;
     box.value = "";
-    stopSpeech(); openTurn();
+    spokeLast = false;
+    sendCommand(text);
+  });
+  async function sendCommand(text) {
+    stopListening(); stopSpeech(); openTurn();
     const r = await api("chat", { text });
     closeTurn();
     if (r.ok) say(r.data.text);
     if (!r.ok && r.status !== 401) $("said").textContent = r.data.error || "That didn't go through.";
     else if (r.ok && !live) { $("said").textContent = r.data.text; setPending(r.data.awaiting_confirmation ? { tool: r.data.tool, question: r.data.text } : null); }
-  });
-  $("signOut").addEventListener("click", () => { stopSpeech(); session = ""; store.del("jarvis.session"); stopLive(); closeSheet(); showGate("pin", "Locked. Enter your PIN."); });
+  }
+  $("signOut").addEventListener("click", () => { stopListening(); stopSpeech(); session = ""; store.del("jarvis.session"); stopLive(); closeSheet(); showGate("pin", "Locked. Enter your PIN."); });
 
   /* clock and static reactor ticks */
   function tick() {
