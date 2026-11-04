@@ -143,10 +143,10 @@
   }
   function pushLog(e) { log.push(e); if (log.length > 100) log.shift(); if (sheetKind === "log") renderSheet(); }
 
-  let serverMode = "idle", hearing = false;
+  let serverMode = "idle", hearing = false, transcribing = false;
   function setMode(mode) { serverMode = mode; showMode(); }
   function showMode() {
-    const mode = hearing ? "listening" : serverMode === "thinking" ? "thinking" : speaking ? "speaking" : "idle";
+    const mode = hearing ? "listening" : (transcribing || serverMode === "thinking") ? "thinking" : speaking ? "speaking" : "idle";
     document.body.dataset.mode = mode;
     $("modeLabel").textContent = { listening: "LISTENING", thinking: "THINKING", speaking: "SPEAKING", idle: "COMPUTE ACTIVITY" }[mode];
   }
@@ -340,50 +340,17 @@
     if (e.ok) panelTimer = setTimeout(closeSheet, 7000);
   }
 
-  /* Speaking a command, with the browser's own recognition (free; the browser maker hears the audio). */
-  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const SPEECH_ERRORS = {
-    "not-allowed": "Microphone access is blocked for this site.",
-    "service-not-allowed": "This browser doesn't allow speech recognition. Type your command instead.",
-    "network": "This browser's speech recognition isn't available. Type your command instead.",
-    "audio-capture": "No microphone found."
-  };
-  let recognition = null, spokeLast = false;
-  function setHearing(on) {
-    hearing = on; $("mic").setAttribute("aria-pressed", String(on)); showMode();
-    wakeHearing(on);
-  }
-  function stopListening() { if (recognition) { const r = recognition; recognition = null; r.onend = r.onresult = r.onerror = null; r.abort(); } setHearing(false); }
-  function startListening() {
-    if (!Recognition) { $("said").textContent = "This browser doesn't support speech recognition. Type your command instead."; return; }
-    stopSpeech(); stopListening();
-    const r = recognition = new Recognition();
-    r.lang = "en-GB"; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
-    let finalText = "";
-    r.onresult = e => {
-      const heard = Array.from(e.results).map(x => x[0].transcript).join("").trim();
-      $("said").textContent = heard;
-      if (e.results[e.results.length - 1].isFinal) finalText = heard;
-    };
-    r.onerror = e => { if (SPEECH_ERRORS[e.error]) $("said").textContent = SPEECH_ERRORS[e.error]; };
-    r.onend = () => {
-      if (recognition !== r) return;
-      recognition = null; setHearing(false);
-      if (!finalText) return;
-      // a bare "stop" just silences Jarvis, unless it's the answer to a question
-      if (!pendingTool && /^(stop|be quiet|quiet|shut up|never mind|nevermind|cancel)\W*$/i.test(finalText)) { $("said").textContent = ""; return; }
-      spokeLast = true; sendCommand(finalText);
-    };
-    setHearing(true); $("said").textContent = "";
-    try { r.start(); } catch { recognition = null; setHearing(false); }
-  }
-  $("mic").addEventListener("click", () => { if (hearing) stopListening(); else startListening(); });
+  /* The microphone. One 16 kHz capture feeds both the "Hey Jarvis" worker and command recording, so it works in any browser.
+     The wake word models run on this device. Audio only leaves it as a recorded command, after the wake word or a tap on the mic.
+     Browsers stop the mic when the tab is hidden or the phone locks, so hands-free needs the page open and the screen on. */
+  // In 80 ms blocks. Detection lags the words, so about two seconds before it are kept, or "Hey Jarvis, what's the weather" would lose its start.
+  const PREROLL_BLOCKS = 28, REARM_BLOCKS = 6, QUICK_BLOCKS = 12, END_SILENCE_BLOCKS = 10, NO_SPEECH_BLOCKS = 62, MAX_BLOCKS = 150, MIN_SPEECH_BLOCKS = 3;
+  const WAKE_COOLDOWN_MS = 2500, SPEECH_FLOOR = 0.012, SPEECH_OVER_NOISE = 3, NOISE_CAP = 0.05;
+  const WAKE_WORD = /\b(?:j[ae]rv[iu]s|javis)\b[\s,.!?:;-]*/ig;
+  const JUST_STOP = /^(stop|be quiet|quiet|shut up|never mind|nevermind|cancel)\W*$/i;
+  let wakeOn = store.get("jarvis.wake") === "on", mic = null, worker = null, wakeReady = false, recording = null;
+  let guardTimer = null, preroll = [], noise = 0.003, wakeLock = null, lastWake = 0, chimeCtx = null, spokeLast = false;
 
-  /* "Hey Jarvis". The models run in a worker on this device, and no audio leaves it until the wake word is heard.
-     Browsers stop the mic when the tab is hidden or the phone locks, so this only works with the page open and the screen on. */
-  const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-  const WAKE_COOLDOWN_MS = 2500;
-  let wakeOn = store.get("jarvis.wake") === "on", wake = null, wakeLock = null, lastWake = 0, chimeCtx = null;
   function wakeStatus(text, warn) {
     $("wakeState").hidden = !text; $("wakeState").textContent = text || "";
     $("wakeState").classList.toggle("warn", Boolean(warn));
@@ -405,58 +372,165 @@
     catch { /* the screen may sleep; listening still works until it does */ }
   }
   function releaseScreen() { if (wakeLock) wakeLock.release().catch(() => {}); wakeLock = null; }
+
+  async function openMic() {
+    if (mic) return true;
+    if (!navigator.mediaDevices || !window.AudioWorkletNode) { $("said").textContent = "This browser can't use the microphone here. Type your command instead."; return false; }
+    let stream, ctx;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+      ctx = new AudioContext({ sampleRate: 16000 });
+      await ctx.audioWorklet.addModule("wake-capture.js?v=1");
+      const node = new AudioWorkletNode(ctx, "wake-capture", { numberOfOutputs: 0 });
+      ctx.createMediaStreamSource(stream).connect(node);
+      node.port.onmessage = e => onBlock(e.data);
+      mic = { stream, ctx, node };
+      ctx.resume().catch(() => {});
+      return true;
+    } catch (error) {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      if (ctx) ctx.close().catch(() => {});
+      $("said").textContent = error && error.name === "NotAllowedError" ? "Microphone access is blocked for this site." : "I couldn't start the microphone.";
+      return false;
+    }
+  }
+  function closeMic() {
+    if (!mic) return;
+    mic.stream.getTracks().forEach(t => t.stop());
+    mic.ctx.close().catch(() => {});
+    mic = null; preroll = [];
+  }
+
+  function onBlock(block) {
+    let sum = 0;
+    for (let i = 0; i < block.length; i++) sum += block[i] * block[i];
+    const level = Math.sqrt(sum / block.length);
+    if (recording) return recordBlock(block, level);
+    // follows the quiet between words: drops quickly, rises slowly, so speech never counts as background noise
+    noise = Math.min(NOISE_CAP, level < noise ? noise * 0.7 + level * 0.3 : noise * 0.998 + level * 0.002);
+    preroll.push(block);
+    if (preroll.length > PREROLL_BLOCKS) preroll.shift();
+    if (worker && wakeReady && !document.hidden) { const copy = block.slice(); worker.postMessage(copy, [copy.buffer]); }
+  }
+  function recordBlock(block, level) {
+    const r = recording;
+    r.blocks.push(block); r.total++;
+    if (level > Math.max(SPEECH_FLOOR, noise * SPEECH_OVER_NOISE)) { r.speech++; r.silent = 0; }
+    else r.silent++;
+    const finished = (r.speech >= MIN_SPEECH_BLOCKS && r.silent >= END_SILENCE_BLOCKS) || r.total >= MAX_BLOCKS;
+    // after the wake word, a short quiet means check what's already been said rather than wait
+    if (finished || (r.afterWake && !r.speech && r.total >= QUICK_BLOCKS) || (!r.speech && r.total >= NO_SPEECH_BLOCKS)) finishRecording();
+  }
+  function setHearing(on) { hearing = on; $("mic").setAttribute("aria-pressed", String(on)); showMode(); }
+
+  function startListening(fromWake) {
+    const earlier = fromWake === true ? preroll.slice() : [];
+    stopSpeech(); stopListening();
+    recording = { blocks: earlier, afterWake: fromWake === true, total: 0, speech: 0, silent: 0 };
+    armGuard();
+    setHearing(true); $("said").textContent = "";
+    openMic().then(ok => { if (!ok) { recording = null; setHearing(false); } });
+  }
+  function armGuard() {  // in case the mic goes quiet for good and blocks stop arriving
+    clearTimeout(guardTimer);
+    guardTimer = setTimeout(() => { if (recording) finishRecording(); }, (MAX_BLOCKS * 80) + 2000);
+  }
+  function stopListening() {
+    clearTimeout(guardTimer);
+    recording = null; setHearing(false);
+    afterRecording();
+  }
+  function afterRecording() {
+    if (worker) worker.postMessage({ type: "reset" });
+    preroll = [];
+    if (!wakeOn) closeMic();
+  }
+  function wavFrom(blocks) {
+    const samples = blocks.length * 1280, out = new DataView(new ArrayBuffer(44 + samples * 2));
+    const text = (at, s) => { for (let i = 0; i < s.length; i++) out.setUint8(at + i, s.charCodeAt(i)); };
+    text(0, "RIFF"); out.setUint32(4, 36 + samples * 2, true); text(8, "WAVEfmt "); out.setUint32(16, 16, true);
+    out.setUint16(20, 1, true); out.setUint16(22, 1, true); out.setUint32(24, 16000, true); out.setUint32(28, 32000, true);
+    out.setUint16(32, 2, true); out.setUint16(34, 16, true); text(36, "data"); out.setUint32(40, samples * 2, true);
+    let at = 44;
+    blocks.forEach(block => { for (let i = 0; i < block.length; i++, at += 2) out.setInt16(at, Math.max(-1, Math.min(1, block[i])) * 32767, true); });
+    return out.buffer;
+  }
+  async function finishRecording() {
+    const r = recording;
+    clearTimeout(guardTimer);
+    recording = null; setHearing(false);
+    afterRecording();
+    if (r) console.debug("recorded", r.total, "blocks,", r.speech, "speech,", r.silent, "quiet, noise", noise.toFixed(4));
+    if (!r || (!r.afterWake && r.speech < MIN_SPEECH_BLOCKS)) return;  // nothing said, and sending silence makes speech models invent words
+    transcribing = true; showMode();
+    let res = null, data = {};
+    try {
+      res = await fetch("/api/jarvis/stt", { method: "POST", headers: { "x-jarvis-session": session, "content-type": "audio/wav" }, body: wavFrom(r.blocks) });
+      data = await res.json().catch(() => ({}));
+    } catch { /* shown below */ }
+    transcribing = false; showMode();
+    if (res && res.status === 401) return signedOut(data.code);
+    if (!res || !res.ok) { $("said").textContent = data.error || "I couldn't reach speech recognition just now."; return; }
+    let heard = String(data.text || "").trim();
+    if (r.afterWake) {
+      // Whisper is the second opinion: no "Jarvis" in what it heard means the wake word fired on something else
+      const words = [...heard.matchAll(WAKE_WORD)], last = words[words.length - 1];
+      if (!last) { console.debug("false wake:", heard); return; }
+      heard = heard.slice(last.index + last[0].length).trim();
+      if (!heard) {  // said only "Hey Jarvis", so now wait for the command, keeping anything said during that check
+        if (recording) return;
+        recording = { blocks: preroll.slice(-REARM_BLOCKS), afterWake: false, total: 0, speech: 0, silent: 0 };
+        armGuard(); setHearing(true);
+        return;
+      }
+    } else {
+      heard = heard.replace(/^(?:(?:hey|hi|ok|okay)[\s,]+)?(?:j[ae]rv[iu]s|javis)\b[\s,.!?:;-]*/i, "").trim();
+    }
+    if (!heard) return;
+    $("said").textContent = heard;
+    if (!pendingTool && JUST_STOP.test(heard)) { $("said").textContent = ""; return; }  // a bare "stop" only silences Jarvis
+    spokeLast = true;
+    sendCommand(heard);
+  }
+  $("mic").addEventListener("click", () => {
+    if (!hearing) return startListening();
+    if (recording && recording.speech >= MIN_SPEECH_BLOCKS) finishRecording(); else stopListening();
+  });
+
+  /* "Hey Jarvis" */
   function stopCapture() {
-    if (!wake) return;
-    wake.stream.getTracks().forEach(t => t.stop());
-    wake.ctx.close().catch(() => {});
-    wake.worker.terminate();
-    wake = null;
-    releaseScreen();
+    recording = null; if (hearing) setHearing(false);
+    if (worker) worker.terminate();
+    worker = null; wakeReady = false;
+    closeMic(); releaseScreen();
   }
   async function startCapture() {
-    if (wake || !wakeOn) return;
-    if (!navigator.mediaDevices || !window.AudioWorkletNode) return wakeStatus("THIS BROWSER CAN'T LISTEN / USE THE MIC BUTTON", true);
+    if (worker || !wakeOn) return;
     wakeStatus("STARTING WAKE WORD");
-    const me = {};
-    try {
-      me.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
-      if (!wakeOn) { me.stream.getTracks().forEach(t => t.stop()); return; }
-      me.ctx = new AudioContext({ sampleRate: 16000 });
-      await me.ctx.audioWorklet.addModule("wake-capture.js?v=1");
-      me.node = new AudioWorkletNode(me.ctx, "wake-capture", { numberOfOutputs: 0 });
-      me.ctx.createMediaStreamSource(me.stream).connect(me.node);
-      me.worker = new Worker("wake-worker.js?v=1");
-    } catch (error) {
-      if (me.stream) me.stream.getTracks().forEach(t => t.stop());
-      if (me.ctx) me.ctx.close().catch(() => {});
-      return wakeStatus(error && error.name === "NotAllowedError" ? "MICROPHONE BLOCKED FOR THIS SITE" : "WAKE WORD FAILED / USE THE MIC BUTTON", true);
-    }
-    me.paused = false;
-    me.node.port.onmessage = e => { if (!me.paused && !document.hidden) me.worker.postMessage(e.data, [e.data.buffer]); };
-    me.worker.onmessage = e => {
+    if (!await openMic() || !wakeOn) return wakeOn ? wakeStatus("WAKE WORD FAILED / USE THE MIC BUTTON", true) : undefined;
+    if (worker) return;
+    const failed = text => { stopCapture(); wakeStatus("WAKE WORD FAILED / USE THE MIC BUTTON", true); if (text) console.warn("wake word:", text); };
+    worker = new Worker("wake-worker.js?v=1");
+    worker.onerror = () => failed();
+    worker.onmessage = e => {
       const m = e.data;
-      if (m.type === "ready") { wakeStatus(me.ctx.state === "running" ? 'LISTENING FOR "HEY JARVIS"' : "TAP THE PAGE TO START LISTENING", me.ctx.state !== "running"); holdScreen(); }
-      else if (m.type === "failed") { stopCapture(); wakeStatus("WAKE WORD FAILED / USE THE MIC BUTTON", true); console.warn("wake word:", m.error); }
+      if (m.type === "ready") {
+        wakeReady = true;
+        const running = mic && mic.ctx.state === "running";
+        wakeStatus(running ? 'LISTENING FOR "HEY JARVIS"' : "TAP THE PAGE TO START LISTENING", !running);
+        holdScreen();
+      } else if (m.type === "failed") failed(m.error);
       else if (m.type === "stats") console.debug("wake stats", m.ms.toFixed(1) + " ms per block", "peak " + m.peak.toFixed(3));
       else if (m.type === "wake") onWake(m.score);
     };
-    me.worker.onerror = () => { stopCapture(); wakeStatus("WAKE WORD FAILED / USE THE MIC BUTTON", true); };
-    wake = me;
-    me.ctx.resume().catch(() => {});
   }
   function onWake(score) {
     const now = Date.now();
     console.debug("wake word heard", score.toFixed(3));
-    if (hearing || now - lastWake < WAKE_COOLDOWN_MS) return;
+    if (recording || now - lastWake < WAKE_COOLDOWN_MS) return;
     lastWake = now;
-    stopSpeech();
     chime();
-    setTimeout(startListening, 220);  // let the chime finish, so recognition doesn't hear it
-  }
-  function wakeHearing(on) {
-    if (!wakeOn) return;
-    if (IOS) { if (on) stopCapture(); else startCapture(); return; }  // iPhones won't share the mic with speech recognition
-    if (wake) { wake.paused = on; if (!on) wake.worker.postMessage({ type: "reset" }); }
+    startListening(true);
   }
   function setWake(on) {
     wakeOn = on; store.set("jarvis.wake", on ? "on" : "off");
@@ -464,7 +538,10 @@
     if (on) startCapture(); else { stopCapture(); wakeStatus(""); }
   }
   $("wakeToggle").addEventListener("click", () => setWake(!wakeOn));
-  document.addEventListener("pointerdown", () => { if (wake && wake.ctx.state !== "running") wake.ctx.resume().then(() => wakeStatus('LISTENING FOR "HEY JARVIS"')).catch(() => {}); else if (wakeOn && !wake && !$("app").hidden) startCapture(); });
+  document.addEventListener("pointerdown", () => {
+    if (mic && mic.ctx.state !== "running") mic.ctx.resume().then(() => { if (wakeReady) wakeStatus('LISTENING FOR "HEY JARVIS"'); }).catch(() => {});
+    else if (wakeOn && !worker && !$("app").hidden) startCapture();
+  });
 
   $("commandForm").addEventListener("submit", e => {
     e.preventDefault();
