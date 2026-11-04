@@ -566,7 +566,7 @@
       const isNow = i === 0 && !v.label;
       const c = el("div", "wx-hour" + (isNow ? " now" : "")); c.style.animationDelay = 200 + i * 18 + "ms";
       c.append(el("small", "", isNow ? "NOW" : h.hour + ":00"), skyIcon(h.kind, h.night), el("b", "", h.temp + "°"));
-      c.append(el("span", "wet", h.rain >= 10 ? h.rain + "%" : " "));
+      c.append(el("span", "wet", h.rain != null ? h.rain + "%" : " "));
       hours.append(c);
     });
     const lower = el("div", "wx-lower"), charts = el("div", "wx-charts"), days = el("div", "wx-days");
@@ -578,7 +578,7 @@
       fill.style.left = (d.low - floor) / span * 100 + "%"; fill.style.width = Math.max(4, (d.high - d.low) / span * 100) + "%";
       bar.append(fill);
       const name = i === 0 ? "Today" : new Date(d.date + "T12:00").toLocaleDateString("en-GB", { weekday: "short" });
-      r.append(el("span", "day", name), skyIcon(d.kind), el("span", "wet", d.rain >= 10 ? d.rain + "%" : ""), el("span", "lo", d.low + "°"), bar, el("span", "hi", d.high + "°"));
+      r.append(el("span", "day", name), skyIcon(d.kind), el("span", "wet", d.rain != null ? d.rain + "%" : ""), el("span", "lo", d.low + "°"), bar, el("span", "hi", d.high + "°"));
       days.append(r);
     });
     lower.append(charts, days);
