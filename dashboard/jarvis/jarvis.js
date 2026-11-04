@@ -139,6 +139,7 @@
         break;
       case "step": pushLog(e); addStep(e.text); break;
       case "result": pushLog(e); if (e.tier >= 2 && !e.needs_confirmation) finishAction(e); break;
+      case "wait": if (turnOpen) say("One moment, " + address + "."); break;
       case "timer": pushLog(e); $("said").textContent = e.text; say(e.text); break;
     }
   }
