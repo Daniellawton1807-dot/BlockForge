@@ -166,11 +166,11 @@
     $("modeLabel").textContent = { listening: "LISTENING", thinking: "THINKING", speaking: "SPEAKING", idle: "COMPUTE ACTIVITY" }[mode];
   }
 
-  /* Speech. One audio element is unlocked by the first tap or key, because browsers block sound started any other way.
+  /* Speech. One audio element is unlocked by the first command, because browsers block sound started any other way.
      It plays ElevenLabs as the audio arrives; if that fails, the browser's own voice takes over and the page says so. */
   const SILENCE = "data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiJrDCQBTcu3UrAIwUdkRgQbFAZC1CQEwTJ9mjRvBA4UOLD8nKVOWfh+UlK3z/177OXrfOdKl7pyn3Xf//WreyTRUoAWgBgkOAGbZHBgG1OF6zM82DWbZaUmMBptgQhGjsyYqc9ae9XFz280948NMBWInljyzsNRFLPWdnZGWrddDsjK1unuSrVN9jJsK8KuQtQCtMBjCEtImISdNKJOopIpBFpNSMbIHCSRpRR5iakjTiyzLhchUUBwCgyKiweBv/7UsQbg8isVNoMPMjAAAA0gAAABEVFGmgqK////9bP/6XCykxBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqq";
   const player = new Audio();
-  let speaking = false, voiceOn = store.get("jarvis.voice") !== "off", unlocked = false, speechQueue = [], speechToken = 0;
+  let voiceRefused = false, speaking = false, voiceOn = store.get("jarvis.voice") !== "off", unlocked = false, speechQueue = [], speechToken = 0;
   let askedBack = false, address = "sir", turnOpen = false, acked = false, ackClips = [], ackNext = 0, ackLoading = false;
   const ACK_LINES = ["Right away", "Certainly", "At once"];
   /* Clips fetched ahead, so the acknowledgement plays with no trip to the server. They're cached there, so this costs nothing after the first time. */
@@ -192,12 +192,14 @@
   }
   function unlockAudio() {
     if (unlocked || speaking) return;
-    unlocked = true;
+    unlocked = true; voiceRefused = false;
     player.src = SILENCE;
     player.play().catch(e => { if (e.name === "NotAllowedError") unlocked = false; });
   }
-  document.addEventListener("pointerdown", unlockAudio);
-  document.addEventListener("keydown", unlockAudio);
+  // not on any touch: starting even silence wakes the speakers, which you can hear. A command's own tap is enough, and while
+  // the mic is open browsers allow sound anyway, so a touch only counts once sound has actually been refused.
+  document.addEventListener("click", e => { if (e.target.closest("button")) unlockAudio(); });
+  document.addEventListener("pointerdown", () => { if (voiceRefused) unlockAudio(); });
   function setSpeaking(on) { speaking = on; showMode(); }
   function warnVoice(text) { $("voiceWarn").hidden = !text; $("voiceWarn").textContent = text || ""; }
   function say(text) {
@@ -237,7 +239,7 @@
     player.onended = () => { if (token === speechToken) nextSpeech(); };
     player.onerror = failed;
     player.src = "/api/jarvis/tts/" + r.data.id;
-    player.play().then(() => warnVoice("")).catch(e => { if (e.name === "NotAllowedError") { setSpeaking(false); speechQueue = []; warnVoice("TAP THE PAGE ONCE TO ALLOW SOUND"); } else failed(); });
+    player.play().then(() => warnVoice("")).catch(e => { if (e.name === "NotAllowedError") { voiceRefused = true; unlocked = false; setSpeaking(false); speechQueue = []; warnVoice("TAP THE PAGE ONCE TO ALLOW SOUND"); } else failed(); });
   }
   function browserVoice(text, token, why) {
     warnVoice("USING THE BROWSER'S VOICE" + (why ? " / " + String(why).toUpperCase() : ""));
@@ -1106,6 +1108,7 @@
   async function sendCommand(text, extra) {
     const { keep, ...more } = extra || {};
     stopListening(); stopSpeech(); openTurn(); hideToast();
+    if (!spokeLast) unlockAudio();  // typed: Enter is a gesture too, but not a button click
     clearInterval(walkTimer);
     // what's on screen stays, dimmed, until there's something to replace it, so the page never jumps home and back
     if (!keep) $("stage").classList.add("stale");
