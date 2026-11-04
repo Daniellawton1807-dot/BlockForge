@@ -168,11 +168,6 @@ details.part p{margin:0 0 12px;color:var(--text);line-height:1.35}
 .outcome{padding:12px;border:1px solid var(--line);border-radius:4px;font-size:1.05rem}
 .outcome.good{border-color:var(--green);color:var(--green)}.outcome.bad{border-color:var(--red);color:var(--red)}
 .art{display:block;max-width:150px;margin:14px 0;border-radius:4px}
-.confirm{position:fixed;z-index:10;inset:0;display:grid;place-items:center;padding:16px;background:#010a10cc}
-.confirm>div{width:min(460px,100%);padding:24px;background:#04202e;border:1px solid var(--amber);box-shadow:0 0 30px #e8a24c33;border-radius:6px}
-.confirm h2{margin:0 0 12px;font:500 .72rem var(--head);letter-spacing:.2em;color:var(--amber)}
-.confirm p{margin:0 0 20px;font-size:1.15rem;line-height:1.35;overflow-wrap:anywhere}
-.confirm-go{display:flex;gap:10px}.confirm-go button{flex:1;padding:12px;border:1px solid #1d5566;border-radius:4px;font:500 .68rem var(--head);letter-spacing:.18em}
 .danger{background:var(--amber);border-color:var(--amber)!important;color:#1b1103}
 .gate{position:fixed;inset:0;display:grid;place-items:center;padding:16px}
 .gate-card{width:min(360px,100%);padding:30px;border:1px solid #1d5566;background:#031722e6;border-radius:6px}

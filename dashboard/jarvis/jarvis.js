@@ -8,7 +8,7 @@
     del(k) { try { localStorage.removeItem(k); } catch { /* nothing kept */ } }
   };
   let session = store.get("jarvis.session") || "";
-  let status = {}, log = [], live = false, pendingTool = null, sheetKind = null, panelTimer = null, pollTimer = null, abort = null;
+  let status = {}, log = [], live = false, pendingTool = null, pendingQuestion = "", sheetKind = null, panelTimer = null, pollTimer = null, abort = null;
   const cpuHistory = [], netHistory = [];
   const TOOL_NAMES = { jellyfin_play: "Play", jellyfin_pause: "Pause", jellyfin_resume: "Resume", jellyfin_stop: "Stop playback", tv_volume: "Volume", tv_power: "TV power", tv_mute: "Mute", minecraft_start: "Start Minecraft", minecraft_stop: "Stop Minecraft", minecraft_restart: "Restart Minecraft" };
   const label = tool => TOOL_NAMES[tool] || String(tool || "").replace(/_/g, " ");
@@ -219,7 +219,7 @@
     if (!item) {
       setSpeaking(false);
       // a spoken command that ends in a question gets a spoken answer: listen by itself
-      if (spokeLast && (askedBack || pendingTool)) { askedBack = false; startListening(); }
+      if ((spokeLast && askedBack) || pendingTool) { askedBack = false; startListening(); }
       return;
     }
     setSpeaking(true);
@@ -259,16 +259,8 @@
 
   function setPending(p) {
     pendingTool = p ? p.tool : null;
-    $("confirm").hidden = !p;
-    if (p) { $("confirmText").textContent = p.question || "Shall I proceed?"; $("confirmNo").focus(); }
-  }
-  async function answer(yes) {
-    const tool = pendingTool; setPending(null);
-    stopListening(); stopSpeech(); openTurn();
-    const r = await api("confirm", { tool, yes });
-    closeTurn();
-    if (r.ok) { if (!live) showReply(r.data); speakReply(r.data); }
-    else $("said").textContent = r.data.error || "That didn't go through.";
+    pendingQuestion = p ? p.question || "Shall I proceed?" : "";
+    if (p) $("said").textContent = pendingQuestion;
   }
   function openTurn() { turnOpen = true; acked = false; }
   function closeTurn() { turnOpen = false; }
@@ -281,10 +273,9 @@
       data.view.points.forEach((p, i) => { speechQueue.push({ text: p.text, before: () => showPoint(i) }); });
       if (!speaking) nextSpeech();
     }
-    if (!voiceOn && spokeLast && (askedBack || pendingTool || data.awaiting_confirmation)) { askedBack = false; startListening(); }
+    // a question for permission is answered out loud, however the command was given
+    if (!voiceOn && ((spokeLast && askedBack) || pendingTool || data.awaiting_confirmation)) { askedBack = false; startListening(); }
   }
-  $("confirmYes").addEventListener("click", () => answer(true));
-  $("confirmNo").addEventListener("click", () => answer(false));
 
   /* readouts */
   const num = (v, d = 0) => v == null ? "--" : Number(v).toFixed(d);
@@ -426,7 +417,7 @@
     head.append(close);
     return head;
   }
-  document.addEventListener("keydown", e => { if (e.key === "Escape" && $("sheet").hidden && $("confirm").hidden) goHome(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && $("sheet").hidden) goHome(); });
 
   /* What's behind the page: a title's backdrop, or the sky */
   function setAmbient(kind, key) {
@@ -988,7 +979,7 @@
     stopSpeech(); stopListening();
     recording = { blocks: earlier, afterWake: fromWake === true, total: 0, speech: 0, silent: 0 };
     armGuard();
-    setHearing(true); $("said").textContent = "";
+    setHearing(true); $("said").textContent = pendingQuestion;  // the question stays up while it waits for the answer
     openMic().then(ok => { if (!ok) { recording = null; setHearing(false); } });
   }
   function armGuard() {  // in case the mic goes quiet for good and blocks stop arriving
@@ -1046,7 +1037,7 @@
     } else {
       heard = heard.replace(/^(?:(?:hey|hi|ok|okay)[\s,]+)?(?:j[ae]rv[iu]s|javis)\b[\s,.!?:;-]*/i, "").trim();
     }
-    if (!heard) return;
+    if (!heard) { $("said").textContent = pendingQuestion; return; }
     $("said").textContent = heard;
     if (!pendingTool && JUST_STOP.test(heard)) { $("said").textContent = ""; return; }  // a bare "stop" only silences Jarvis
     spokeLast = true;
