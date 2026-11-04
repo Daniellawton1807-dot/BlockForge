@@ -378,7 +378,7 @@
 
   /* Scenes. Each reply says what it wants shown, and the whole page rearranges for it: the side panels slide out, the reactor flies to
      wherever that scene leaves room, and the content takes the page. Text only, never HTML from data. */
-  const SCENES = { report: "report", weather: "weather", media: "cinema", options: "wall", table: "reading", sections: "reading", suggestions: "reading", error: "alert", web: "web" };
+  const SCENES = { report: "report", weather: "weather", media: "cinema", options: "wall", table: "reading", sections: "reading", suggestions: "reading", error: "alert", web: "web", race: "race" };
   const CALM = window.matchMedia("(prefers-reduced-motion: reduce)");
   const HOME_AFTER_MS = 300000;
   let noticeTimer = null, sceneTimer = null, cineTimer = null, webState = null, walkTimer = null, ambientKey = "";
@@ -583,6 +583,37 @@
     stage.append(close, hero, hours, lower);
   }
 
+  /* Formula 1: the next race, a countdown, its weekend and the rest of the season */
+  function renderRace(v, stage) {
+    const close = stageHead("").querySelector("button"); close.classList.add("floating");
+    const hero = el("div", "gp"), name = el("div", "gp-name"), count = el("div", "gp-count");
+    name.append(el("small", "", "ROUND " + v.round + "  /  " + v.season), el("h2", "", v.name), el("p", "", v.circuit + "  ·  " + v.place), el("p", "gp-when", v.day + (v.time ? "  ·  " + v.time : "")));
+    hero.append(name);
+    if (v.at) {
+      const units = [["DAYS", 86400], ["HRS", 3600], ["MIN", 60]].map(([label, size]) => { const u = el("div", "unit"), b = el("b"); u.append(b, el("small", "", label)); count.append(u); return [b, size]; });
+      const draw = () => {
+        let left = Math.max(0, (new Date(v.at) - Date.now()) / 1000);
+        units.forEach(([b, size]) => { const n = Math.floor(left / size); left -= n * size; b.textContent = String(n).padStart(2, "0"); });
+      };
+      draw(); cineTimer = setInterval(draw, 30000);
+      hero.append(count);
+    }
+    const lower = el("div", "gp-lower"), part = (title, build) => { const box = el("section", "gp-part"); box.append(el("h4", "", title)); build(box); lower.append(box); };
+    part("RACE WEEKEND", box => v.sessions.forEach(s => {
+      const r = el("div", "gp-row" + (s.name === "Race" ? " main" : "") + (s.at && new Date(s.at) < Date.now() ? " past" : ""));
+      r.append(el("span", "", s.name), el("span", "dim", s.day), el("b", "", s.time || "TBC")); box.append(r);
+    }));
+    if (v.standings.length) part("DRIVERS' STANDINGS", box => v.standings.forEach(d => {
+      const r = el("div", "gp-row");
+      r.append(el("span", "pos", d.position), el("span", "", d.name), el("b", "", d.points)); box.append(r);
+    }));
+    if (v.next.length) part("AFTER THAT", box => v.next.forEach(r => {
+      const row = el("div", "gp-row");
+      row.append(el("span", "", r.name), el("span", "dim", r.day)); box.append(row);
+    }));
+    stage.append(close, hero, lower);
+  }
+
   /* A title on screen: cinema, with its backdrop behind the whole page */
   function renderCinema(v, stage) {
     const [main, ...others] = v.items, clock = s => { const m = Math.floor((s || 0) / 60); return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0"); };
@@ -641,6 +672,7 @@
       if (v.cards && v.cards.length) { const g = el("div", "cards"); v.cards.forEach((c, i) => g.append(drawTile(c, i))); stage.append(g); }
       if (v.charts && v.charts.length) { const g = el("div", "chartgrid"); v.charts.forEach(c => g.append(drawChart(c))); stage.append(g); }
     } else if (v.type === "weather") renderWeather(v, openStage(null, scene));
+    else if (v.type === "race") renderRace(v, openStage(null, scene));
     else if (v.type === "media") {
       const stage = openStage(null, scene), close = stageHead("").querySelector("button");
       close.classList.add("floating"); stage.append(close);
@@ -682,7 +714,7 @@
   }
 
   /* The web: a browser you can watch, beside what Jarvis makes of it */
-  const WEB_FIELDS = ["query", "status", "url", "site", "frame", "hero", "results", "answer", "facts", "points", "read", "mode", "stage"];
+  const WEB_FIELDS = ["hide_page", "query", "status", "url", "site", "frame", "hero", "results", "answer", "facts", "points", "read", "mode", "stage"];
   function webLive(e) {
     const starting = e.stage === "searching" || !webState;
     if (starting) { emptyStage(); $("said").textContent = ""; hideToast(); setAmbient(); webState = { results: [], points: [], facts: [], answer: "", index: 0 }; }
@@ -718,7 +750,9 @@
     root.querySelector(".addr").textContent = w.live && w.status ? w.status : w.url ? w.url.replace(/^https?:\/\/(www\.)?/, "") : "";
     const out = root.querySelector(".out");
     if (/^https?:\/\//.test(w.url || "")) { out.href = w.url; out.hidden = false; } else out.hidden = true;
-    root.querySelector(".browser").hidden = !w.frame && !w.live;
+    const noPage = w.hide_page || (!w.frame && !w.live);
+    root.querySelector(".browser").hidden = noPage;
+    root.classList.toggle("solo", noPage);
     setFrame(w.mode === "walk" && w.points[w.index] && !w.live ? w.points[w.index].frame || w.frame : w.frame);
     drawWebSide(root.querySelector(".side"));
     setCaption();
@@ -767,7 +801,7 @@
       side.append(list);
     }
     if (!w.live && w.mode === "answer" && w.url) {
-      const go = el("button", "act", "GO THROUGH THE PAGE"); go.type = "button"; go.addEventListener("click", () => webCommand("go through it")); side.append(go);
+      const go = el("button", "act", w.hide_page ? "SHOW THE PAGE" : "GO THROUGH THE PAGE"); go.type = "button"; go.addEventListener("click", () => webCommand("go through it")); side.append(go);
     }
     if (w.results.length) {
       side.append(el("h4", "", "SOURCES"));
