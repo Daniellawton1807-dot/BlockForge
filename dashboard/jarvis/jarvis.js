@@ -251,11 +251,13 @@
     stopListening(); stopSpeech(); openTurn();
     const r = await api("confirm", { tool, yes });
     closeTurn();
-    if (r.ok) say(r.data.text);
+    if (r.ok) speakReply(r.data);
     else $("said").textContent = r.data.error || "That didn't go through.";
   }
   function openTurn() { turnOpen = true; acked = false; }
   function closeTurn() { turnOpen = false; }
+  // after "Right away, sir", a success needs no follow-up; failures and answers are still spoken
+  function speakReply(data) { if (!(data.quiet && acked)) say(data.text); }
   $("confirmYes").addEventListener("click", () => answer(true));
   $("confirmNo").addEventListener("click", () => answer(false));
 
@@ -581,7 +583,7 @@
     stopListening(); stopSpeech(); openTurn();
     const r = await api("chat", { text });
     closeTurn();
-    if (r.ok) say(r.data.text);
+    if (r.ok) speakReply(r.data);
     if (!r.ok && r.status !== 401) $("said").textContent = r.data.error || "That didn't go through.";
     else if (r.ok && !live) { $("said").textContent = r.data.text; setPending(r.data.awaiting_confirmation ? { tool: r.data.tool, question: r.data.text } : null); }
   }
