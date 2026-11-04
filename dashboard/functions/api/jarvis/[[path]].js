@@ -2,7 +2,7 @@ import { json, loginConfigured, readJsonBody, validRequestOrigin, validSession }
 
 // Jarvis (~/vault-claude/jarvis on the server), through the private bridge. Needs the Homebase sign-in;
 // Jarvis then asks for its own PIN. The bridge Worker holds the token, so it never reaches this code or the browser.
-const ROUTES = { GET: /^(state|events|img\/[A-Za-z0-9]{1,64})$/, POST: /^(pin|chat|confirm)$/ };
+const ROUTES = { GET: /^(state|events|tts\/[a-f0-9]{40}|img\/[A-Za-z0-9]{1,64})$/, POST: /^(pin|chat|confirm|tts)$/ };
 
 export async function onRequest({ request, env, params }) {
   const method = request.method.toUpperCase();
@@ -28,6 +28,7 @@ export async function onRequest({ request, env, params }) {
         "x-homebase-service": "jarvis",
         "x-jarvis-session": request.headers.get("x-jarvis-session") || "",
         "accept": request.headers.get("accept") || "application/json",
+        ...(request.headers.get("range") ? { range: request.headers.get("range") } : {}),
         ...(body ? { "content-type": "application/json" } : {})
       },
       body
@@ -36,7 +37,9 @@ export async function onRequest({ request, env, params }) {
     return json({ code: "jarvis_unavailable", error: "Jarvis isn't reachable right now." }, 503);
   }
   const headers = new Headers({ "cache-control": response.headers.get("cache-control") || "no-store", "x-content-type-options": "nosniff" });
-  const type = response.headers.get("content-type");
-  if (type) headers.set("content-type", type);
+  for (const name of ["content-type", "content-length", "content-range", "accept-ranges"]) {
+    const value = response.headers.get(name);
+    if (value) headers.set(name, value);
+  }
   return new Response(response.body, { status: response.status, headers });
 }

@@ -51,7 +51,7 @@ async function autopilot(request, env, path) {
 }
 
 // Jarvis: the Pages Function has already checked the Homebase sign-in. Only this Worker holds JARVIS_TOKEN.
-const JARVIS_PATHS = new RegExp("^(state|events|pin|chat|confirm|img/[A-Za-z0-9]{1,64})$");
+const JARVIS_PATHS = new RegExp("^(state|events|pin|chat|confirm|tts|tts/[a-f0-9]{40}|img/[A-Za-z0-9]{1,64})$");
 async function jarvis(request, env, path) {
   const method = request.method.toUpperCase();
   if (!["GET", "POST"].includes(method)) return json({ error: "Method not allowed." }, 405);
@@ -65,6 +65,7 @@ async function jarvis(request, env, path) {
     "accept": request.headers.get("accept") || "application/json"
   });
   if (body) headers.set("content-type", "application/json");
+  if (request.headers.get("range")) headers.set("range", request.headers.get("range"));  // Safari's audio player
   let upstream;
   try {
     upstream = await env.VPC_JARVIS.fetch(new Request("http://192.168.8.150:8770/api/" + path, { method, headers, body }));
@@ -72,8 +73,10 @@ async function jarvis(request, env, path) {
     return json({ error: "Jarvis is unavailable." }, 503);
   }
   const out = new Headers({ "cache-control": upstream.headers.get("cache-control") || "no-store" });
-  const type = upstream.headers.get("content-type");
-  if (type) out.set("content-type", type);
+  for (const name of ["content-type", "content-length", "content-range", "accept-ranges"]) {
+    const value = upstream.headers.get(name);
+    if (value) out.set(name, value);
+  }
   return new Response(upstream.body, { status: upstream.status, headers: out });
 }
 

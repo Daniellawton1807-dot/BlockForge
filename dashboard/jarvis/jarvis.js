@@ -68,6 +68,7 @@
   function applyView(v) {
     if (v.status) setStatus(v.status);
     if (v.log) { log = v.log; if (sheetKind === "log") renderSheet(); }
+    if (v.address) address = v.address;
     setMode(v.mode || "idle");
     setPending(v.pending);
   }
@@ -128,15 +129,85 @@
       case "mode": setMode(e.mode); break;
       case "you": pushLog(e); $("said").textContent = ""; break;
       case "reply": pushLog(e); $("said").textContent = e.text; setPending(e.awaiting_confirmation ? { tool: e.tool, question: e.text } : null); break;
-      case "action": pushLog(e); if (e.tier >= 2) openAction(e); break;
+      case "action":
+        pushLog(e);
+        if (e.tier >= 2) openAction(e);
+        // only the device that gave the command speaks, and only if the action is taking a moment
+        if (e.tier >= 2 && turnOpen && !ackTimer) ackTimer = setTimeout(() => { if (turnOpen) say("Right away, " + address + "."); }, 1200);
+        break;
       case "step": pushLog(e); addStep(e.text); break;
       case "result": pushLog(e); if (e.tier >= 2 && !e.needs_confirmation) finishAction(e); break;
-      case "timer": pushLog(e); $("said").textContent = e.text; break;
+      case "timer": pushLog(e); $("said").textContent = e.text; say(e.text); break;
     }
   }
   function pushLog(e) { log.push(e); if (log.length > 100) log.shift(); if (sheetKind === "log") renderSheet(); }
 
-  function setMode(mode) { document.body.dataset.mode = mode; $("modeLabel").textContent = mode === "thinking" ? "THINKING" : "COMPUTE ACTIVITY"; }
+  let serverMode = "idle";
+  function setMode(mode) { serverMode = mode; showMode(); }
+  function showMode() {
+    const mode = serverMode === "thinking" ? "thinking" : speaking ? "speaking" : "idle";
+    document.body.dataset.mode = mode;
+    $("modeLabel").textContent = { thinking: "THINKING", speaking: "SPEAKING", idle: "COMPUTE ACTIVITY" }[mode];
+  }
+
+  /* Speech. One audio element is unlocked by the first tap or key, because browsers block sound started any other way.
+     It plays ElevenLabs as the audio arrives; if that fails, the browser's own voice takes over and the page says so. */
+  const SILENCE = "data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiJrDCQBTcu3UrAIwUdkRgQbFAZC1CQEwTJ9mjRvBA4UOLD8nKVOWfh+UlK3z/177OXrfOdKl7pyn3Xf//WreyTRUoAWgBgkOAGbZHBgG1OF6zM82DWbZaUmMBptgQhGjsyYqc9ae9XFz280948NMBWInljyzsNRFLPWdnZGWrddDsjK1unuSrVN9jJsK8KuQtQCtMBjCEtImISdNKJOopIpBFpNSMbIHCSRpRR5iakjTiyzLhchUUBwCgyKiweBv/7UsQbg8isVNoMPMjAAAA0gAAABEVFGmgqK////9bP/6XCykxBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqq";
+  const player = new Audio();
+  let speaking = false, voiceOn = store.get("jarvis.voice") !== "off", unlocked = false, speechQueue = [], speechToken = 0;
+  let address = "sir", ackTimer = null, turnOpen = false;
+  function unlockAudio() {
+    if (unlocked || speaking) return;
+    unlocked = true;
+    player.src = SILENCE;
+    player.play().catch(e => { if (e.name === "NotAllowedError") unlocked = false; });
+  }
+  document.addEventListener("pointerdown", unlockAudio);
+  document.addEventListener("keydown", unlockAudio);
+  function setSpeaking(on) { speaking = on; showMode(); }
+  function warnVoice(text) { $("voiceWarn").hidden = !text; $("voiceWarn").textContent = text || ""; }
+  function say(text) {
+    if (!voiceOn || !text) return;
+    speechQueue.push(text);
+    if (!speaking) nextSpeech();
+  }
+  function stopSpeech() {
+    speechToken++; speechQueue = [];
+    player.pause(); player.removeAttribute("src");
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    setSpeaking(false);
+  }
+  async function nextSpeech() {
+    const text = speechQueue.shift();
+    if (!text) return setSpeaking(false);
+    setSpeaking(true);
+    const token = ++speechToken;
+    const r = await api("tts", { text });
+    if (token !== speechToken) return;
+    if (!r.ok) return browserVoice(text, token, r.data.error);
+    const failed = () => { if (token === speechToken) { speechToken++; browserVoice(text, speechToken, "ElevenLabs failed"); } };
+    player.onended = () => { if (token === speechToken) nextSpeech(); };
+    player.onerror = failed;
+    player.src = "/api/jarvis/tts/" + r.data.id;
+    player.play().then(() => warnVoice("")).catch(e => { if (e.name === "NotAllowedError") { setSpeaking(false); speechQueue = []; warnVoice("TAP THE PAGE ONCE TO ALLOW SOUND"); } else failed(); });
+  }
+  function browserVoice(text, token, why) {
+    warnVoice("USING THE BROWSER'S VOICE" + (why ? " / " + String(why).toUpperCase() : ""));
+    if (!window.speechSynthesis) return nextSpeech();
+    const u = new SpeechSynthesisUtterance(text);
+    const voices = speechSynthesis.getVoices();
+    u.voice = voices.find(v => /en-GB/i.test(v.lang) && /male|daniel|arthur|george/i.test(v.name)) || voices.find(v => /en-GB/i.test(v.lang)) || null;
+    u.lang = "en-GB";
+    u.onend = u.onerror = () => { if (token === speechToken) nextSpeech(); };
+    speechSynthesis.speak(u);
+  }
+  function setVoice(on) {
+    voiceOn = on; store.set("jarvis.voice", on ? "on" : "off");
+    $("voiceToggle").setAttribute("aria-pressed", String(on)); $("voiceState").textContent = on ? "On" : "Off";
+    if (!on) { stopSpeech(); warnVoice(""); }
+  }
+  $("voiceToggle").addEventListener("click", () => setVoice(!voiceOn));
+  setVoice(voiceOn);
 
   function setPending(p) {
     pendingTool = p ? p.tool : null;
@@ -145,9 +216,14 @@
   }
   async function answer(yes) {
     const tool = pendingTool; setPending(null);
+    stopSpeech(); openTurn();
     const r = await api("confirm", { tool, yes });
-    if (!r.ok) $("said").textContent = r.data.error || "That didn't go through.";
+    closeTurn();
+    if (r.ok) say(r.data.text);
+    else $("said").textContent = r.data.error || "That didn't go through.";
   }
+  function openTurn() { turnOpen = true; clearTimeout(ackTimer); ackTimer = null; }
+  function closeTurn() { turnOpen = false; clearTimeout(ackTimer); ackTimer = null; }
   $("confirmYes").addEventListener("click", () => answer(true));
   $("confirmNo").addEventListener("click", () => answer(false));
 
@@ -263,11 +339,14 @@
     const box = $("command"), text = box.value.trim();
     if (!text) return;
     box.value = "";
+    stopSpeech(); openTurn();
     const r = await api("chat", { text });
+    closeTurn();
+    if (r.ok) say(r.data.text);
     if (!r.ok && r.status !== 401) $("said").textContent = r.data.error || "That didn't go through.";
     else if (r.ok && !live) { $("said").textContent = r.data.text; setPending(r.data.awaiting_confirmation ? { tool: r.data.tool, question: r.data.text } : null); }
   });
-  $("signOut").addEventListener("click", () => { session = ""; store.del("jarvis.session"); stopLive(); closeSheet(); showGate("pin", "Locked. Enter your PIN."); });
+  $("signOut").addEventListener("click", () => { stopSpeech(); session = ""; store.del("jarvis.session"); stopLive(); closeSheet(); showGate("pin", "Locked. Enter your PIN."); });
 
   /* clock and static reactor ticks */
   function tick() {
