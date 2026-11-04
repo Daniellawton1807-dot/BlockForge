@@ -73,6 +73,7 @@
     loadAcks();
     setMode(v.mode || "idle");
     setPending(v.pending);
+    if (v.view && !$("stage").childElementCount) renderView(v.view);
   }
 
   function stopLive() { if (abort) abort.abort(); abort = null; clearInterval(pollTimer); pollTimer = null; setLink(false); }
@@ -119,7 +120,7 @@
   }
 
   function setLink(on, text) {
-    live = on;
+    live = on && !text;  // polling connects, but delivers no replies: those come from the command's own response
     $("linkText").textContent = on ? (text || "LIVE LINK / VAULT") : "LINK LOST / RECONNECTING";
     document.querySelector(".link").classList.toggle("off", !on);
   }
@@ -130,7 +131,7 @@
       case "status": setStatus(e.status); break;
       case "mode": setMode(e.mode); break;
       case "you": pushLog(e); $("said").textContent = ""; break;
-      case "reply": pushLog(e); $("said").textContent = e.text; setPending(e.awaiting_confirmation ? { tool: e.tool, question: e.text } : null); break;
+      case "reply": pushLog(e); showReply(e); setPending(e.awaiting_confirmation ? { tool: e.tool, question: e.text } : null); break;
       case "action":
         pushLog(e);
         if (e.tier >= 2) openAction(e);
@@ -138,10 +139,15 @@
         if (e.tier >= 2 && turnOpen) acknowledge();
         break;
       case "step": pushLog(e); addStep(e.text); break;
-      case "result": pushLog(e); if (e.tier >= 2 && !e.needs_confirmation) finishAction(e); break;
+      case "result": pushLog(e); break;
       case "wait": if (turnOpen) say("One moment, " + address + "."); break;
       case "timer": pushLog(e); $("said").textContent = e.text; say(e.text); break;
     }
+  }
+  function showReply(r) {
+    const type = r.view && r.view.type;
+    $("said").textContent = type === "notice" || type === "error" ? "" : r.text;
+    renderView(r.view);
   }
   function pushLog(e) { log.push(e); if (log.length > 100) log.shift(); if (sheetKind === "log") renderSheet(); }
 
@@ -253,7 +259,7 @@
     stopListening(); stopSpeech(); openTurn();
     const r = await api("confirm", { tool, yes });
     closeTurn();
-    if (r.ok) speakReply(r.data);
+    if (r.ok) { if (!live) showReply(r.data); speakReply(r.data); }
     else $("said").textContent = r.data.error || "That didn't go through.";
   }
   function openTurn() { turnOpen = true; acked = false; }
@@ -357,25 +363,183 @@
     }
   }
 
-  function openAction(e) {
-    openSheet("action", label(e.tool).toUpperCase());
-    const body = $("sheetBody"); body.replaceChildren(el("ul", "steps"));
-    body.dataset.tool = e.tool;
+  /* The response stage: each reply says what it wants shown, and this draws it. Text only, never HTML from data. */
+  let noticeTimer = null;
+  function clearStage() {
+    clearTimeout(noticeTimer);
+    const stage = $("stage");
+    stage.hidden = true; stage.replaceChildren(); stage.className = "stage";
+    document.body.classList.remove("staged");
   }
-  function addStep(text) { const list = $("sheetBody").querySelector(".steps"); if (sheetKind === "action" && list) list.append(el("li", "", text)); }
-  async function finishAction(e) {
-    if (sheetKind !== "action" || $("sheetBody").dataset.tool !== e.tool) return;
-    const body = $("sheetBody"), d = e.details || {};
-    if (d.image) {
-      const img = el("img", "art"); img.alt = d.title || ""; body.append(img);
-      const res = await fetch("/api/jarvis/img/" + encodeURIComponent(d.image), { headers: { "x-jarvis-session": session } }).catch(() => null);
-      if (res && res.ok) img.src = URL.createObjectURL(await res.blob()); else img.remove();
-    }
-    body.append(el("div", "outcome " + (e.ok ? "good" : "bad"), e.text));
-    if (e.ok) panelTimer = setTimeout(closeSheet, 7000);
+  function openStage(title, kind) {
+    clearStage();
+    const stage = $("stage");
+    stage.hidden = false; document.body.classList.add("staged");
+    if (kind) stage.classList.add("is-" + kind);
+    if (title !== null) stage.append(stageHead(title));
+    return stage;
+  }
+  function stageHead(title) {
+    const head = el("div", "stage-head");
+    head.append(el("h3", "", title));
+    const close = el("button", "stage-close", "×");
+    close.type = "button"; close.setAttribute("aria-label", "Close"); close.addEventListener("click", clearStage);
+    head.append(close);
+    return head;
+  }
+  async function loadImage(img, id) {
+    const res = await fetch("/api/jarvis/img/" + encodeURIComponent(id), { headers: { "x-jarvis-session": session } }).catch(() => null);
+    if (res && res.ok) img.src = URL.createObjectURL(await res.blob()); else img.remove();
+  }
+  const poster = (id, alt) => { const img = el("img"); img.alt = alt || ""; loadImage(img, id); return img; };
+  const STATES = { good: ["✓", "Healthy"], warn: ["!", "Watch"], bad: ["✕", "Problem"] };
+
+  function drawTile(c, i) {
+    const t = el("div", "tile " + (c.state || ""));
+    t.style.animationDelay = i * 40 + "ms";
+    t.append(el("small", "", c.label), el("b", "", c.value));
+    if (c.detail) t.append(el("span", "more", c.detail));
+    if (typeof c.percent === "number") { const m = el("div", "meter"), f = el("i"); f.style.width = Math.max(0, Math.min(100, c.percent)) + "%"; m.append(f); t.append(m); }
+    if (STATES[c.state] && c.state !== "good") { const p = el("span", "pill " + c.state); p.textContent = STATES[c.state][0] + " " + STATES[c.state][1]; t.append(p); }
+    return t;
+  }
+  function drawFigures(chart) {
+    const d = el("details", "figures");
+    d.append(el("summary", "", "Show figures"));
+    const scroll = el("div", "scrollx"), table = el("table", "compare"), row = (cells, tag) => { const tr = el("tr"); cells.forEach(x => tr.append(el(tag, "", x))); return tr; };
+    table.append(row(["", chart.title], "th"));
+    chart.labels.forEach((l, i) => table.append(row([l, chart.values[i] + (chart.unit || "")], "td")));
+    scroll.append(table); d.append(scroll);
+    return d;
+  }
+  function drawLine(chart) {
+    const W = 600, H = 150, L = 34, R = 8, T = 10, B = 20, NS = "http://www.w3.org/2000/svg", vals = chart.values;
+    let lo = chart.floor ?? Math.floor(Math.min(...vals) - 1), hi = chart.ceiling ?? Math.ceil(Math.max(...vals) + 1);
+    if (hi <= lo) hi = lo + 1;
+    const x = i => L + i / Math.max(1, vals.length - 1) * (W - L - R), y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+    const svg = document.createElementNS(NS, "svg"), make = (tag, attrs, text) => { const n = document.createElementNS(NS, tag); Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v)); if (text != null) n.textContent = text; svg.append(n); return n; };
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", `${chart.title}, from ${Math.min(...vals)} to ${Math.max(...vals)} ${chart.unit || ""}`);
+    [lo, (lo + hi) / 2, hi].forEach(v => { make("line", { class: "grid", x1: L, x2: W - R, y1: y(v), y2: y(v) }); make("text", { class: "axis", x: L - 6, y: y(v) + 3, "text-anchor": "end" }, Math.round(v) + (chart.unit || "")); });
+    chart.labels.forEach((l, i) => { if (i % 6 === 0) make("text", { class: "axis", x: x(i), y: H - 5, "text-anchor": "middle" }, l + ":00"); });
+    const pts = vals.map((v, i) => x(i).toFixed(1) + "," + y(v).toFixed(1)).join(" ");
+    make("polygon", { class: "area", points: `${x(0)},${y(lo)} ${pts} ${x(vals.length - 1)},${y(lo)}` });
+    make("polyline", { class: "line", points: pts });
+    const cross = make("line", { class: "cross", y1: T, y2: H - B, visibility: "hidden" });
+    const dot = make("circle", { class: "dot", r: 5, cx: x(chart.now ?? 0), cy: y(vals[chart.now ?? 0]), visibility: chart.now == null ? "hidden" : "visible" });
+    const plot = el("div", "plot"), tip = el("div", "tip"); tip.hidden = true;
+    plot.append(svg, tip);
+    const show = i => {
+      cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
+      dot.setAttribute("cx", x(i)); dot.setAttribute("cy", y(vals[i])); dot.setAttribute("visibility", "visible");
+      tip.hidden = false; tip.textContent = chart.labels[i] + ":00  ·  " + vals[i] + (chart.unit || "");
+      tip.style.left = Math.max(12, Math.min(88, x(i) / W * 100)) + "%";
+    };
+    plot.addEventListener("pointermove", e => { const box = svg.getBoundingClientRect(), at = (e.clientX - box.left) / box.width * W; show(Math.max(0, Math.min(vals.length - 1, Math.round((at - L) / (W - L - R) * (vals.length - 1))))); });
+    plot.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); if (chart.now != null) { dot.setAttribute("cx", x(chart.now)); dot.setAttribute("cy", y(vals[chart.now])); } else dot.setAttribute("visibility", "hidden"); });
+    return plot;
+  }
+  function drawBars(chart) {
+    const wrap = el("div", "bars"), top = Math.max(...chart.values.map(Math.abs), 1);
+    chart.labels.forEach((l, i) => {
+      const row = el("div", "bar"), track = el("div"), fill = el("i");
+      fill.style.width = Math.abs(chart.values[i]) / top * 100 + "%"; track.append(fill);
+      row.append(el("span", "", l), track, el("b", "", chart.values[i] + (chart.unit || "")));
+      row.title = l + ": " + chart.values[i] + (chart.unit || "");
+      wrap.append(row);
+    });
+    return wrap;
+  }
+  function drawChart(chart) {
+    const box = el("div", "chart");
+    if (chart.title) box.append(el("h4", "", chart.title.toUpperCase()));
+    box.append(chart.kind === "line" ? drawLine(chart) : drawBars(chart));
+    if (chart.kind === "line") box.append(drawFigures(chart));
+    return box;
   }
 
-  /* The microphone. One 16 kHz capture feeds both the "Hey Jarvis" worker and command recording, so it works in any browser.
+  function renderView(v) {
+    if (!v) return clearStage();
+    const clock = s => { const m = Math.floor((s || 0) / 60); return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0"); };
+    if (v.type === "report") {
+      const stage = openStage(v.title);
+      if (v.cards && v.cards.length) { const g = el("div", "cards"); v.cards.forEach((c, i) => g.append(drawTile(c, i))); stage.append(g); }
+      (v.charts || []).forEach(c => stage.append(drawChart(c)));
+    } else if (v.type === "media") {
+      const stage = openStage("Now playing");
+      v.items.forEach(m => {
+        const row = el("div", "mediarow"), txt = el("div", "txt");
+        if (m.image) row.append(poster(m.image, m.title));
+        txt.append(el("small", "", String(m.tv || "").toUpperCase()), el("b", "", m.title));
+        if (m.subtitle) txt.append(el("span", "", m.subtitle));
+        if (m.runtime) { const bar = el("div", "meter"), f = el("i"); f.style.width = Math.min(100, (m.position || 0) / m.runtime * 100) + "%"; bar.append(f); txt.append(bar, el("span", "", (m.paused ? "Paused · " : "") + clock(m.position) + " of " + clock(m.runtime))); }
+        row.append(txt); stage.append(row);
+      });
+    } else if (v.type === "options") {
+      const stage = openStage(v.title), grid = el("div", "optgrid");
+      v.items.forEach((o, i) => {
+        const b = el("button", "opt"); b.type = "button"; b.style.animationDelay = i * 50 + "ms";
+        const txt = el("span", "txt"), name = el("b", "", o.label);
+        txt.append(name); if (o.detail) txt.append(el("small", "", o.detail));
+        if (o.progress) { const bar = el("span", "meter"), f = el("i"); bar.style.display = "block"; f.style.width = o.progress + "%"; bar.append(f); txt.append(bar); }
+        b.append(el("span", "num", String(i + 1)));
+        if (o.image) b.append(poster(o.image, ""));
+        b.append(txt);
+        b.addEventListener("click", () => { spokeLast = false; sendCommand(o.label, { option_set: v.id, option: i }); });
+        grid.append(b);
+      });
+      stage.append(grid, el("p", "hint", 'Tap one, or say "the second one".'));
+    } else if (v.type === "notice") {
+      const stage = openStage(null, "notice"), n = el("div", "notice"), p = el("p", "", v.title || v.text);
+      n.append(el("span", "tick", "✓"));
+      if (v.image) n.append(poster(v.image, ""));
+      if (v.subtitle) p.append(el("span", "", v.subtitle));
+      n.append(p); stage.append(n);
+      noticeTimer = setTimeout(clearStage, 6000);
+    } else if (v.type === "error") {
+      const stage = openStage(null, "error"), head = el("div", "errhead"), close = stageHead("").querySelector("button");
+      head.append(el("i", "", "!"), el("h3", "", v.title), close);
+      stage.append(head);
+      const part = (label, text) => { const d = el("p", "diag"); d.append(el("small", "", label), document.createTextNode(text)); stage.append(d); };
+      part("WHAT HAPPENED", v.what);
+      if (v.why) part("LIKELY CAUSE", v.why);
+      if (v.tips && v.tips.length) { const u = el("ul", "tips"); v.tips.forEach(t => u.append(el("li", "", t))); stage.append(el("small", "", "WHAT TO TRY"), u); }
+      const again = el("button", "act", "TRY AGAIN"); again.type = "button";
+      again.addEventListener("click", () => { spokeLast = false; sendCommand("try again"); });
+      stage.append(again);
+    } else if (v.type === "table") {
+      const stage = openStage(v.title), scroll = el("div", "scrollx"), table = el("table", "compare");
+      if (v.columns && v.columns.length) { const tr = el("tr"); v.columns.forEach(c => tr.append(el("th", "", c))); table.append(tr); }
+      v.rows.forEach(r => { const tr = el("tr"); r.forEach(c => tr.append(el("td", "", c))); table.append(tr); });
+      scroll.append(table); stage.append(scroll);
+      if (v.verdict) stage.append(el("p", "verdict", v.verdict));
+    } else if (v.type === "sections") {
+      const stage = openStage(v.title);
+      v.sections.forEach((s, i) => { const d = el("details", "part"); d.open = i === 0; d.append(el("summary", "", s.heading), el("p", "", s.body)); stage.append(d); });
+    } else if (v.type === "suggestions") {
+      const stage = openStage(v.title), list = el("div", "sugg");
+      v.items.forEach((s, i) => {
+        const c = el("div", "sug"); c.style.animationDelay = i * 50 + "ms"; c.append(el("b", "", s.title));
+        if (s.detail) c.append(el("span", "", s.detail));
+        if (s.command) { const go = el("button", "act", "DO THIS"); go.type = "button"; go.addEventListener("click", () => { spokeLast = false; sendCommand(s.command); }); c.append(go); }
+        list.append(c);
+      });
+      stage.append(list);
+    } else clearStage();
+  }
+
+  /* Live steps while an action runs */
+  function openAction(e) {
+    const stage = openStage(label(e.tool)), work = el("div", "work"), track = el("div", "track");
+    track.append(el("i")); work.append(track, el("ul", "steps")); stage.append(work);
+  }
+  function addStep(text) {
+    const list = $("stage").querySelector(".steps");
+    if (!list) return;
+    list.querySelectorAll("li").forEach(li => { li.className = "past"; });
+    list.append(el("li", "current", text));
+  }
+    /* The microphone. One 16 kHz capture feeds both the "Hey Jarvis" worker and command recording, so it works in any browser.
      The wake word models run on this device. Audio only leaves it as a recorded command, after the wake word or a tap on the mic.
      Browsers stop the mic when the tab is hidden or the phone locks, so hands-free needs the page open and the screen on. */
   // In 80 ms blocks. Detection lags the words, so about two seconds before it are kept, or "Hey Jarvis, what's the weather" would lose its start.
@@ -586,13 +750,13 @@
     spokeLast = false;
     sendCommand(text);
   });
-  async function sendCommand(text) {
-    stopListening(); stopSpeech(); openTurn();
-    const r = await api("chat", { text });
+  async function sendCommand(text, extra) {
+    stopListening(); stopSpeech(); openTurn(); clearStage();
+    const r = await api("chat", { text, ...extra });
     closeTurn();
     if (r.ok) speakReply(r.data);
     if (!r.ok && r.status !== 401) $("said").textContent = r.data.error || "That didn't go through.";
-    else if (r.ok && !live) { $("said").textContent = r.data.text; setPending(r.data.awaiting_confirmation ? { tool: r.data.tool, question: r.data.text } : null); }
+    else if (r.ok && !live) { showReply(r.data); setPending(r.data.awaiting_confirmation ? { tool: r.data.tool, question: r.data.text } : null); }
   }
   $("signOut").addEventListener("click", () => { stopListening(); stopSpeech(); stopCapture(); wakeStatus(""); session = ""; store.del("jarvis.session"); stopLive(); closeSheet(); showGate("pin", "Locked. Enter your PIN."); });
 
