@@ -157,7 +157,7 @@
   const SILENCE = "data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiJrDCQBTcu3UrAIwUdkRgQbFAZC1CQEwTJ9mjRvBA4UOLD8nKVOWfh+UlK3z/177OXrfOdKl7pyn3Xf//WreyTRUoAWgBgkOAGbZHBgG1OF6zM82DWbZaUmMBptgQhGjsyYqc9ae9XFz280948NMBWInljyzsNRFLPWdnZGWrddDsjK1unuSrVN9jJsK8KuQtQCtMBjCEtImISdNKJOopIpBFpNSMbIHCSRpRR5iakjTiyzLhchUUBwCgyKiweBv/7UsQbg8isVNoMPMjAAAA0gAAABEVFGmgqK////9bP/6XCykxBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqq";
   const player = new Audio();
   let speaking = false, voiceOn = store.get("jarvis.voice") !== "off", unlocked = false, speechQueue = [], speechToken = 0;
-  let address = "sir", turnOpen = false, acked = false, ackClips = [], ackNext = 0, ackLoading = false;
+  let askedBack = false, address = "sir", turnOpen = false, acked = false, ackClips = [], ackNext = 0, ackLoading = false;
   const ACK_LINES = ["Right away", "Certainly", "At once"];
   /* Clips fetched ahead, so the acknowledgement plays with no trip to the server. They're cached there, so this costs nothing after the first time. */
   async function loadAcks() {
@@ -192,6 +192,7 @@
     if (!speaking) nextSpeech();
   }
   function stopSpeech() {
+    askedBack = false;
     speechToken++; speechQueue = [];
     player.pause(); player.removeAttribute("src");
     if (window.speechSynthesis) speechSynthesis.cancel();
@@ -202,8 +203,8 @@
     const text = item && item.clip ? null : item;
     if (!item) {
       setSpeaking(false);
-      // a spoken question gets a spoken answer: listen once for yes or no
-      if (pendingTool && spokeLast) startListening();
+      // a spoken command that ends in a question gets a spoken answer: listen by itself
+      if (spokeLast && (askedBack || pendingTool)) { askedBack = false; startListening(); }
       return;
     }
     setSpeaking(true);
@@ -257,7 +258,12 @@
   function openTurn() { turnOpen = true; acked = false; }
   function closeTurn() { turnOpen = false; }
   // after "Right away, sir", a success needs no follow-up; failures and answers are still spoken
-  function speakReply(data) { if (!(data.quiet && acked)) say(data.text); }
+  function speakReply(data) {
+    askedBack = /\?\s*$/.test(data.text || "");
+    if (data.quiet && acked) return;
+    say(data.text);
+    if (!voiceOn && spokeLast && (askedBack || pendingTool || data.awaiting_confirmation)) { askedBack = false; startListening(); }
+  }
   $("confirmYes").addEventListener("click", () => answer(true));
   $("confirmNo").addEventListener("click", () => answer(false));
 
