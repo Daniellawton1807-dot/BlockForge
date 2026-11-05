@@ -24,12 +24,14 @@ export function wordsFrom(request) {
   const intent = request?.intent?.name;
   if (intent === "AMAZON.YesIntent") return "yes";
   if (intent === "AMAZON.NoIntent") return "no";
-  if (intent === "AnswerIntent") return request.intent.slots?.answer?.value?.trim() || null;
-  if (intent in OPENER_BY_INTENT) {
+  let words = null;
+  if (intent === "AnswerIntent") words = request.intent.slots?.answer?.value?.trim();
+  else if (intent in OPENER_BY_INTENT) {
     const said = request.intent.slots?.text?.value?.trim();
-    return said ? `${OPENER_BY_INTENT[intent]} ${said}`.trim() : null;
+    if (said) words = `${OPENER_BY_INTENT[intent]} ${said}`.trim();
   }
-  return null;
+  // "ask Jarvis to ..." said while the skill's already listening
+  return words ? words.replace(/^(?:(?:please )?(?:ask|tell) )?jarvis(?: to)?\s+/i, "").replace(/^to\s+/i, "") || null : null;
 }
 
 async function holdingLine(body) {
@@ -70,6 +72,7 @@ export async function handle(body, env, waitUntil) {
   if (intent === "AMAZON.StopIntent" || intent === "AMAZON.CancelIntent" || intent === "AMAZON.NavigateHomeIntent") return speak("Very good, sir.");
   if (intent === "AMAZON.HelpIntent") return speak("Tell me what you'd like, sir. For example, turn off the living room lights, or what time is the next race.", true);
   const text = wordsFrom(request);
+  if (!text) console.log(`no words from ${intent}, slots: ${Object.keys(request.intent?.slots || {}).join() || "none"}`);
   if (!text) return speak("I didn't catch that, sir. I'm listening, so there's no need to say my name. Just start with a word like what, turn or play.", true);
   const reply = await askJarvis(env, text, waitUntil, body);
   return speak(reply.text || "Done, sir.", reply.keep_open === true);

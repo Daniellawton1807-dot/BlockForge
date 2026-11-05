@@ -28,10 +28,6 @@
           "samples": []
         },
         {
-          "name": "AMAZON.FallbackIntent",
-          "samples": []
-        },
-        {
           "name": "Say_to",
           "slots": [
             {
@@ -780,6 +776,106 @@
         {
           "name": "ANSWER_WORDS",
           "values": [
+            {
+              "name": {
+                "value": "turn down the living room tv"
+              }
+            },
+            {
+              "name": {
+                "value": "turn off the lights in the passage"
+              }
+            },
+            {
+              "name": {
+                "value": "what's the weather like tomorrow"
+              }
+            },
+            {
+              "name": {
+                "value": "what time is f1 practice tomorrow"
+              }
+            },
+            {
+              "name": {
+                "value": "is anything downloading"
+              }
+            },
+            {
+              "name": {
+                "value": "play the next episode"
+              }
+            },
+            {
+              "name": {
+                "value": "put something funny on"
+              }
+            },
+            {
+              "name": {
+                "value": "it's too dark in here"
+              }
+            },
+            {
+              "name": {
+                "value": "i can't hear it"
+              }
+            },
+            {
+              "name": {
+                "value": "i'm going to bed"
+              }
+            },
+            {
+              "name": {
+                "value": "how much space have i got left"
+              }
+            },
+            {
+              "name": {
+                "value": "who's in this film"
+              }
+            },
+            {
+              "name": {
+                "value": "wake me at seven tomorrow"
+              }
+            },
+            {
+              "name": {
+                "value": "search the web for the best air fryer"
+              }
+            },
+            {
+              "name": {
+                "value": "pause the film on mum's tv"
+              }
+            },
+            {
+              "name": {
+                "value": "tell me a joke"
+              }
+            },
+            {
+              "name": {
+                "value": "good evening"
+              }
+            },
+            {
+              "name": {
+                "value": "is the minecraft server on"
+              }
+            },
+            {
+              "name": {
+                "value": "how long until dune is ready"
+              }
+            },
+            {
+              "name": {
+                "value": "say that again"
+              }
+            },
             {
               "name": {
                 "value": "the living room"

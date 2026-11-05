@@ -12,6 +12,11 @@ test("the opening word is put back", () => {
   assert.equal(wordsFrom(said("AnswerIntent", "the living room")), "the living room");
   assert.equal(wordsFrom({ type: "IntentRequest", intent: { name: "AMAZON.YesIntent" } }), "yes");
   assert.equal(wordsFrom({ type: "IntentRequest", intent: { name: "AMAZON.FallbackIntent" } }), null);
+  assert.equal(wordsFrom(said("AnswerIntent", "ask jarvis to turn down the living room tv")), "turn down the living room tv");
+  assert.equal(wordsFrom(said("AnswerIntent", "ask jarvis what's the weather")), "what's the weather");
+  assert.equal(wordsFrom(said("AnswerIntent", "jarvis pause it")), "pause it");
+  assert.equal(wordsFrom(said("AnswerIntent", "to turn the lights off")), "turn the lights off");
+  assert.equal(wordsFrom(said("AnswerIntent", "jarvisworld rocks")), "jarvisworld rocks");
 });
 
 const envReplying = (reply, seen = []) => ({ ALEXA_TOKEN: "t", VPC_JARVIS: { fetch: async r => { seen.push([r.headers.get("x-alexa-token"), await r.json()]); return Response.json(reply); } } });
