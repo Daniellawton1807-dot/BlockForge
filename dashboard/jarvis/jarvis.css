@@ -258,6 +258,19 @@ body[data-scene=reading]{--rs:190px}
 .stage-close.floating{position:fixed;z-index:6;top:52px;left:28px}
 [data-scene=weather] .stage-close.floating,[data-scene=race] .stage-close.floating{top:48px;left:auto;right:150px}
 [data-scene=cinema] .stage-close.floating{top:58px;left:auto;right:28px}
+/* flights */
+.fl-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin:0 var(--padr) 12px 0;color:var(--dim)}
+.fl-head b{color:var(--text);font-weight:600;font-size:1.1rem}
+.fl-level{text-transform:capitalize}
+.fl-level.is-low{color:var(--green)}
+.fl-level.is-high{color:var(--amber)}
+.fl{display:grid;grid-template-columns:110px minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr);gap:4px 16px;align-items:center;margin:0 0 8px;padding:10px 14px;background:#031722aa;border:1px solid var(--line);border-radius:4px;animation:rise .4s backwards}
+.fl small{display:block;color:var(--dim);overflow-wrap:anywhere}
+.fl span{overflow-wrap:anywhere}
+.fl-price{font:600 1.05rem var(--head);color:var(--cy2)}
+.fl-times b{font-weight:600}
+.fl-label{margin:14px 0 8px;font:500 .68rem var(--head);letter-spacing:.12em;color:var(--dim)}
+a.fl-open{display:block;width:max-content;max-width:100%;margin:12px 0 0;padding-left:18px;padding-right:18px;text-align:center;text-decoration:none}
 /* a journey: the route beside the map */
 [data-scene=map] .stage{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
 .route{flex:1;min-height:0;display:grid;grid-template-columns:1fr minmax(300px,390px);gap:14px;padding-bottom:58px}
@@ -473,6 +486,9 @@ a.srctitle:hover,a.srctitle:focus-visible{color:var(--cy2);text-decoration:under
   [data-scene=reading] .core{padding-left:0}
   [data-scene=reading] .said{position:static;width:auto;padding:0 var(--padr) 0 0}
   .stage-close.floating{position:static;display:block;margin:0 0 8px auto}
+  .fl{grid-template-columns:1fr 1fr}
+  .fl-times{grid-column:1/-1;grid-row:2}
+  .fl-head{margin-right:0}
   [data-scene=map] .stage{overflow-y:auto;display:block;padding-bottom:10px}
   .route{display:block;padding-bottom:0}
   .route-map{height:46vh;min-height:260px;margin-bottom:12px}

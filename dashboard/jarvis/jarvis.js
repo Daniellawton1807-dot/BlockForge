@@ -371,7 +371,7 @@
 
   /* Scenes. Each reply says what it wants shown, and the whole page rearranges for it: the side panels slide out, the reactor flies to
      wherever that scene leaves room, and the content takes the page. Text only, never HTML from data. */
-  const SCENES = { report: "report", weather: "weather", media: "cinema", options: "wall", table: "reading", sections: "reading", suggestions: "reading", error: "alert", web: "web", race: "race", route: "map" };
+  const SCENES = { report: "report", weather: "weather", media: "cinema", options: "wall", table: "reading", sections: "reading", suggestions: "reading", error: "alert", web: "web", race: "race", route: "map", flights: "reading" };
   const CALM = window.matchMedia("(prefers-reduced-motion: reduce)");
   const HOME_AFTER_MS = 300000;
   let noticeTimer = null, sceneTimer = null, cineTimer = null, webState = null, walkTimer = null, ambientKey = "";
@@ -669,6 +669,7 @@
     } else if (v.type === "weather") renderWeather(v, openStage(null, scene));
     else if (v.type === "race") renderRace(v, openStage(null, scene));
     else if (v.type === "route") renderRoute(v, openStage(v.title, scene));
+    else if (v.type === "flights") renderFlights(v, openStage(v.title, scene));
     else if (v.type === "media") {
       const stage = openStage(null, scene), close = stageHead("").querySelector("button");
       close.classList.add("floating"); stage.append(close);
@@ -774,6 +775,37 @@
       map.fitBounds(bounds, 48);
       pick(chosen);
     }).catch(() => { if (box.isConnected) noMap(box); });
+  }
+
+  /* Flights: the cheapest first, and the way home with it on a return */
+  function renderFlights(v, stage) {
+    const head = el("div", "fl-head");
+    head.append(el("b", "", v.when), el("span", "", v.kind));
+    if (v.level) head.append(el("span", "fl-level is-" + v.level, v.level + " price" + (v.usual ? " · usually " + v.usual : "")));
+    stage.append(head);
+    const row = (o, i) => {
+      const c = el("div", "fl"), times = el("div", "fl-times"), who = el("div", "fl-who");
+      c.style.animationDelay = i * 50 + "ms";
+      c.append(el("b", "fl-price", o.price_text));
+      times.append(el("b", "", o.leaves + " to " + o.lands), el("small", "", o.from + " " + o.leaves_day + " · " + o.to + " " + o.lands_day));
+      who.append(el("span", "", o.airlines.join(", ")), el("small", "", o.numbers.join(", ")));
+      const how = el("div", "fl-how");
+      how.append(el("span", "", o.stops_text), el("small", "", o.duration));
+      c.append(times, who, how);
+      return c;
+    };
+    v.options.forEach((o, i) => stage.append(row(o, i)));
+    if (v.back) {
+      stage.append(el("p", "fl-label", "COMING BACK, WITH THE CHEAPEST"));
+      const home = row(v.back, 0);
+      home.querySelector(".fl-price").textContent = "Included";
+      stage.append(home);
+    }
+    if (/^https:\/\/www\.google\.com\/travel\/flights/.test(v.link || "")) {
+      const go = el("a", "act fl-open", "BOOK ON GOOGLE FLIGHTS");
+      go.href = v.link; go.target = "_blank"; go.rel = "noopener";
+      stage.append(go);
+    }
   }
 
   /* The web: a browser you can watch, beside what Jarvis makes of it */
@@ -965,7 +997,7 @@
      The wake word models run on this device. Audio only leaves it as a recorded command, after the wake word or a tap on the mic.
      Browsers stop the mic when the tab is hidden or the phone locks, so hands-free needs the page open and the screen on. */
   // In 80 ms blocks. Detection lags the words, so about two seconds before it are kept, or "Hey Jarvis, what's the weather" would lose its start.
-  const PREROLL_BLOCKS = 28, REARM_BLOCKS = 6, QUICK_BLOCKS = 12, END_SILENCE_BLOCKS = 8, NO_SPEECH_BLOCKS = 62, MAX_BLOCKS = 150, MIN_SPEECH_BLOCKS = 3;
+  const PREROLL_BLOCKS = 28, REARM_BLOCKS = 6, QUICK_BLOCKS = 12, END_SILENCE_BLOCKS = 20, NO_SPEECH_BLOCKS = 62, MAX_BLOCKS = 400, MIN_SPEECH_BLOCKS = 3;
   const WAKE_COOLDOWN_MS = 2500, SPEECH_FLOOR = 0.012, SPEECH_OVER_NOISE = 3, NOISE_CAP = 0.05;
   const WAKE_WORD = /\b(?:j[ae]rv[iu]s|javis)\b[\s,.!?:;-]*/ig;
   const JUST_STOP = /^(stop|be quiet|quiet|shut up|never mind|nevermind|cancel)\W*$/i;
