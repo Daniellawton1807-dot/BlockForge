@@ -926,8 +926,13 @@
   }
   function releaseScreen() { if (wakeLock) wakeLock.release().catch(() => {}); wakeLock = null; }
 
+  // iOS asks permission every time the mic is opened, and a Home Screen app has no "always allow". Stopping and starting it is also
+  // what you hear, so there the mic stays open once allowed, and is only ever sent anywhere while listening for a command or the wake word.
+  const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  function micAlive() { return mic && mic.stream.getAudioTracks().some(t => t.readyState === "live"); }
   async function openMic() {
-    if (mic) return true;
+    if (micAlive()) return true;
+    closeMic();
     if (!navigator.mediaDevices || !window.AudioWorkletNode) { $("said").textContent = "This browser can't use the microphone here. Type your command instead."; return false; }
     let stream, ctx;
     try {
@@ -996,7 +1001,7 @@
   function afterRecording() {
     if (worker) worker.postMessage({ type: "reset" });
     preroll = [];
-    if (!wakeOn) closeMic();
+    if (!wakeOn && !IOS) closeMic();
   }
   function wavFrom(blocks) {
     const samples = blocks.length * 1280, out = new DataView(new ArrayBuffer(44 + samples * 2));
@@ -1141,8 +1146,16 @@
   /* save the battery while the page is out of sight, and pick up again on return */
   document.addEventListener("visibilitychange", () => {
     document.body.classList.toggle("paused", document.hidden);
-    if (document.hidden) { if (abort) { abort.abort(); abort = null; } stopCapture(); }
-    else if (session && !$("app").hidden) { connect(); startCapture(); }
+    if (document.hidden) {
+      if (abort) { abort.abort(); abort = null; }
+      if (IOS) { recording = null; if (hearing) setHearing(false); releaseScreen(); }  // iOS pauses the mic by itself in the background
+      else stopCapture();
+    } else if (session && !$("app").hidden) {
+      connect();
+      if (IOS && mic && !micAlive()) stopCapture();  // iOS ended it after all, so it has to ask again
+      if (IOS && mic) { mic.ctx.resume().catch(() => {}); if (worker) holdScreen(); else startCapture(); }
+      else startCapture();
+    }
   });
 
   /* start: does Homebase know us, then does Jarvis */
