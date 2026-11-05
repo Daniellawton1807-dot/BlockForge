@@ -6,9 +6,9 @@ workers_dev = true
 preview_urls = false
 
 # The public HTTPS address Daniel's private Alexa skill calls. Only requests Amazon signed for his skill get through.
-# Secret: ALEXA_TOKEN (matches Jarvis's .env). ALEXA_SKILL_ID is set under [vars] once the skill exists.
+# Secret: ALEXA_TOKEN (matches Jarvis's .env). ALEXA_SKILL_ID below is what it accepts.
 [vars]
-ALEXA_SKILL_ID = ""
+ALEXA_SKILL_ID = "amzn1.ask.skill.7ab35f6c-d845-4f18-b8ef-746e8a2135a6"
 
 [[vpc_services]]
 binding = "VPC_JARVIS"
