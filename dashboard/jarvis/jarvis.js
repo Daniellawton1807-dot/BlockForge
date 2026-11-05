@@ -371,7 +371,7 @@
 
   /* Scenes. Each reply says what it wants shown, and the whole page rearranges for it: the side panels slide out, the reactor flies to
      wherever that scene leaves room, and the content takes the page. Text only, never HTML from data. */
-  const SCENES = { report: "report", weather: "weather", media: "cinema", options: "wall", table: "reading", sections: "reading", suggestions: "reading", error: "alert", web: "web", race: "race" };
+  const SCENES = { report: "report", weather: "weather", media: "cinema", options: "wall", table: "reading", sections: "reading", suggestions: "reading", error: "alert", web: "web", race: "race", route: "map" };
   const CALM = window.matchMedia("(prefers-reduced-motion: reduce)");
   const HOME_AFTER_MS = 300000;
   let noticeTimer = null, sceneTimer = null, cineTimer = null, webState = null, walkTimer = null, ambientKey = "";
@@ -668,6 +668,7 @@
       if (v.charts && v.charts.length) { const g = el("div", "chartgrid"); v.charts.forEach(c => g.append(drawChart(c))); stage.append(g); }
     } else if (v.type === "weather") renderWeather(v, openStage(null, scene));
     else if (v.type === "race") renderRace(v, openStage(null, scene));
+    else if (v.type === "route") renderRoute(v, openStage(v.title, scene));
     else if (v.type === "media") {
       const stage = openStage(null, scene), close = stageHead("").querySelector("button");
       close.classList.add("floating"); stage.append(close);
@@ -706,6 +707,73 @@
       webState = null;
       webLive({ ...v, stage: "done", status: "" });
     }
+  }
+
+  /* A journey: every way of going beside Google's map, with live traffic on the roads. The map's key comes from the server and only works on this site. */
+  const MAP_STYLE = [
+    { elementType: "geometry", stylers: [{ color: "#06202c" }] }, { elementType: "labels.text.fill", stylers: [{ color: "#7fb0be" }] }, { elementType: "labels.text.stroke", stylers: [{ color: "#04141c" }] },
+    { featureType: "poi", stylers: [{ visibility: "off" }] }, { featureType: "transit", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+    { featureType: "road", elementType: "geometry", stylers: [{ color: "#123a4a" }] }, { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#1c5468" }] },
+    { featureType: "water", elementType: "geometry", stylers: [{ color: "#020c13" }] }, { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#1d5566" }] }];
+  let mapsReady = null;
+  function loadMaps(key) {
+    if (!mapsReady) mapsReady = new Promise((done, failed) => {
+      window.jarvisMapsLoaded = done;
+      window.gm_authFailure = () => { failed(); document.querySelectorAll(".route-map").forEach(noMap); };
+      const s = document.createElement("script");
+      s.async = true; s.onerror = failed;
+      s.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(key) + "&libraries=geometry&loading=async&callback=jarvisMapsLoaded";
+      document.head.append(s);
+    });
+    return mapsReady;
+  }
+  function noMap(box) { box.replaceChildren(el("p", "route-nomap", "The map isn't available, but the route is all here.")); }
+  function renderRoute(v, stage) {
+    const wrap = el("div", "route"), side = el("div", "route-side"), box = el("div", "route-map"), summary = el("div"), lines = [];
+    const go = el("a", "act route-open", "OPEN IN GOOGLE MAPS");
+    if (/^https:\/\/www\.google\.com\/maps\//.test(v.link || "")) { go.href = v.link; go.target = "_blank"; go.rel = "noopener"; } else go.hidden = true;
+    let chosen = 0;
+    const pick = i => {
+      chosen = i;
+      const r = v.routes[i], facts = el("div", "route-facts"), list = el("ol", "route-steps");
+      [["Leave", r.leave], ["Arrive", r.arrive], ["Distance", r.miles + " mi"], r.traffic_text && ["Traffic", "+" + r.traffic_text]].filter(Boolean).forEach(([a, b]) => { const f = el("div"); f.append(el("small", "", a), el("b", "", b)); facts.append(f); });
+      const parts = [el("div", "route-time", r.duration), el("p", "route-to", [v.how, r.via].filter(Boolean).join(" · ")), el("p", "route-address", v.address || v.to), facts];
+      (r.warnings || []).forEach(w => parts.push(el("p", "route-warn", w)));
+      if (v.routes.length > 1) {
+        const alts = el("div", "route-alts");
+        v.routes.forEach((o, n) => {
+          const b = el("button", "route-alt" + (n === i ? " on" : "")); b.type = "button";
+          b.append(el("b", "", o.duration), el("span", "", (o.via || "Route " + (n + 1)) + " · " + o.miles + " mi"));
+          b.addEventListener("click", () => { keepScene(); pick(n); });
+          alts.append(b);
+        });
+        parts.push(alts);
+      }
+      r.steps.forEach(s => { const li = el("li", "is-" + s.kind); li.append(el("span", "", s.text)); if (s.detail) li.append(el("small", "", s.detail)); list.append(li); });
+      parts.push(go, list);
+      summary.replaceChildren(...parts);
+      lines.forEach((l, n) => l.setOptions(n === i ? { strokeColor: "#22d3ee", strokeOpacity: 1, strokeWeight: 6, zIndex: 2 } : { strokeColor: "#8fb4c0", strokeOpacity: 0.65, strokeWeight: 4, zIndex: 1 }));
+    };
+    side.append(summary); wrap.append(box, side); stage.append(wrap);
+    pick(0);
+    if (!v.map_key) return noMap(box);
+    loadMaps(v.map_key).then(() => {
+      if (!box.isConnected) return;  // he's moved on: a map is only paid for once it's drawn
+      const g = window.google.maps, bounds = new g.LatLngBounds();
+      const map = new g.Map(box, { styles: MAP_STYLE, backgroundColor: "#020c13", disableDefaultUI: true, zoomControl: true, zoomControlOptions: { position: g.ControlPosition.RIGHT_BOTTOM } });
+      v.routes.forEach((r, n) => {
+        const path = g.geometry.encoding.decodePath(r.polyline);
+        path.forEach(p => bounds.extend(p));
+        const line = new g.Polyline({ path, map, clickable: true });
+        line.addListener("click", () => { keepScene(); pick(n); });
+        lines.push(line);
+      });
+      const path = g.geometry.encoding.decodePath(v.routes[0].polyline);
+      [[path[0], "#ffffff"], [path[path.length - 1], "#e8a24c"]].forEach(([position, fillColor]) => new g.Marker({ position, map, zIndex: 3, icon: { path: g.SymbolPath.CIRCLE, scale: 7, fillColor, fillOpacity: 1, strokeColor: "#020c13", strokeWeight: 2 } }));
+      if (v.mode === "drive") new g.TrafficLayer().setMap(map);
+      map.fitBounds(bounds, 48);
+      pick(chosen);
+    }).catch(() => { if (box.isConnected) noMap(box); });
   }
 
   /* The web: a browser you can watch, beside what Jarvis makes of it */

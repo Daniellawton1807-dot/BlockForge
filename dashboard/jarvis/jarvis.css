@@ -238,8 +238,8 @@ body[data-scene]{--rs:112px;--padl:0px;--padr:0px;overflow:hidden}
 [data-scene] .command input{padding:9px 12px}
 [data-scene=weather] .said:empty~.stage,[data-scene=race] .said:empty~.stage{padding-top:72px}
 /* where each scene puts the reactor */
-body[data-scene=weather],body[data-scene=web],body[data-scene=race]{--padr:124px}
-[data-scene=weather] .reactor,[data-scene=web] .reactor,[data-scene=race] .reactor{top:4px;right:18px}
+body[data-scene=weather],body[data-scene=web],body[data-scene=race],body[data-scene=map]{--padr:124px}
+[data-scene=weather] .reactor,[data-scene=web] .reactor,[data-scene=race] .reactor,[data-scene=map] .reactor{top:4px;right:18px}
 body[data-scene=report]{--padl:124px}
 [data-scene=report] .reactor{top:4px;left:18px}
 [data-scene=wall] .reactor,[data-scene=alert] .reactor{top:0;left:calc(50% - var(--rs) / 2)}
@@ -258,6 +258,33 @@ body[data-scene=reading]{--rs:190px}
 .stage-close.floating{position:fixed;z-index:6;top:52px;left:28px}
 [data-scene=weather] .stage-close.floating,[data-scene=race] .stage-close.floating{top:48px;left:auto;right:150px}
 [data-scene=cinema] .stage-close.floating{top:58px;left:auto;right:28px}
+/* a journey: the route beside the map */
+[data-scene=map] .stage{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
+.route{flex:1;min-height:0;display:grid;grid-template-columns:1fr minmax(300px,390px);gap:14px;padding-bottom:58px}
+.route-map{min-height:320px;background:#031722;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.route-nomap{margin:0;padding:40px 20px;text-align:center;color:var(--dim)}
+.route-side{min-height:0;overflow-y:auto;padding-right:6px;scrollbar-width:thin;scrollbar-color:#1d5566 transparent}
+.route-time{font:600 2rem/1.15 var(--head);color:var(--cy2)}
+.route-to,.route-address{margin:4px 0 0;overflow-wrap:anywhere}
+.route-to{color:var(--text);font-size:1.08rem}
+.route-address{color:var(--dim)}
+.route-facts{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:12px 0}
+.route-facts div{min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:4px;background:#031722aa}
+.route-facts small{display:block;color:var(--dim);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase}
+.route-facts b{display:block;font-weight:600;color:var(--text);overflow-wrap:anywhere}
+.route-warn{margin:0 0 10px;padding:8px 10px;color:var(--amber);border:1px solid #e8a24c55;border-radius:4px}
+.route-alts{display:grid;gap:6px;margin:0 0 12px}
+.route-alt{display:flex;align-items:baseline;gap:10px;width:100%;padding:8px 10px;color:var(--text);text-align:left;font:inherit;background:#031722aa;border:1px solid var(--line);border-radius:4px;cursor:pointer}
+.route-alt b{flex:none;font-weight:600}
+.route-alt span{min-width:0;color:var(--dim);overflow-wrap:anywhere}
+.route-alt.on{border-color:var(--cy);box-shadow:inset 3px 0 0 var(--cy)}
+.route-alt:hover,.route-alt:focus-visible{border-color:var(--cy2)}
+a.route-open{display:block;margin:0 0 12px;text-align:center;text-decoration:none}
+.route-steps{margin:0;padding:0 0 0 24px;color:var(--dim)}
+.route-steps li{margin:0 0 9px;padding-left:2px}
+.route-steps span{color:var(--text)}
+.route-steps small{display:block;color:var(--dim)}
+.route-steps .is-ride span{color:var(--cy2)}
 .toast{position:fixed;z-index:8;top:60px;left:50%;width:min(440px,calc(100% - 32px));transform:translateX(-50%);padding:12px 14px;background:#04202ef2;border:1px solid #1d5566;border-radius:6px;box-shadow:0 10px 30px #0008;animation:drop .3s ease-out}
 .toast.is-notice{border-color:#2dd4a788}
 .toast .work h3{margin:0 0 8px;font:500 .66rem var(--head);letter-spacing:.16em;color:var(--cy)}
@@ -446,6 +473,10 @@ a.srctitle:hover,a.srctitle:focus-visible{color:var(--cy2);text-decoration:under
   [data-scene=reading] .core{padding-left:0}
   [data-scene=reading] .said{position:static;width:auto;padding:0 var(--padr) 0 0}
   .stage-close.floating{position:static;display:block;margin:0 0 8px auto}
+  [data-scene=map] .stage{overflow-y:auto;display:block;padding-bottom:10px}
+  .route{display:block;padding-bottom:0}
+  .route-map{height:46vh;min-height:260px;margin-bottom:12px}
+  .route-side{overflow:visible;padding-right:0}
   .chartgrid,.wx-lower{grid-template-columns:1fr}
   .wx-tile b{white-space:normal;font-size:.92rem}
   .stage-close.floating{margin-right:68px}
