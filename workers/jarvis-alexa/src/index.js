@@ -70,7 +70,7 @@ export async function handle(body, env, waitUntil) {
   if (intent === "AMAZON.StopIntent" || intent === "AMAZON.CancelIntent" || intent === "AMAZON.NavigateHomeIntent") return speak("Very good, sir.");
   if (intent === "AMAZON.HelpIntent") return speak("Tell me what you'd like, sir. For example, turn off the living room lights, or what time is the next race.", true);
   const text = wordsFrom(request);
-  if (!text) return speak("I didn't catch that, sir. Say it starting with a word like what, turn or play.", true);
+  if (!text) return speak("I didn't catch that, sir. I'm listening, so there's no need to say my name. Just start with a word like what, turn or play.", true);
   const reply = await askJarvis(env, text, waitUntil, body);
   return speak(reply.text || "Done, sir.", reply.keep_open === true);
 }
