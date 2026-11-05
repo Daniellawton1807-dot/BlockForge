@@ -133,7 +133,7 @@
       case "status": setStatus(e.status); break;
       case "mode": setMode(e.mode); break;
       case "you": pushLog(e); $("said").textContent = ""; break;
-      case "reply": pushLog(e); showReply(e); setPending(e.awaiting_confirmation ? { tool: e.tool, question: e.text } : null); break;
+      case "reply": if (e.text) pushLog(e); showReply(e); setPending(e.awaiting_confirmation ? { tool: e.tool, question: e.text } : null); break;
       case "action":
         pushLog(e);
         if (e.tier >= 2) openAction(e);
@@ -1207,7 +1207,7 @@
     spokeLast = false;
     sendCommand(text);
   });
-  $("stopAll").addEventListener("click", () => { spokeLast = false; sendCommand("stop everything", { keep: true }); });
+  $("stopAll").addEventListener("click", () => { spokeLast = false; sendCommand("stop everything", { keep: true, silent: true }); });
   async function sendCommand(text, extra) {
     const { keep, ...more } = extra || {};
     stopListening(); stopSpeech(); openTurn(); hideToast();
@@ -1218,6 +1218,7 @@
     const r = await api("chat", { text, scene: document.body.dataset.scene || "", narrow: window.innerWidth < 700, ...more });
     closeTurn();
     if (r.ok && r.data.stopped) return;  // the stop's own reply says so
+    if (r.ok && r.data.silent) { if (!live) { showReply(r.data); setPending(null); } return; }  // the stop button: everything stops, and he doesn't answer
     if (r.ok) speakReply(r.data);
     if (!r.ok) $("stage").classList.remove("stale");
     if (!r.ok && r.status !== 401) $("said").textContent = r.data.error || "That didn't go through.";
