@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis privacy</title>
+<style>
+  :root { --bg: #ffffff; --text: #1d2327; --dim: #5b6670; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0b1117; --text: #e3e9ee; --dim: #9aa6b1; } }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 40px 16px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  p.date { color: var(--dim); margin: 0 0 24px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Jarvis privacy</h1>
+  <p class="date">Last updated 5 November 2026</p>
+  <p>Jarvis is a personal assistant that runs on one private home server and is used only by its owner. It isn't offered to anyone else.</p>
+  <h2>Google Calendar</h2>
+  <p>With the owner's permission, Jarvis reads and adds events on the owner's own Google Calendar so it can answer questions such as "what's on tomorrow?" and add events when asked. Calendar data is used only to answer those requests. It isn't sold, shared with anyone, or used for advertising.</p>
+  <p>Jarvis keeps the sign-in token on the home server, in a file only the owner can read. Event details may be passed to the AI model that turns the owner's spoken request into an answer, and are not stored afterwards.</p>
+  <p>Access can be removed at any time from the owner's Google Account, under Security, then Third-party connections.</p>
+  <h2>Contact</h2>
+  <p>Questions go to the owner of danielvault.uk.</p>
+</main>
+</body>
+</html>
