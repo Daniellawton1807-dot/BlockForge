@@ -740,6 +740,11 @@
       [["Leave", r.leave], ["Arrive", r.arrive], ["Distance", r.miles + " mi"], r.traffic_text && ["Traffic", "+" + r.traffic_text]].filter(Boolean).forEach(([a, b]) => { const f = el("div"); f.append(el("small", "", a), el("b", "", b)); facts.append(f); });
       const parts = [el("div", "route-time", r.duration), el("p", "route-to", [v.how, r.via].filter(Boolean).join(" · ")), el("p", "route-address", v.address || v.to), facts];
       (r.warnings || []).forEach(w => parts.push(el("p", "route-warn", w)));
+      if (i === 0 && v.stops && v.stops.length) {
+        const list = el("ol", "route-stops");
+        v.stops.forEach(s => { const li = el("li"); li.append(el("b", "", s.name), el("small", "", s.duration + " · " + s.miles + " mi · arrive " + s.arrive)); list.append(li); });
+        parts.push(list);
+      }
       if (v.routes.length > 1) {
         const alts = el("div", "route-alts");
         v.routes.forEach((o, n) => {
@@ -771,6 +776,7 @@
       });
       const path = g.geometry.encoding.decodePath(v.routes[0].polyline);
       [[path[0], "#ffffff"], [path[path.length - 1], "#e8a24c"]].forEach(([position, fillColor]) => new g.Marker({ position, map, zIndex: 3, icon: { path: g.SymbolPath.CIRCLE, scale: 7, fillColor, fillOpacity: 1, strokeColor: "#020c13", strokeWeight: 2 } }));
+      (v.stops || []).filter(s => s.lat != null).forEach(s => new g.Marker({ position: { lat: s.lat, lng: s.lng }, map, zIndex: 3, title: s.name, icon: { path: g.SymbolPath.CIRCLE, scale: 6, fillColor: "#67e8f9", fillOpacity: 1, strokeColor: "#020c13", strokeWeight: 2 } }));
       if (v.mode === "drive") new g.TrafficLayer().setMap(map);
       map.fitBounds(bounds, 48);
       pick(chosen);
@@ -781,6 +787,7 @@
   function renderFlights(v, stage) {
     const head = el("div", "fl-head");
     head.append(el("b", "", v.when), el("span", "", v.kind));
+    if (v.total) head.append(el("b", "fl-total", v.total + " total"));
     if (v.level) head.append(el("span", "fl-level is-" + v.level, v.level + " price" + (v.usual ? " · usually " + v.usual : "")));
     stage.append(head);
     const row = (o, i) => {
@@ -796,9 +803,9 @@
     };
     v.options.forEach((o, i) => stage.append(row(o, i)));
     if (v.back) {
-      stage.append(el("p", "fl-label", "COMING BACK, WITH THE CHEAPEST"));
+      stage.append(el("p", "fl-label", v.back_priced ? "COMING BACK" : "COMING BACK, WITH THE CHEAPEST"));
       const home = row(v.back, 0);
-      home.querySelector(".fl-price").textContent = "Included";
+      if (!v.back_priced) home.querySelector(".fl-price").textContent = "Included";
       stage.append(home);
     }
     if (/^https:\/\/www\.google\.com\/travel\/flights/.test(v.link || "")) {
