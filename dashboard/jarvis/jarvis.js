@@ -997,7 +997,7 @@
      The wake word models run on this device. Audio only leaves it as a recorded command, after the wake word or a tap on the mic.
      Browsers stop the mic when the tab is hidden or the phone locks, so hands-free needs the page open and the screen on. */
   // In 80 ms blocks. Detection lags the words, so about two seconds before it are kept, or "Hey Jarvis, what's the weather" would lose its start.
-  const PREROLL_BLOCKS = 28, REARM_BLOCKS = 6, QUICK_BLOCKS = 12, END_SILENCE_BLOCKS = 20, NO_SPEECH_BLOCKS = 62, MAX_BLOCKS = 400, MIN_SPEECH_BLOCKS = 3;
+  const PREROLL_BLOCKS = 28, REARM_BLOCKS = 6, QUICK_BLOCKS = 12, END_SILENCE_BLOCKS = 20, NO_SPEECH_BLOCKS = 62, MAX_BLOCKS = 380, MIN_SPEECH_BLOCKS = 3;
   const WAKE_COOLDOWN_MS = 2500, SPEECH_FLOOR = 0.012, SPEECH_OVER_NOISE = 3, NOISE_CAP = 0.05;
   const WAKE_WORD = /\b(?:j[ae]rv[iu]s|javis)\b[\s,.!?:;-]*/ig;
   const JUST_STOP = /^(stop|be quiet|quiet|shut up|never mind|nevermind|cancel)\W*$/i;
