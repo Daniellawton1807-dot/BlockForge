@@ -6,7 +6,7 @@ export const OPENERS = {
   will: "will", would: "would", should: "should", which: "which", turn: "turn", switch: "switch", put: "put", play: "play", pause: "pause", resume: "resume",
   stop: "stop", skip: "skip", mute: "mute", unmute: "unmute", set: "set", make: "make", dim: "dim", tell: "tell", give: "give", show: "show", check: "check",
   find: "find", search: "search", google: "google", get: "get", request: "request", download: "download", "it's": "it's", "that's": "that's", "i'm": "i'm", i: "i",
-  my: "my", any: "any", anything: "anything", volume: "volume", lights: "lights", remind: "remind", wake: "wake"
+  my: "my", any: "any", anything: "anything", volume: "volume", lights: "lights", remind: "remind", wake: "wake", this: "this", "you're": "you're"
 };
 export const intentName = word => "Say_" + word.replace(/[^a-z]/g, "");
 export const OPENER_BY_INTENT = Object.fromEntries(Object.entries(OPENERS).map(([word, kept]) => [intentName(word), kept]));

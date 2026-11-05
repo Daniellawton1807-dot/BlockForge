@@ -28,6 +28,9 @@ test("a reply is spoken, and a question keeps the Echo listening", async () => {
   assert.equal(out.outputSpeech.text, "Done, sir.");
   assert.equal(out.shouldEndSession, true);
   assert.deepEqual(seen[0], ["t", { text: "turn off the lights" }]);
+  seen.length = 0;
+  await handle({ request: said("Say_this", "is the living room"), context: { System: { device: { deviceId: "dot-1" } } } }, envReplying({ text: "Very good." }, seen));
+  assert.deepEqual(seen[0], ["t", { text: "this is the living room", device: "dot-1" }]);
   out = await read(await handle({ request: said("Say_turn", "the lights down") }, envReplying({ text: "Which room, sir?", keep_open: true }), () => {}));
   assert.equal(out.shouldEndSession, false);
 });

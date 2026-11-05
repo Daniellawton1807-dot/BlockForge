@@ -10,7 +10,7 @@ const openers = Object.keys(OPENERS).map(word => ({
 // Sentences, so Alexa treats this slot as free speech. Without a FallbackIntent it has to pick one of these intents and pass the words on.
 const sentences = ["turn down the living room tv", "turn off the lights in the passage", "what's the weather like tomorrow", "what time is f1 practice tomorrow", "is anything downloading",
   "play the next episode", "put something funny on", "it's too dark in here", "i can't hear it", "i'm going to bed", "how much space have i got left", "who's in this film",
-  "wake me at seven tomorrow", "search the web for the best air fryer", "pause the film on mum's tv", "tell me a joke", "good evening", "is the minecraft server on", "how long until dune is ready", "say that again"];
+  "wake me at seven tomorrow", "search the web for the best air fryer", "pause the film on mum's tv", "tell me a joke", "good evening", "this is the living room", "this is mum's room", "this is daniel's room", "which room is this", "is the minecraft server on", "how long until dune is ready", "say that again"];
 const answers = [...sentences, "the living room", "living room", "the passage", "passage", "daniel's room", "daniel's tv", "mum's tv", "mum's bedroom", "the first one", "the second one", "the third one", "this evening", "tomorrow morning", "all of them"];
 const model = {
   interactionModel: {

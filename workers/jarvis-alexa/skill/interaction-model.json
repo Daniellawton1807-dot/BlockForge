@@ -760,6 +760,30 @@
           ]
         },
         {
+          "name": "Say_this",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "this {text}"
+          ]
+        },
+        {
+          "name": "Say_youre",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "you're {text}"
+          ]
+        },
+        {
           "name": "AnswerIntent",
           "slots": [
             {
@@ -859,6 +883,26 @@
             {
               "name": {
                 "value": "good evening"
+              }
+            },
+            {
+              "name": {
+                "value": "this is the living room"
+              }
+            },
+            {
+              "name": {
+                "value": "this is mum's room"
+              }
+            },
+            {
+              "name": {
+                "value": "this is daniel's room"
+              }
+            },
+            {
+              "name": {
+                "value": "which room is this"
               }
             },
             {

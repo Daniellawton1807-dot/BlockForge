@@ -33,12 +33,12 @@ export function wordsFrom(request) {
   return words ? words.replace(/^(?:(?:please )?(?:ask|tell) )?jarvis(?: to)?\s+/i, "").replace(/^to\s+/i, "") || null : null;
 }
 
-async function askJarvis(env, text) {
+async function askJarvis(env, text, device) {
   try {
     const response = await env.VPC_JARVIS.fetch(new Request(JARVIS_URL, {
       method: "POST",
       headers: { "x-alexa-token": env.ALEXA_TOKEN, "content-type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, device }),
       signal: AbortSignal.timeout(JARVIS_MS)
     }));
     if (!response.ok) throw new Error("HTTP " + response.status);
@@ -60,7 +60,7 @@ export async function handle(body, env) {
   const text = wordsFrom(request);
   if (!text) console.log(`no words from ${intent}, slots: ${Object.keys(request.intent?.slots || {}).join() || "none"}`);
   if (!text) return speak("I didn't catch that, sir. I'm listening, so there's no need to say my name. Just start with a word like what, turn or play.", true);
-  const reply = await askJarvis(env, text);
+  const reply = await askJarvis(env, text, body.context?.System?.device?.deviceId);
   if (!reply.text) return json({ version: "1.0", response: { shouldEndSession: true } });  // it worked, so nothing to say (Daniel's choice)
   return speak(reply.text, reply.keep_open === true);
 }
