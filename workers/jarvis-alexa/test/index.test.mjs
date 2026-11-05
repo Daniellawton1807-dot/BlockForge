@@ -32,6 +32,12 @@ test("a reply is spoken, and a question keeps the Echo listening", async () => {
   assert.equal(out.shouldEndSession, false);
 });
 
+test("nothing to say means silence, not a filler", async () => {
+  const out = await read(await handle({ request: said("Say_turn", "off the lights") }, envReplying({ text: "", keep_open: false })));
+  assert.equal(out.outputSpeech, undefined);
+  assert.equal(out.shouldEndSession, true);
+});
+
 test("Jarvis being down is said plainly", async () => {
   const env = { ALEXA_TOKEN: "t", VPC_JARVIS: { fetch: async () => { throw new Error("down"); } } };
   assert.match((await read(await handle({ request: said("Say_what", "time is it") }, env, () => {}))).outputSpeech.text, /can't reach Jarvis/);

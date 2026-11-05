@@ -5,7 +5,6 @@ import { OPENER_BY_INTENT } from "./phrases.js";
 
 const JARVIS_URL = "http://192.168.8.150:8770/api/alexa";
 const JARVIS_MS = 7300;  // Jarvis gives up at 6.5 s; Alexa stops waiting at about 8
-const HOLDING_MS = 2500;
 const MAX_BODY = 128 * 1024;
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json;charset=UTF-8", "cache-control": "no-store" } });
@@ -34,18 +33,7 @@ export function wordsFrom(request) {
   return words ? words.replace(/^(?:(?:please )?(?:ask|tell) )?jarvis(?: to)?\s+/i, "").replace(/^to\s+/i, "") || null : null;
 }
 
-async function holdingLine(body) {
-  const system = body?.context?.System;
-  if (!system?.apiEndpoint?.startsWith("https://") || !system.apiAccessToken) return;
-  await fetch(`${system.apiEndpoint}/v1/directives`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${system.apiAccessToken}`, "content-type": "application/json" },
-    body: JSON.stringify({ header: { requestId: body.request.requestId }, directive: { type: "VoicePlayer.Speak", speech: "One moment, sir." } })
-  }).catch(() => {});
-}
-
-async function askJarvis(env, text, waitUntil, body) {
-  const holding = setTimeout(() => waitUntil(holdingLine(body)), HOLDING_MS);
+async function askJarvis(env, text) {
   try {
     const response = await env.VPC_JARVIS.fetch(new Request(JARVIS_URL, {
       method: "POST",
@@ -58,12 +46,10 @@ async function askJarvis(env, text, waitUntil, body) {
   } catch (error) {
     console.log("jarvis: " + error.message);
     return { text: "I can't reach Jarvis at the moment, sir. Do try the page.", keep_open: false };
-  } finally {
-    clearTimeout(holding);
   }
 }
 
-export async function handle(body, env, waitUntil) {
+export async function handle(body, env) {
   const request = body.request;
   if (request.type === "LaunchRequest") return speak("Yes, sir?", true);
   if (request.type === "SessionEndedRequest") return json({ version: "1.0", response: {} });
@@ -74,12 +60,13 @@ export async function handle(body, env, waitUntil) {
   const text = wordsFrom(request);
   if (!text) console.log(`no words from ${intent}, slots: ${Object.keys(request.intent?.slots || {}).join() || "none"}`);
   if (!text) return speak("I didn't catch that, sir. I'm listening, so there's no need to say my name. Just start with a word like what, turn or play.", true);
-  const reply = await askJarvis(env, text, waitUntil, body);
-  return speak(reply.text || "Done, sir.", reply.keep_open === true);
+  const reply = await askJarvis(env, text);
+  if (!reply.text) return json({ version: "1.0", response: { shouldEndSession: true } });  // it worked, so nothing to say (Daniel's choice)
+  return speak(reply.text, reply.keep_open === true);
 }
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     if (request.method !== "POST") return new Response("Not found.", { status: 404 });
     const rawBody = await request.text();
     if (rawBody.length > MAX_BODY) return new Response("Too large.", { status: 413 });
@@ -90,6 +77,6 @@ export default {
       console.log("refused: " + error.message);
       return new Response("Bad request.", { status: 400 });  // what Amazon asks for, whatever the reason
     }
-    return handle(body, env, promise => ctx.waitUntil(promise));
+    return handle(body, env);
   }
 };
