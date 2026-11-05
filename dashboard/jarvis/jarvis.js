@@ -997,8 +997,8 @@
      The wake word models run on this device. Audio only leaves it as a recorded command, after the wake word or a tap on the mic.
      Browsers stop the mic when the tab is hidden or the phone locks, so hands-free needs the page open and the screen on. */
   // In 80 ms blocks. Detection lags the words, so about two seconds before it are kept, or "Hey Jarvis, what's the weather" would lose its start.
-  const PREROLL_BLOCKS = 28, REARM_BLOCKS = 6, QUICK_BLOCKS = 12, END_SILENCE_BLOCKS = 20, NO_SPEECH_BLOCKS = 62, MAX_BLOCKS = 380, MIN_SPEECH_BLOCKS = 3;
-  const WAKE_COOLDOWN_MS = 2500, SPEECH_FLOOR = 0.012, SPEECH_OVER_NOISE = 3, NOISE_CAP = 0.05;
+  const PREROLL_BLOCKS = 28, REARM_BLOCKS = 6, QUICK_BLOCKS = 12, NO_SPEECH_BLOCKS = 62, MAX_BLOCKS = 380, MIN_SPEECH_BLOCKS = window.jarvisSpeech.MIN_SPEECH_BLOCKS;
+  const WAKE_COOLDOWN_MS = 2500, NOISE_CAP = 0.05;
   const WAKE_WORD = /\b(?:j[ae]rv[iu]s|javis)\b[\s,.!?:;-]*/ig;
   const JUST_STOP = /^(stop|be quiet|quiet|shut up|never mind|nevermind|cancel)\W*$/i;
   let wakeOn = store.get("jarvis.wake") === "on", mic = null, worker = null, wakeReady = false, recording = null;
@@ -1073,9 +1073,7 @@
   function recordBlock(block, level) {
     const r = recording;
     r.blocks.push(block); r.total++;
-    if (level > Math.max(SPEECH_FLOOR, noise * SPEECH_OVER_NOISE)) { r.speech++; r.silent = 0; }
-    else r.silent++;
-    const finished = (r.speech >= MIN_SPEECH_BLOCKS && r.silent >= END_SILENCE_BLOCKS) || r.total >= MAX_BLOCKS;
+    const finished = window.jarvisSpeech.heard(r, level, noise) || r.total >= MAX_BLOCKS;
     // after the wake word, a short quiet means check what's already been said rather than wait
     if (finished || (r.afterWake && !r.speech && r.total >= QUICK_BLOCKS) || (!r.speech && r.total >= NO_SPEECH_BLOCKS)) finishRecording();
   }
@@ -1123,7 +1121,7 @@
     transcribing = true; showMode();
     let res = null, data = {};
     try {
-      res = await fetch("/api/jarvis/stt", { method: "POST", headers: { "x-jarvis-session": session, "content-type": "audio/wav" }, body: wavFrom(r.blocks) });
+      res = await fetch("/api/jarvis/stt", { method: "POST", headers: { "x-jarvis-session": session, "content-type": "audio/wav" }, body: wavFrom(window.jarvisSpeech.kept(r)) });
       data = await res.json().catch(() => ({}));
     } catch { /* shown below */ }
     transcribing = false; showMode();
