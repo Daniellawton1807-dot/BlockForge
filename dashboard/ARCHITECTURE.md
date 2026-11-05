@@ -64,6 +64,8 @@ cd workers/homebase-arr-bridge && npx wrangler deploy   # needs CLOUDFLARE_API_T
 Pages itself deploys automatically from `main` (branches get preview URLs, but previews have no secrets,
 so sign-in doesn't work there).
 
+Daniel's private Alexa skill calls its own Worker, `workers/jarvis-alexa` (public on workers.dev, because Amazon has to reach it). It only forwards requests Amazon signed for his skill, to Jarvis's `/api/alexa`, using its own token (secret `ALEXA_TOKEN`) and the same `homebase-jarvis` VPC service. The skill's model is in `workers/jarvis-alexa/skill/`: edit `src/phrases.js`, then run `build-model.mjs`.
+
 Jarvis's code is on the server in `~/vault-claude/jarvis` (see `PROGRESS.md` there), not in this repo. Its token is the Worker secret `JARVIS_TOKEN`, so it isn't a Pages secret.
 
 ## Cloudflare secrets (Pages, production)

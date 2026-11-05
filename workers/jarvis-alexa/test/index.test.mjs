@@ -1,0 +1,39 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { handle, wordsFrom } from "../src/index.js";
+
+const said = (name, value) => ({ type: "IntentRequest", intent: { name, slots: { text: { value }, answer: { value } } } });
+
+test("the opening word is put back", () => {
+  assert.equal(wordsFrom(said("Say_what", "time is f1 practice")), "what time is f1 practice");
+  assert.equal(wordsFrom(said("Say_whats", "the weather")), "what's the weather");
+  assert.equal(wordsFrom(said("Say_to", "turn off the lights")), "turn off the lights");
+  assert.equal(wordsFrom(said("Say_turn", "off the lights")), "turn off the lights");
+  assert.equal(wordsFrom(said("AnswerIntent", "the living room")), "the living room");
+  assert.equal(wordsFrom({ type: "IntentRequest", intent: { name: "AMAZON.YesIntent" } }), "yes");
+  assert.equal(wordsFrom({ type: "IntentRequest", intent: { name: "AMAZON.FallbackIntent" } }), null);
+});
+
+const envReplying = (reply, seen = []) => ({ ALEXA_TOKEN: "t", VPC_JARVIS: { fetch: async r => { seen.push([r.headers.get("x-alexa-token"), await r.json()]); return Response.json(reply); } } });
+const read = async r => (await r.json()).response;
+
+test("a reply is spoken, and a question keeps the Echo listening", async () => {
+  const seen = [];
+  let out = await read(await handle({ request: said("Say_turn", "off the lights") }, envReplying({ text: "Done, sir." }, seen), () => {}));
+  assert.equal(out.outputSpeech.text, "Done, sir.");
+  assert.equal(out.shouldEndSession, true);
+  assert.deepEqual(seen[0], ["t", { text: "turn off the lights" }]);
+  out = await read(await handle({ request: said("Say_turn", "the lights down") }, envReplying({ text: "Which room, sir?", keep_open: true }), () => {}));
+  assert.equal(out.shouldEndSession, false);
+});
+
+test("Jarvis being down is said plainly", async () => {
+  const env = { ALEXA_TOKEN: "t", VPC_JARVIS: { fetch: async () => { throw new Error("down"); } } };
+  assert.match((await read(await handle({ request: said("Say_what", "time is it") }, env, () => {}))).outputSpeech.text, /can't reach Jarvis/);
+});
+
+test("stop ends without troubling Jarvis, and opening just listens", async () => {
+  const env = { VPC_JARVIS: { fetch: async () => assert.fail("shouldn't call") } };
+  assert.equal((await read(await handle({ request: { type: "IntentRequest", intent: { name: "AMAZON.StopIntent" } } }, env, () => {}))).shouldEndSession, true);
+  assert.equal((await read(await handle({ request: { type: "LaunchRequest" } }, env, () => {}))).shouldEndSession, false);
+});

@@ -1,0 +1,858 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "jarvis",
+      "intents": [
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.YesIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NoIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "Say_to",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "to {text}"
+          ]
+        },
+        {
+          "name": "Say_please",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "please {text}"
+          ]
+        },
+        {
+          "name": "Say_what",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "what {text}"
+          ]
+        },
+        {
+          "name": "Say_whats",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "what's {text}"
+          ]
+        },
+        {
+          "name": "Say_when",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "when {text}"
+          ]
+        },
+        {
+          "name": "Say_whens",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "when's {text}"
+          ]
+        },
+        {
+          "name": "Say_who",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "who {text}"
+          ]
+        },
+        {
+          "name": "Say_whos",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "who's {text}"
+          ]
+        },
+        {
+          "name": "Say_where",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "where {text}"
+          ]
+        },
+        {
+          "name": "Say_wheres",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "where's {text}"
+          ]
+        },
+        {
+          "name": "Say_why",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "why {text}"
+          ]
+        },
+        {
+          "name": "Say_how",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "how {text}"
+          ]
+        },
+        {
+          "name": "Say_hows",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "how's {text}"
+          ]
+        },
+        {
+          "name": "Say_is",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "is {text}"
+          ]
+        },
+        {
+          "name": "Say_are",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "are {text}"
+          ]
+        },
+        {
+          "name": "Say_am",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "am {text}"
+          ]
+        },
+        {
+          "name": "Say_do",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "do {text}"
+          ]
+        },
+        {
+          "name": "Say_does",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "does {text}"
+          ]
+        },
+        {
+          "name": "Say_did",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "did {text}"
+          ]
+        },
+        {
+          "name": "Say_has",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "has {text}"
+          ]
+        },
+        {
+          "name": "Say_have",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "have {text}"
+          ]
+        },
+        {
+          "name": "Say_can",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "can {text}"
+          ]
+        },
+        {
+          "name": "Say_could",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "could {text}"
+          ]
+        },
+        {
+          "name": "Say_will",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "will {text}"
+          ]
+        },
+        {
+          "name": "Say_would",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "would {text}"
+          ]
+        },
+        {
+          "name": "Say_should",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "should {text}"
+          ]
+        },
+        {
+          "name": "Say_which",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "which {text}"
+          ]
+        },
+        {
+          "name": "Say_turn",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "turn {text}"
+          ]
+        },
+        {
+          "name": "Say_switch",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "switch {text}"
+          ]
+        },
+        {
+          "name": "Say_put",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "put {text}"
+          ]
+        },
+        {
+          "name": "Say_play",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "play {text}"
+          ]
+        },
+        {
+          "name": "Say_pause",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "pause {text}"
+          ]
+        },
+        {
+          "name": "Say_resume",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "resume {text}"
+          ]
+        },
+        {
+          "name": "Say_stop",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "stop {text}"
+          ]
+        },
+        {
+          "name": "Say_skip",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "skip {text}"
+          ]
+        },
+        {
+          "name": "Say_mute",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "mute {text}"
+          ]
+        },
+        {
+          "name": "Say_unmute",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "unmute {text}"
+          ]
+        },
+        {
+          "name": "Say_set",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "set {text}"
+          ]
+        },
+        {
+          "name": "Say_make",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "make {text}"
+          ]
+        },
+        {
+          "name": "Say_dim",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "dim {text}"
+          ]
+        },
+        {
+          "name": "Say_tell",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "tell {text}"
+          ]
+        },
+        {
+          "name": "Say_give",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "give {text}"
+          ]
+        },
+        {
+          "name": "Say_show",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "show {text}"
+          ]
+        },
+        {
+          "name": "Say_check",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "check {text}"
+          ]
+        },
+        {
+          "name": "Say_find",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "find {text}"
+          ]
+        },
+        {
+          "name": "Say_search",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "search {text}"
+          ]
+        },
+        {
+          "name": "Say_google",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "google {text}"
+          ]
+        },
+        {
+          "name": "Say_get",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "get {text}"
+          ]
+        },
+        {
+          "name": "Say_request",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "request {text}"
+          ]
+        },
+        {
+          "name": "Say_download",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "download {text}"
+          ]
+        },
+        {
+          "name": "Say_its",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "it's {text}"
+          ]
+        },
+        {
+          "name": "Say_thats",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "that's {text}"
+          ]
+        },
+        {
+          "name": "Say_im",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "i'm {text}"
+          ]
+        },
+        {
+          "name": "Say_i",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "i {text}"
+          ]
+        },
+        {
+          "name": "Say_my",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "my {text}"
+          ]
+        },
+        {
+          "name": "Say_any",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "any {text}"
+          ]
+        },
+        {
+          "name": "Say_anything",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "anything {text}"
+          ]
+        },
+        {
+          "name": "Say_volume",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "volume {text}"
+          ]
+        },
+        {
+          "name": "Say_lights",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "lights {text}"
+          ]
+        },
+        {
+          "name": "Say_remind",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "remind {text}"
+          ]
+        },
+        {
+          "name": "Say_wake",
+          "slots": [
+            {
+              "name": "text",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "wake {text}"
+          ]
+        },
+        {
+          "name": "AnswerIntent",
+          "slots": [
+            {
+              "name": "answer",
+              "type": "ANSWER_WORDS"
+            }
+          ],
+          "samples": [
+            "{answer}"
+          ]
+        }
+      ],
+      "types": [
+        {
+          "name": "ANSWER_WORDS",
+          "values": [
+            {
+              "name": {
+                "value": "the living room"
+              }
+            },
+            {
+              "name": {
+                "value": "living room"
+              }
+            },
+            {
+              "name": {
+                "value": "the passage"
+              }
+            },
+            {
+              "name": {
+                "value": "passage"
+              }
+            },
+            {
+              "name": {
+                "value": "daniel's room"
+              }
+            },
+            {
+              "name": {
+                "value": "daniel's tv"
+              }
+            },
+            {
+              "name": {
+                "value": "mum's tv"
+              }
+            },
+            {
+              "name": {
+                "value": "mum's bedroom"
+              }
+            },
+            {
+              "name": {
+                "value": "the first one"
+              }
+            },
+            {
+              "name": {
+                "value": "the second one"
+              }
+            },
+            {
+              "name": {
+                "value": "the third one"
+              }
+            },
+            {
+              "name": {
+                "value": "this evening"
+              }
+            },
+            {
+              "name": {
+                "value": "tomorrow morning"
+              }
+            },
+            {
+              "name": {
+                "value": "all of them"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
