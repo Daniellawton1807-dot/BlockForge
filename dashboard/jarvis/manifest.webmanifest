@@ -1,0 +1,16 @@
+{
+  "name": "J.A.R.V.I.S.",
+  "short_name": "Jarvis",
+  "description": "Daniel's voice assistant.",
+  "id": "/jarvis/",
+  "start_url": "/jarvis/",
+  "scope": "/jarvis/",
+  "display": "standalone",
+  "background_color": "#020c13",
+  "theme_color": "#020c13",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
