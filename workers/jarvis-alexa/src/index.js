@@ -1,11 +1,42 @@
 // Daniel's private Alexa skill: "Alexa, ask Jarvis to ...". Checks Amazon signed the request, hands the words to Jarvis, speaks the answer.
 // Only this Worker holds ALEXA_TOKEN, and Jarvis accepts that token on /api/alexa alone.
+// Also /siri, for Daniel's "Ask Jarvis" Siri Shortcut: it needs SIRI_TOKEN as a Bearer token, which Jarvis also checks, on /api/siri alone.
 import { Rejected, verifyRequest } from "./verify.js";
 import { OPENER_BY_INTENT } from "./phrases.js";
 
 const JARVIS_URL = "http://192.168.8.150:8770/api/alexa";
 const JARVIS_MS = 7300;  // Jarvis gives up at 6.5 s; Alexa stops waiting at about 8
 const MAX_BODY = 128 * 1024;
+const SIRI_URL = "http://192.168.8.150:8770/api/siri";
+const SIRI_MS = 30000;  // Siri waits much longer than Alexa; Jarvis gives up at 25 s and sends anything slower to his phone
+
+const same = (a, b) => {  // constant time, so the token can't be guessed a letter at a time
+  const x = new TextEncoder().encode(a), y = new TextEncoder().encode(b);
+  let diff = x.length ^ y.length;
+  for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] || 0) ^ (y[i] || 0);
+  return diff === 0;
+};
+
+export async function siri(request, env) {
+  const given = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  if (!env.SIRI_TOKEN || !given || !same(given, env.SIRI_TOKEN)) return json({ text: "Not allowed." }, 401);
+  const raw = await request.text();
+  if (raw.length > 4096) return json({ text: "That's too long, sir." }, 413);
+  let text = "";
+  try { text = String(JSON.parse(raw).text || "").trim().slice(0, 500); } catch { return json({ text: "I didn't catch that, sir." }, 400); }
+  if (!text) return json({ text: "I didn't catch that, sir." });
+  try {
+    const response = await env.VPC_JARVIS.fetch(new Request(SIRI_URL, {
+      method: "POST", headers: { "x-siri-token": env.SIRI_TOKEN, "content-type": "application/json" }, body: JSON.stringify({ text }), signal: AbortSignal.timeout(SIRI_MS)
+    }));
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const reply = await response.json();
+    return json({ text: reply.text || "Done, sir." });
+  } catch (error) {
+    console.log("siri: " + error.message);
+    return json({ text: "I can't reach Jarvis at the moment, sir." });
+  }
+}
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json;charset=UTF-8", "cache-control": "no-store" } });
 
@@ -68,6 +99,7 @@ export async function handle(body, env) {
 export default {
   async fetch(request, env) {
     if (request.method !== "POST") return new Response("Not found.", { status: 404 });
+    if (new URL(request.url).pathname === "/siri") return siri(request, env);
     const rawBody = await request.text();
     if (rawBody.length > MAX_BODY) return new Response("Too large.", { status: 413 });
     let body;

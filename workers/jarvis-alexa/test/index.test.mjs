@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { handle, wordsFrom } from "../src/index.js";
+import { handle, siri, wordsFrom } from "../src/index.js";
 
 const said = (name, value) => ({ type: "IntentRequest", intent: { name, slots: { text: { value }, answer: { value } } } });
 
@@ -50,4 +50,18 @@ test("stop ends without troubling Jarvis, and opening just listens", async () =>
   const env = { VPC_JARVIS: { fetch: async () => assert.fail("shouldn't call") } };
   assert.equal((await read(await handle({ request: { type: "IntentRequest", intent: { name: "AMAZON.StopIntent" } } }, env, () => {}))).shouldEndSession, true);
   assert.equal((await read(await handle({ request: { type: "LaunchRequest" } }, env, () => {}))).shouldEndSession, false);
+});
+
+
+test("siri needs its own token and gets a reply to speak", async () => {
+  const seen = [];
+  const env = { SIRI_TOKEN: "s", VPC_JARVIS: { fetch: async r => { seen.push([r.url, r.headers.get("x-siri-token"), await r.json()]); return new Response(JSON.stringify({ text: "" })); } } };
+  const ask = (auth, body = { text: "turn off the lights" }) => siri(new Request("https://x/siri", { method: "POST", headers: auth ? { authorization: auth } : {}, body: JSON.stringify(body) }), env);
+  assert.equal((await ask("Bearer wrong")).status, 401);
+  assert.equal((await ask(null)).status, 401);
+  assert.equal(seen.length, 0);
+  const ok = await ask("Bearer s");
+  assert.deepEqual(await ok.json(), { text: "Done, sir." });  // a quiet success still says something on Siri
+  assert.deepEqual(seen[0], ["http://192.168.8.150:8770/api/siri", "s", { text: "turn off the lights" }]);
+  assert.equal((await siri(new Request("https://x/siri", { method: "POST", headers: { authorization: "Bearer s" } }), { ...env, SIRI_TOKEN: "" })).status, 401);
 });
