@@ -1250,8 +1250,14 @@
   }
 
   /* save the battery while the page is out of sight, and pick up again on return */
+  let hiddenAt = 0;
+  const FRESH_AFTER_MS = 60000;  // away longer than this, and he comes back to the dashboard, not to the last question
   document.addEventListener("visibilitychange", () => {
     document.body.classList.toggle("paused", document.hidden);
+    if (!document.hidden && hiddenAt && Date.now() - hiddenAt > FRESH_AFTER_MS && !recording && !speaking) {
+      goHome(); hideToast(); $("said").textContent = "";
+    }
+    hiddenAt = document.hidden ? Date.now() : 0;
     if (document.hidden) {
       if (abort) { abort.abort(); abort = null; }
       if (IOS) { recording = null; if (hearing) setHearing(false); releaseScreen(); }  // iOS pauses the mic by itself in the background
