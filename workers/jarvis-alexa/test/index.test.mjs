@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { handle, siri, wordsFrom } from "../src/index.js";
+import { audio, handle, siri, wordsFrom } from "../src/index.js";
 
 const said = (name, value) => ({ type: "IntentRequest", intent: { name, slots: { text: { value }, answer: { value } } } });
 
@@ -64,4 +64,36 @@ test("siri needs its own token and gets a reply to speak", async () => {
   assert.deepEqual(await ok.json(), { text: "Done, sir." });  // a quiet success still says something on Siri
   assert.deepEqual(seen[0], ["http://192.168.8.150:8770/api/siri", "s", { text: "turn off the lights" }]);
   assert.equal((await siri(new Request("https://x/siri", { method: "POST", headers: { authorization: "Bearer s" } }), { ...env, SIRI_TOKEN: "" })).status, 401);
+});
+
+const CLIP = "a" + "0123456789abcdef".repeat(3).slice(0, 39);
+
+test("Jarvis's own voice plays when there's a clip, and Alexa's reads it when there isn't", async () => {
+  let out = await read(await handle({ request: said("Say_what", "time is it") }, envReplying({ text: "Ten past nine, sir.", audio: CLIP }), "https://w.example"));
+  assert.equal(out.outputSpeech.type, "SSML");
+  assert.equal(out.outputSpeech.ssml, `<speak><audio src="https://w.example/audio/${CLIP}.mp3"/></speak>`);
+  out = await read(await handle({ request: said("Say_what", "time is it") }, envReplying({ text: "Ten past nine, sir.", audio: 'x"/><audio src="evil' }), "https://w.example"));
+  assert.deepEqual(out.outputSpeech, { type: "PlainText", text: "Ten past nine, sir." });  // only a clip id goes into the SSML
+  out = await read(await handle({ request: said("Say_turn", "the lights down") }, envReplying({ text: "Which room, sir?", keep_open: true, audio: CLIP, reprompt_audio: CLIP }), "https://w.example"));
+  assert.equal(out.reprompt.outputSpeech.type, "SSML");
+});
+
+test("the opening phrase is in Jarvis's voice when he's there, and still works when he isn't", async () => {
+  let out = await read(await handle({ request: { type: "LaunchRequest" } }, envReplying({ audio: CLIP }), "https://w.example"));
+  assert.equal(out.outputSpeech.type, "SSML");
+  assert.equal(out.shouldEndSession, false);
+  const down = { ALEXA_TOKEN: "t", VPC_JARVIS: { fetch: async () => { throw new Error("down"); } } };
+  out = await read(await handle({ request: { type: "LaunchRequest" } }, down, "https://w.example"));
+  assert.deepEqual(out.outputSpeech, { type: "PlainText", text: "Yes, sir?" });
+});
+
+test("clips are fetched from Jarvis with the token, and nothing else is", async () => {
+  const asked = [];
+  const env = { ALEXA_TOKEN: "t", VPC_JARVIS: { fetch: async r => { asked.push([r.url, r.headers.get("x-alexa-token")]); return new Response("mp3"); } } };
+  const r = await audio(`/audio/${CLIP}.mp3`, env);
+  assert.equal(r.headers.get("content-type"), "audio/mpeg");
+  assert.equal(await r.text(), "mp3");
+  assert.deepEqual(asked, [[`http://192.168.8.150:8770/api/alexa/audio/${CLIP}`, "t"]]);
+  assert.equal((await audio("/audio/../state", env)).status, 404);
+  assert.equal(asked.length, 1);
 });
