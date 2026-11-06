@@ -64,6 +64,7 @@
     applyView(r.data);
     connect();
     setWake(wakeOn);
+    fetchToday(true);
   }
 
   function applyView(v) {
@@ -121,10 +122,15 @@
     }, 5000);
   }
 
+  let linkOn = false, linkLostAt = 0;
   function setLink(on, text) {
     live = on && !text;  // polling connects, but delivers no replies: those come from the command's own response
-    $("linkText").textContent = on ? (text || "LIVE LINK / VAULT") : "LINK LOST / RECONNECTING";
-    document.querySelector(".link").classList.toggle("off", !on);
+    linkOn = on;
+    linkLostAt = on ? 0 : linkLostAt || Date.now();
+    // a moment's reconnect isn't news: the dot only turns amber if it lasts
+    setTimeout(() => { if (!linkOn) $("linkDot").className = "off"; }, 4000);
+    if (on) $("linkDot").className = "";
+    drawStrip();
   }
 
   function onEvent(e) {
@@ -132,7 +138,7 @@
       case "hello": applyView(e); break;
       case "status": setStatus(e.status); break;
       case "mode": setMode(e.mode); break;
-      case "you": pushLog(e); $("said").textContent = ""; break;
+      case "you": pushLog(e); lastSaid = e.text || lastSaid; $("said").textContent = ""; break;
       case "reply": if (e.text) pushLog(e); showReply(e); setPending(e.awaiting_confirmation ? { tool: e.tool, question: e.text } : null); break;
       case "action":
         pushLog(e);
@@ -147,7 +153,24 @@
       case "timer": pushLog(e); $("said").textContent = e.text; say(e.text); break;
     }
   }
+  /* History (Daniel, 2026-11-06): the last answers, each one tappable to bring back, so nothing's lost when it's closed */
+  const SCENE_NAMES = { weather: "WEATHER", report: "REPORT", media: "PLAYING", options: "CHOICES", table: "TABLE", sections: "EXPLAINED", suggestions: "IDEAS", error: "PROBLEM", web: "WEB", race: "F1", route: "MAP", flights: "FLIGHTS" };
+  let history = [], lastSaid = "";
+  try { history = JSON.parse(sessionStorage.getItem("jarvis.history") || "[]"); } catch { history = []; }
+  function remember(r) {
+    if (!r.text && !(r.view && SCENES[r.view.type])) return;
+    history.push({ at: Date.now(), said: lastSaid, text: r.text || "", view: r.view && SCENES[r.view.type] ? r.view : null });
+    lastSaid = "";
+    if (history.length > 25) history.shift();
+    try {
+      let saved = JSON.stringify(history);
+      if (saved.length > 400000) saved = JSON.stringify(history.map((h, i) => i < history.length - 5 ? { ...h, view: null } : h));  // keep the newest views, drop the rest
+      sessionStorage.setItem("jarvis.history", saved);
+    } catch { /* it still works for this visit */ }
+    if (sheetKind === "history") renderSheet();
+  }
   function showReply(r) {
+    remember(r);
     const type = r.view && r.view.type;
     seenView = r.view_at || seenView;
     $("said").textContent = ["notice", "error", "web", "media", "home"].includes(type) ? "" : r.text;
@@ -160,11 +183,22 @@
 
   let serverMode = "idle", hearing = false, transcribing = false;
   function setMode(mode) { serverMode = mode; showMode(); }
+  /* The reactor is Jarvis's face (Daniel, 2026-11-06): it shows what he's doing, not the server's CPU. Listening follows your voice,
+     thinking spins amber, speaking pulses. */
   function showMode() {
     const mode = hearing ? "listening" : (transcribing || serverMode === "thinking") ? "thinking" : speaking ? "speaking" : "idle";
     document.body.dataset.mode = mode;
-    $("modeLabel").textContent = { listening: "LISTENING", thinking: "THINKING", speaking: "SPEAKING", idle: "COMPUTE ACTIVITY" }[mode];
+    $("modeLabel").textContent = { listening: "LISTENING", thinking: "THINKING", speaking: "SPEAKING", idle: "READY" }[mode];
+    if (mode !== "listening") setLevel(0);
+    showHint();
   }
+  function showHint() {
+    const mode = document.body.dataset.mode;
+    $("hintLine").textContent = mode === "listening" ? "GO AHEAD" : mode === "thinking" ? "WORKING ON IT" : mode === "speaking" ? "TALK OVER ME TO STOP" :
+      store.get("jarvis.wake") === "on" ? 'SAY "HEY JARVIS"' : "TAP THE MIC OR TYPE";
+  }
+  const reactorEl = document.querySelector(".reactor");
+  function setLevel(v) { reactorEl.style.setProperty("--lvl", Math.max(0, Math.min(1, v)).toFixed(3)); }
 
   /* Speech. One audio element is unlocked by the first command, because browsers block sound started any other way.
      It plays ElevenLabs as the audio arrives; if that fails, the browser's own voice takes over and the page says so. */
@@ -280,55 +314,84 @@
     if (!voiceOn && ((spokeLast && askedBack) || pendingTool || data.awaiting_confirmation)) { askedBack = false; startListening(); }
   }
 
-  /* readouts */
+  /* The server, on one line under the reactor: tap it for the details */
   const num = (v, d = 0) => v == null ? "--" : Number(v).toFixed(d);
-  function ring(id, percent, text) {
-    const r = $(id);
-    r.querySelector(".v").style.strokeDasharray = Math.max(0, Math.min(100, percent || 0)) + " 100";
-    r.querySelector("span").textContent = text;
+  function drawStrip() {
+    const s = status, parts = [];
+    if (!linkOn && linkLostAt && Date.now() - linkLostAt > 4000) parts.push("RECONNECTING");
+    if (s.cpu != null) parts.push("CPU " + num(s.cpu) + "%");
+    if (s.memory) parts.push("MEM " + num(s.memory.percent) + "%");
+    if (s.storage) parts.push("DISK " + num(s.storage.percent) + "%");
+    if (s.minecraft) parts.push("MINECRAFT " + (s.minecraft.starting ? "STARTING" : s.minecraft.running ? (s.minecraft.online || 0) + " ON" : "OFF"));
+    if (s.uptime) parts.push("UP " + s.uptime);
+    $("stripText").textContent = "SERVER  /  " + (parts.join("  ·  ") || "CONNECTING");
   }
-  function spark(id, values) {
-    if (values.length < 2) return;
-    const top = Math.max(...values, 1);
-    $(id).querySelector("polyline").setAttribute("points", values.map((v, i) => (i / (60 - 1) * 200).toFixed(1) + "," + (42 - v / top * 38).toFixed(1)).join(" "));
-  }
-  function push(list, v) { list.push(v || 0); if (list.length > 60) list.shift(); }
-
   function setStatus(s) {
     if (!s) return;
     status = { ...status, ...s };
-    const on = s.telemetry !== false && s.cpu != null;
-    $("telemetry").textContent = on ? "LIVE TELEMETRY / ONLINE" : "TELEMETRY / UNAVAILABLE";
-    if (on) {
-      $("cpu").textContent = num(s.cpu, 1) + "%";
-      $("coreCpu").textContent = num(s.cpu);
-      $("loadArc").setAttribute("stroke-dasharray", Math.min(100, s.cpu).toFixed(1) + " 100");
-      $("coreTemp").textContent = s.temp != null ? num(s.temp) + "°C / CPU" : "";
-      push(cpuHistory, s.cpu); spark("cpuSpark", cpuHistory);
-      if (s.memory) {
-        ring("memRing", s.memory.percent, num(s.memory.percent) + "%");
-        $("memUsed").textContent = s.memory.used_gb + " GiB"; $("memOf").textContent = "OF " + s.memory.total_gb + " GIB IN USE";
-        $("coreSub").textContent = "Memory " + num(s.memory.percent, 1) + "%" + (s.storage ? "  ·  Disk " + num(s.storage.percent) + "%" : "");
+    drawStrip();
+    if (status.memory && status.storage) $("mini").textContent = "CPU " + num(status.cpu) + "%   MEM " + num(status.memory.percent) + "%   DISK " + num(status.storage.percent) + "%";
+    drawNowBar();
+    if (sheetKind === "server") renderSheet();
+  }
+  $("serverStrip").addEventListener("click", () => openSheet("server", "SERVER"));
+
+  /* Now playing: every TV that has something on, with the buttons you'd reach for. They go straight to the TV: no model, nothing spoken. */
+  const ICONS = {
+    back: "M11 17l-5-5 5-5M18 17l-5-5 5-5", forward: "M13 7l5 5-5 5M6 7l5 5-5 5", pause: "M8 5v14M16 5v14", resume: "M7 4l12 8-12 8z",
+    next: "M6 5l9 7-9 7zM18 5v14", quieter: "M4 9v6h4l5 4V5L8 9zM16 12h5", louder: "M4 9v6h4l5 4V5L8 9zM16 12h5M18.5 9.5v5"
+  };
+  const icon = d => { const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("viewBox", "0 0 24 24"); const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", d); svg.append(p); return svg; };
+  const npClock = {};  // tv -> {position, at, paused, runtime}, so the bar's progress moves between status updates
+  function drawNowBar() {
+    const bar = $("nowbar"), playing = (status.tvs || []).filter(t => t.playing);
+    document.body.classList.toggle("has-now", playing.length > 0);
+    bar.hidden = !playing.length;
+    if (!playing.length) return bar.replaceChildren();
+    const keep = new Set(playing.map(t => t.key));
+    bar.querySelectorAll(".np").forEach(n => { if (!keep.has(n.dataset.tv)) n.remove(); });
+    playing.slice(0, 2).forEach(t => {
+      const p = t.playing;
+      npClock[t.key] = { position: p.position || 0, runtime: p.runtime || 0, paused: !!p.paused, at: Date.now() };
+      let row = bar.querySelector(`.np[data-tv="${CSS.escape(t.key)}"]`);
+      if (!row || row.dataset.thumb !== String(p.thumb)) {
+        const fresh = el("div", "np"); fresh.dataset.tv = t.key; fresh.dataset.thumb = String(p.thumb);
+        const art = el("img"); art.alt = ""; if (p.thumb) loadImage(art, p.thumb);
+        const txt = el("div", "np-txt");
+        txt.append(el("small", "", t.label.toUpperCase()), el("b", ""), el("span", ""));
+        const prog = el("div", "np-prog"); prog.append(el("i")); txt.append(prog);
+        const btns = el("div", "np-btns");
+        [["back", "Back 30 seconds"], ["toggle", "Pause or play"], ["forward", "Forward 30 seconds"], ["next", "Next episode"], ["quieter", "Volume down"], ["louder", "Volume up"]].forEach(([a, name]) => {
+          const b = el("button", "np-" + a); b.type = "button"; b.dataset.action = a; b.setAttribute("aria-label", name); b.title = name;
+          b.append(icon(ICONS[a === "toggle" ? "pause" : a])); b.addEventListener("click", () => npPress(t.key, a, b)); btns.append(b);
+        });
+        fresh.append(art, txt, btns);
+        if (row) row.replaceWith(fresh); else bar.append(fresh);
+        row = fresh;
       }
-      if (s.storage) { ring("diskRing", s.storage.percent, num(s.storage.percent) + "%"); $("diskFree").textContent = s.storage.free_gb; }
-      if (s.network) {
-        $("netDown").textContent = "↓ " + num(s.network.down, s.network.down < 10 ? 1 : 0);
-        $("netUp").textContent = "↑ " + num(s.network.up, 1) + " KiB/s"; $("netName").textContent = s.network.name || "";
-        push(netHistory, s.network.down); spark("netSpark", netHistory);
-      }
-      $("uptime").textContent = s.uptime || "--";
-      if (s.memory && s.storage) $("mini").textContent = "CPU " + num(s.cpu) + "%   MEM " + num(s.memory.percent) + "%   DISK " + num(s.storage.percent) + "%";
-    }
-    const mc = status.minecraft;
-    if (mc) {
-      const players = mc.online || 0;
-      ring("mcRing", mc.running && mc.max ? players / mc.max * 100 : 0, mc.running ? players + "/" + (mc.max || "?") : "OFF");
-      $("mcState").textContent = mc.starting ? "STARTING" : mc.running ? "RUNNING" : "STOPPED";
-      $("mcWho").textContent = mc.running && mc.players && mc.players.length ? mc.players.join(", ").toUpperCase() : mc.running ? "NOBODY ONLINE" : "MAIN WORLD";
-    }
-    const busy = (status.tvs || []).filter(t => t.playing);
-    $("dockTv").textContent = busy.length ? busy.length + " playing" : "Nothing playing";
-    if (sheetKind === "tvs" || sheetKind === "minecraft") renderSheet();
+      row.querySelector("b").textContent = p.title || "";
+      row.querySelector(".np-txt span").textContent = [p.subtitle, p.paused ? "Paused" : ""].filter(Boolean).join(" · ");
+      row.classList.toggle("paused", !!p.paused);
+      const t2 = row.querySelector(".np-toggle"); t2.replaceChildren(icon(ICONS[p.paused ? "resume" : "pause"])); t2.dataset.paused = p.paused ? "1" : "";
+      row.querySelector(".np-next").hidden = !/\bE\d/.test(p.subtitle || "");
+    });
+    tickNowBar();
+  }
+  function tickNowBar() {
+    document.querySelectorAll("#nowbar .np").forEach(row => {
+      const c = npClock[row.dataset.tv]; if (!c || !c.runtime) return;
+      const at = c.position + (c.paused ? 0 : (Date.now() - c.at) / 1000);
+      row.querySelector(".np-prog i").style.width = Math.min(100, at / c.runtime * 100).toFixed(2) + "%";
+    });
+  }
+  setInterval(() => { if (!document.hidden) tickNowBar(); }, 1000);
+  async function npPress(tv, action, button) {
+    if (action === "toggle") action = button.dataset.paused ? "resume" : "pause";
+    button.disabled = true;
+    const r = await api("control", { action, tv });
+    button.disabled = false;
+    if (!r.ok || !r.data.ok) showNotice({ title: (r.data && (r.data.text || r.data.error)) || "That didn't work." });
+    else if (action === "pause" || action === "resume") { const c = npClock[tv]; if (c) { c.position += c.paused ? 0 : (Date.now() - c.at) / 1000; c.at = Date.now(); c.paused = action === "pause"; } button.dataset.paused = action === "pause" ? "1" : ""; button.replaceChildren(icon(ICONS[action === "pause" ? "resume" : "pause"])); }
   }
 
   /* side sheet: status views and the live action panel */
@@ -340,22 +403,37 @@
   function closeSheet() { clearTimeout(panelTimer); sheetKind = null; $("sheet").hidden = true; }
   $("sheetClose").addEventListener("click", closeSheet);
   document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
-  document.querySelectorAll("[data-sheet]").forEach(b => b.addEventListener("click", () => openSheet(b.dataset.sheet, { tvs: "TVS", minecraft: "MINECRAFT", log: "ACTIVITY" }[b.dataset.sheet])));
+  document.querySelectorAll("[data-sheet]").forEach(b => b.addEventListener("click", () => openSheet(b.dataset.sheet, { log: "ACTIVITY", history: "HISTORY", settings: "SETTINGS" }[b.dataset.sheet])));
 
   function renderSheet() {
     const body = $("sheetBody"); body.replaceChildren();
     const row = (tag, title, sub, cls) => { const r = el("div", "item " + (cls || "")); if (tag) r.append(el("span", "tag", tag)); r.append(el("b", "", title)); if (sub) r.append(el("span", "", sub)); body.append(r); };
-    if (sheetKind === "tvs") {
-      (status.tvs || []).forEach(t => {
-        const p = t.playing;
-        row(t.label.toUpperCase(), p ? p.title : t.online == null ? "Unknown" : t.online ? "Nothing playing" : "Not connected", p ? [p.subtitle, p.paused ? "Paused" : "Playing"].filter(Boolean).join(" · ") : "");
+    if (sheetKind === "server") {
+      const s = status;
+      if (s.cpu != null) row("PROCESSOR", num(s.cpu, 1) + "%", s.temp != null ? num(s.temp) + "°C" : "");
+      if (s.memory) row("MEMORY", s.memory.used_gb + " of " + s.memory.total_gb + " GiB", num(s.memory.percent) + "% in use");
+      if (s.storage) row("SYSTEM DISK", s.storage.free_gb + " GiB free", num(s.storage.percent) + "% used");
+      if (s.network) row("NETWORK", "↓ " + num(s.network.down, 1) + "  ↑ " + num(s.network.up, 1) + " KiB/s", s.network.name || "");
+      if (s.uptime) row("UPTIME", s.uptime);
+      const m = s.minecraft;
+      if (m) row("MINECRAFT", m.starting ? "Starting" : m.running ? "Running, " + (m.online || 0) + " of " + (m.max || "?") + " on" : "Stopped", m.running ? (m.players || []).join(", ") || "Nobody online" : "");
+      (s.tvs || []).forEach(t => { const p = t.playing; row(t.label.toUpperCase(), p ? p.title : t.online == null ? "Unknown" : t.online ? "Nothing playing" : "Not connected", p ? [p.subtitle, p.paused ? "Paused" : "Playing"].filter(Boolean).join(" · ") : ""); });
+      const more = el("button", "act", "FULL SYSTEMS CHECK"); more.type = "button"; more.addEventListener("click", () => { closeSheet(); spokeLast = false; sendCommand("how's the server"); }); body.append(more);
+    } else if (sheetKind === "history") {
+      if (!history.length) return row("", "Nothing yet", "Your questions and his answers appear here.");
+      history.slice().reverse().forEach(h => {
+        const r = el("div", "item hist");
+        r.append(el("span", "tag", new Date(h.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + (h.view ? " / " + (SCENE_NAMES[h.view.type] || "ANSWER") : "")));
+        if (h.said) r.append(el("b", "", h.said));
+        if (h.text) r.append(el("span", "", h.text));
+        const acts = el("div", "hist-acts");
+        if (h.view && SCENES[h.view.type]) { const show = el("button", "act", "SHOW IT"); show.type = "button"; show.addEventListener("click", () => { closeSheet(); $("said").textContent = h.text || ""; renderView(h.view); }); acts.append(show); }
+        if (h.said) { const again = el("button", "act", "ASK AGAIN"); again.type = "button"; again.addEventListener("click", () => { closeSheet(); spokeLast = false; sendCommand(h.said); }); acts.append(again); }
+        if (acts.children.length) r.append(acts);
+        body.append(r);
       });
-    } else if (sheetKind === "minecraft") {
-      const m = status.minecraft;
-      if (!m) return row("", "Status unavailable");
-      row("SERVER", m.starting ? "Starting" : m.running ? "Running" : "Stopped", m.version || "");
-      if (m.running) row("PLAYERS", (m.online || 0) + " of " + (m.max || "?"), (m.players || []).join(", ") || "Nobody online");
-      body.append(el("p", "", "Ask Jarvis to start or stop it."));
+    } else if (sheetKind === "settings") {
+      renderSettings(body);
     } else if (sheetKind === "log") {
       const rows = log.filter(e => e.type !== "step").slice(-60).reverse();
       if (!rows.length) return row("", "Nothing yet");
@@ -1013,7 +1091,9 @@
   /* Talking over him (Daniel, 2026-11-06): while he speaks, a voice that's clearly louder than the room for about half a second pauses him and
      records. "Stop" ends his reply, a new request replaces it, and nothing intelligible (the TV, a cough) lets him carry on where he paused.
      Echo cancellation keeps most of his own voice out. The two numbers are guesses until tried in the real room. */
-  const BARGE_BLOCKS = 6, BARGE_RATIO = 8, BARGE_FLOOR = 0.02;
+  const BARGE_BLOCKS = 6, BARGE_FLOOR = 0.02, BARGE_RATIOS = { off: 0, low: 12, normal: 8, high: 5 };
+  let bargeRatio = BARGE_RATIOS[store.get("jarvis.talkover") || "normal"] ?? 8;
+  const WAKE_LEVELS = { low: 0.65, normal: 0.5, high: 0.35 };
   let wakeOn = store.get("jarvis.wake") === "on", mic = null, worker = null, wakeReady = false, recording = null;
   let guardTimer = null, preroll = [], noise = 0.003, wakeLock = null, lastWake = 0, chimeCtx = null, spokeLast = false, loudFor = 0;
 
@@ -1077,7 +1157,7 @@
     for (let i = 0; i < block.length; i++) sum += block[i] * block[i];
     const level = Math.sqrt(sum / block.length);
     if (recording) return recordBlock(block, level);
-    loudFor = speaking && level > Math.max(noise * BARGE_RATIO, BARGE_FLOOR) ? loudFor + 1 : 0;
+    loudFor = speaking && bargeRatio && level > Math.max(noise * bargeRatio, BARGE_FLOOR) ? loudFor + 1 : 0;
     if (loudFor >= BARGE_BLOCKS) { loudFor = 0; preroll.push(block); return bargeIn(); }
     // follows the quiet between words: drops quickly, rises slowly, so speech never counts as background noise
     noise = Math.min(NOISE_CAP, level < noise ? noise * 0.7 + level * 0.3 : noise * 0.998 + level * 0.002);
@@ -1086,6 +1166,7 @@
     if (worker && wakeReady && !document.hidden) { const copy = block.slice(); worker.postMessage(copy, [copy.buffer]); }
   }
   function recordBlock(block, level) {
+    setLevel(level / 0.06);
     const r = recording;
     r.blocks.push(block); r.total++;
     const finished = window.jarvisSpeech.heard(r, level, noise) || r.total >= MAX_BLOCKS;
@@ -1183,7 +1264,19 @@
     spokeLast = true;
     sendCommand(heard);
   }
+  let micPress = null;
+  $("mic").addEventListener("pointerdown", () => {
+    if (hearing) { micPress = null; return; }
+    micPress = { at: Date.now() };
+    startListening();
+  });
+  $("mic").addEventListener("pointerup", () => {
+    if (!micPress) return;
+    micPress.held = Date.now() - micPress.at > 450;
+    if (micPress.held && recording) { if (recording.speech >= MIN_SPEECH_BLOCKS) finishRecording(); else stopListening(); }
+  });
   $("mic").addEventListener("click", () => {
+    if (micPress) { micPress = null; return; }  // its press already started (or finished) it
     if (!hearing) return startListening();
     if (recording && recording.speech >= MIN_SPEECH_BLOCKS) finishRecording(); else stopListening();
   });
@@ -1201,12 +1294,13 @@
     if (!await openMic() || !wakeOn) return wakeOn ? wakeStatus("WAKE WORD FAILED / USE THE MIC BUTTON", true) : undefined;
     if (worker) return;
     const failed = text => { stopCapture(); wakeStatus("WAKE WORD FAILED / USE THE MIC BUTTON", true); if (text) console.warn("wake word:", text); };
-    worker = new Worker("wake-worker.js?v=1");
+    worker = new Worker("wake-worker.js?v=2");
     worker.onerror = () => failed();
     worker.onmessage = e => {
       const m = e.data;
       if (m.type === "ready") {
         wakeReady = true;
+        worker.postMessage({ type: "threshold", value: WAKE_LEVELS[store.get("jarvis.wakesens") || "normal"] || 0.5 });
         const running = mic && mic.ctx.state === "running";
         wakeStatus(running ? 'LISTENING FOR "HEY JARVIS"' : "TAP THE PAGE TO START LISTENING", !running);
         holdScreen();
@@ -1245,6 +1339,7 @@
   $("stopAll").addEventListener("click", () => { spokeLast = false; sendCommand("stop everything", { keep: true, silent: true }); });
   async function sendCommand(text, extra) {
     const { keep, ...more } = extra || {};
+    if (!more.silent) lastSaid = text;
     stopListening(); stopSpeech(); openTurn(); hideToast();
     if (!spokeLast) unlockAudio();  // typed: Enter is a gesture too, but not a button click
     clearInterval(walkTimer);
@@ -1292,11 +1387,112 @@
       else stopCapture();
     } else if (session && !$("app").hidden) {
       connect();
+      fetchToday();
       if (IOS && mic && !micAlive()) stopCapture();  // iOS ended it after all, so it has to ask again
       if (IOS && mic) { mic.ctx.resume().catch(() => {}); if (worker) holdScreen(); else startCapture(); }
       else startCapture();
     }
   });
+
+  /* Your day (Daniel, 2026-11-06): the home screen's cards, from /api/today. The server keeps each one a while, so this is cheap. */
+  const TODAY_EVERY_MS = 60000;
+  let todayAt = 0;
+  const li = (title, sub, cls) => { const n = el("li", cls || ""); n.append(el("b", "", title)); if (sub) n.append(el("span", "", sub)); return n; };
+  function fill(id, items) { $(id).replaceChildren(...items); }
+  function card(id, on) { $(id).hidden = !on; }
+  async function fetchToday(force) {
+    if (!force && (Date.now() - todayAt < TODAY_EVERY_MS - 1000 || document.hidden || $("app").hidden)) return;
+    todayAt = Date.now();
+    const r = await api("today");
+    if (r.ok) drawToday(r.data);
+  }
+  setInterval(() => fetchToday(), TODAY_EVERY_MS);
+  const cap = t => t ? t[0].toUpperCase() + t.slice(1) : "";
+  function drawToday(d) {
+    const w = d.weather;
+    card("cardWeather", !!w);
+    if (w) {
+      $("wxPlace").textContent = (w.place || "").toUpperCase();
+      $("wxTemp").textContent = w.temp + "°";
+      $("wxSky").textContent = cap(w.sky) + " · feels " + w.feels + "°";
+      $("wxMore").textContent = `High ${w.high}° · low ${w.low}° · rain ${w.rain}%` + (w.sunset ? ` · sunset ${w.sunset}` : "");
+    }
+    const ev = d.calendar && d.calendar.events;
+    card("cardCalendar", !!d.calendar);
+    if (d.calendar) fill("calList", ev.length ? ev.map(e => li(e.title, cap(e.day) + " · " + e.time + (e.location ? " · " + e.location : ""))) : [li("Nothing in the diary", "Today or tomorrow")]);
+    const bus = d.buses && d.buses.arrivals;
+    card("cardBuses", !!(bus && bus.length));
+    if (bus) fill("busList", bus.map(b => { const n = li(b.line + " to " + b.to, b.stop.replace(/\s*\(stop \w+\)/i, "")); n.prepend(el("i", "due", b.in)); return n; }));
+    const teams = d.sport && d.sport.teams;
+    card("cardSport", !!(teams && teams.length));
+    if (teams) {
+      $("cardSport").dataset.ask = "how did " + teams[0].team + " get on";
+      fill("sportList", teams.flatMap(t => [li(t.team, t.live ? "LIVE · " + t.latest : t.latest || "", t.live ? "live" : ""), ...(t.next ? [li("Next", t.next, "sub")] : [])]));
+    }
+    const f = d.f1;
+    card("cardF1", !!f);
+    if (f) fill("f1List", [li(f.race || "Next race", (f.next ? f.next.name + " · " + f.next.day + " " + f.next.time : "Weekend under way") + (f.drivers.length ? " · following " + f.drivers.join(", ") : ""))]);
+    const news = d.news && d.news.headlines;
+    card("cardNews", !!(news && news.length));
+    if (news) fill("newsList", news.slice(0, window.innerWidth < 700 ? 4 : 3).map(h => li(h)));
+    const dl = d.downloads && d.downloads.items, shop = d.shopping;
+    card("cardHome", !!(d.downloads || shop));
+    const home = [];
+    if (dl) home.push(...(dl.length ? dl.map(x => li(x.title, [x.percent != null ? Math.round(x.percent) + "%" : "", x.left ? x.left + " left" : "", x.stage || ""].filter(Boolean).join(" · "))) : [li("Nothing downloading")]));
+    if (shop) home.push(li("Shopping list", shop.count ? shop.count + " to get: " + shop.items.join(", ") : "Nothing on it"));
+    fill("homeList", home);
+  }
+  document.querySelectorAll(".card[data-ask]").forEach(c => c.addEventListener("click", () => { spokeLast = false; sendCommand(c.dataset.ask); }));
+
+  /* Settings (Daniel, 2026-11-06). Voice, listening and text size belong to this device; the rest is kept by Jarvis for every device. */
+  function choice(labelText, key, options, current, onChange) {
+    const wrap = el("label", "set"); wrap.append(el("span", "", labelText));
+    const sel = el("select"); options.forEach(([v, t]) => { const o = el("option", "", t); o.value = v; sel.append(o); });
+    sel.value = current; sel.addEventListener("change", () => onChange(sel.value)); wrap.append(sel); return wrap;
+  }
+  function toggle(labelText, on, onChange) {
+    const wrap = el("label", "set"); wrap.append(el("span", "", labelText));
+    const box = el("input"); box.type = "checkbox"; box.checked = on; box.className = "switch"; box.addEventListener("change", () => onChange(box.checked));
+    wrap.append(box); return wrap;
+  }
+  function setTextSize(v) { store.set("jarvis.text", v); document.body.classList.toggle("bigtext", v === "large"); }
+  setTextSize(store.get("jarvis.text") || "normal");
+  async function renderSettings(body) {
+    body.append(el("h3", "set-head", "ON THIS DEVICE"));
+    body.append(toggle("Jarvis's voice", voiceOn, v => setVoice(v)));
+    body.append(toggle('Listen for "Hey Jarvis"', wakeOn, v => setWake(v)));
+    body.append(choice("Wake word sensitivity", "wakesens", [["low", "Less sensitive (fewer false starts)"], ["normal", "Normal"], ["high", "More sensitive (hears you from further)"]], store.get("jarvis.wakesens") || "normal",
+      v => { store.set("jarvis.wakesens", v); if (worker) worker.postMessage({ type: "threshold", value: WAKE_LEVELS[v] }); }));
+    body.append(choice("Talking over him", "talkover", [["off", "Off"], ["low", "Only when you're loud"], ["normal", "Normal"], ["high", "Stops easily"]], store.get("jarvis.talkover") || "normal",
+      v => { store.set("jarvis.talkover", v); bargeRatio = BARGE_RATIOS[v] ?? 8; }));
+    body.append(choice("Text size", "text", [["normal", "Normal"], ["large", "Large"]], store.get("jarvis.text") || "normal", setTextSize));
+    body.append(el("h3", "set-head", "FOR EVERY DEVICE"));
+    const wait = el("p", "hint", "Loading…"); body.append(wait);
+    const r = await api("settings");
+    wait.remove();
+    if (sheetKind !== "settings") return;
+    if (!r.ok) return body.append(el("p", "hint", r.data.error || "Jarvis isn't reachable."));
+    const s = r.data, [qFrom, qTo] = (s.quiet || "23:00-08:00").split("-");
+    const tv = choice("Default TV", "tv", Object.entries(s.tvs || {}), s.default_tv, () => {});
+    const from = el("input"); from.type = "time"; from.value = qFrom;
+    const to = el("input"); to.type = "time"; to.value = qTo;
+    const quiet = el("label", "set"); quiet.append(el("span", "", "Quiet hours for phone alerts")); const qrow = el("div", "set-row"); qrow.append(from, el("span", "", "to"), to); quiet.append(qrow);
+    const teams = el("input"); teams.value = (s.follow_teams || []).join(", "); teams.placeholder = "e.g. Arsenal, Millwall";
+    const drivers = el("input"); drivers.value = (s.follow_drivers || []).join(", "); drivers.placeholder = "e.g. Lando Norris";
+    const tLabel = el("label", "set"); tLabel.append(el("span", "", "Football teams you follow"), teams);
+    const dLabel = el("label", "set"); dLabel.append(el("span", "", "F1 drivers you follow"), drivers);
+    const save = el("button", "act", "SAVE"); save.type = "button";
+    const note = el("p", "hint", "");
+    save.addEventListener("click", async () => {
+      save.disabled = true;
+      const list = v => v.split(",").map(x => x.trim()).filter(Boolean);
+      const out = await api("settings", { default_tv: tv.querySelector("select").value, quiet: from.value + "-" + to.value, follow_teams: list(teams.value), follow_drivers: list(drivers.value) });
+      save.disabled = false;
+      note.textContent = out.ok ? "Saved." : out.data.error || "That didn't save.";
+      if (out.ok) fetchToday(true);
+    });
+    body.append(tv, quiet, tLabel, dLabel, save, note);
+  }
 
   /* start: does Homebase know us, then does Jarvis */
   (async () => {

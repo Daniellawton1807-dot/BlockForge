@@ -61,8 +61,6 @@ small{font-size:.72rem;letter-spacing:.14em;color:var(--dim)}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
 .reactor-read{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;text-align:center}
 .reactor-read small{font-family:var(--head);font-size:.56rem}
-.big{display:flex;align-items:baseline;gap:4px;color:var(--cy)}.big b{font:700 clamp(2.6rem,6vw,4.2rem)/1.1 var(--head);text-shadow:0 0 20px #22d3ee88}.big i{font:500 1.2rem var(--head);font-style:normal}
-.reactor-read hr{width:90px;border:0;border-top:1px solid var(--line);margin:6px}
 .amber{color:var(--amber)!important}
 .telemetry{font:.62rem var(--head);letter-spacing:.24em;color:var(--green)}
 .said{min-height:2.6em;max-width:560px;margin:12px 0 0;text-align:center;color:var(--text);font-size:1.08rem;line-height:1.3}
@@ -515,3 +513,117 @@ a.srctitle:hover,a.srctitle:focus-visible{color:var(--cy2);text-decoration:under
   .toast{top:64px}
   .backdrop:after{background:linear-gradient(0deg,#020c13 0,#020c13d0 60%,#020c1370 100%)}
 }
+
+
+/* Home screen, 2026-11-06: your day around Jarvis's face, the server on one line */
+.reactor{--lvl:0}
+.reactor-read{gap:8px}
+.reactor-read .state{font:600 clamp(1.3rem,2.4vw,1.8rem)/1 var(--head);letter-spacing:.14em;color:var(--cy);text-shadow:0 0 18px #22d3ee88;transition:color .3s}
+.reactor-read .hintline{max-width:62%;font-size:.54rem;letter-spacing:.16em;color:var(--dim)}
+.vu{display:flex;align-items:center;gap:5px;height:34px}
+.vu i{width:4px;height:6px;border-radius:2px;background:var(--cy);opacity:.75;transition:height .09s;box-shadow:0 0 6px #22d3ee88}
+[data-mode=idle] .vu i{animation:breathe 3.6s ease-in-out infinite}
+[data-mode=idle] .vu i:nth-child(2n){animation-delay:.4s}[data-mode=idle] .vu i:nth-child(3n){animation-delay:.8s}
+@keyframes breathe{50%{height:10px;opacity:.45}}
+[data-mode=listening] .vu i{background:var(--green);box-shadow:0 0 6px #2dd4a788;height:calc(6px + var(--lvl) * 28px)}
+[data-mode=listening] .vu i:nth-child(1),[data-mode=listening] .vu i:nth-child(7){height:calc(5px + var(--lvl) * 12px)}
+[data-mode=listening] .vu i:nth-child(2),[data-mode=listening] .vu i:nth-child(6){height:calc(5px + var(--lvl) * 20px)}
+[data-mode=thinking] .vu i{background:var(--amber);box-shadow:0 0 6px #e8a24c88;animation:wave 1s ease-in-out infinite}
+[data-mode=speaking] .vu i{animation:wave .7s ease-in-out infinite}
+.vu i:nth-child(2){animation-delay:.1s}.vu i:nth-child(3){animation-delay:.2s}.vu i:nth-child(4){animation-delay:.3s}.vu i:nth-child(5){animation-delay:.4s}.vu i:nth-child(6){animation-delay:.5s}.vu i:nth-child(7){animation-delay:.6s}
+@keyframes wave{50%{height:26px}}
+[data-mode=thinking] .state{color:var(--amber);text-shadow:0 0 18px #e8a24c88}[data-mode=listening] .state{color:var(--green);text-shadow:0 0 18px #2dd4a788}
+.level{fill:none;stroke:var(--green);stroke-width:calc(1px + var(--lvl) * 10px);stroke-opacity:calc(var(--lvl) * .8);transition:stroke-width .09s,stroke-opacity .09s;filter:drop-shadow(0 0 8px var(--green))}
+[data-mode=speaking] .level{stroke:var(--cy);animation:speak 1s ease-in-out infinite}
+@keyframes speak{0%,100%{stroke-width:1px;stroke-opacity:.1}50%{stroke-width:7px;stroke-opacity:.5}}
+.serverstrip{display:flex;align-items:center;gap:10px;margin-top:4px;padding:6px 12px;border:1px solid transparent;border-radius:3px;font:.6rem var(--head);letter-spacing:.16em;color:var(--dim)}
+.serverstrip:hover,.serverstrip:focus-visible{border-color:var(--line);color:var(--text);outline:0}
+.serverstrip i{flex:none;width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+.serverstrip i.off{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.card{display:block;width:100%;padding:0;text-align:left;color:inherit;border-radius:4px;transition:background .2s}
+.card:hover,.card:focus-visible{background:#04202e88;outline:0}
+.card h2{pointer-events:none}
+.list{list-style:none;margin:0;padding:0 2px}
+.list li{position:relative;padding:7px 0;border-bottom:1px solid #0f3a4966;min-width:0}
+.list li:last-child{border-bottom:0}
+.list b{display:block;font:600 1.06rem var(--body);line-height:1.2;color:var(--text);overflow-wrap:anywhere}
+.list span{display:block;margin-top:2px;font-size:.95rem;color:#8fb6c3;overflow-wrap:anywhere}
+.list li.sub b{font:500 .7rem var(--head);letter-spacing:.12em;color:var(--dim);font-weight:500}
+.list li.live b:after{content:"LIVE";margin-left:8px;padding:1px 6px;border-radius:2px;background:var(--red);color:#fff;font:600 .55rem var(--head);letter-spacing:.12em;vertical-align:middle}
+.list i.due{float:right;margin-left:10px;font:500 .8rem var(--head);font-style:normal;color:var(--green)}
+#newsList b{font-size:1rem;font-weight:500}
+.wxnow{display:flex;align-items:center;gap:16px}
+.wxnow b{font:500 2.8rem/1 var(--head);color:var(--cy);text-shadow:0 0 16px #22d3ee66}
+.wxnow span{display:block;font-size:1.08rem;color:var(--text)}.wxnow small{display:block;margin-top:5px;font-family:var(--body);font-size:.92rem;letter-spacing:0;color:#8fb6c3}
+small{color:#86adba}
+.hud{grid-template-columns:minmax(240px,300px) 1fr minmax(240px,300px);padding-top:18px}
+@media (min-width:1001px){
+  body:not([data-scene]) .app{padding-top:18px}
+  body:not([data-scene]) .head{padding-bottom:12px}
+  body:not([data-scene]) .brand small{display:none}
+  body:not([data-scene]) .brand h1{margin:0;font-size:1.9rem}
+  body:not([data-scene]) .clock small{margin-top:6px}
+  body:not([data-scene]) .dock{padding:10px 0 8px}
+}
+#sportList li:first-child span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.col{gap:18px}
+
+/* Now playing: one row per TV that's playing */
+.nowbar{display:grid;gap:8px;max-width:620px;width:100%;margin:8px auto 0}
+body.has-now:not([data-scene]) .reactor{width:min(100%,380px,38vh)}
+.np{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:8px 10px;background:#031a25e6;border:1px solid #1d5566;border-radius:5px;animation:rise .3s ease-out}
+.np img{width:44px;height:64px;object-fit:cover;border-radius:3px;background:var(--line)}
+.np-txt{min-width:0}.np-txt small{display:block;font-family:var(--head);font-size:.52rem}
+.np-txt b{display:block;font-weight:600;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.np-txt span{display:block;font-size:.9rem;color:#8fb6c3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.np-prog{height:3px;margin-top:6px;background:var(--line);border-radius:2px;overflow:hidden}.np-prog i{display:block;height:100%;width:0;background:var(--cy);transition:width 1s linear}
+.np.paused .np-prog i{background:var(--dim)}
+.np-btns{display:flex;gap:4px}
+.np-btns button{width:40px;height:40px;display:grid;place-items:center;border:1px solid #1d5566;border-radius:50%;background:#052230}
+.np-btns button:hover,.np-btns button:focus-visible{border-color:var(--cy);box-shadow:0 0 10px #22d3ee44;outline:0}
+.np-btns button:disabled{opacity:.5}
+.np-btns svg{width:18px;height:18px;fill:none;stroke:var(--cy);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.np-btns .np-toggle{border-color:var(--cy)}
+[data-scene] .nowbar{display:none}
+
+/* History and settings, in the side sheet */
+.item.hist b{margin-top:2px}.hist-acts{display:flex;gap:8px;margin-top:6px}.hist-acts .act{margin-top:4px;padding:6px 10px}
+.set-head{margin:6px 0 10px;font:500 .62rem var(--head);letter-spacing:.2em;color:var(--dim)}
+.set{display:block;margin:0 0 16px}
+.set>span{display:block;margin-bottom:6px;font-size:1rem}
+.set select,.set input:not(.switch){width:100%;padding:9px 10px;background:#02121b;border:1px solid var(--line);border-radius:3px;font-size:16px;color:var(--text);outline:0}
+.set select:focus,.set input:focus{border-color:var(--cy)}
+.set-row{display:flex;align-items:center;gap:10px}.set-row input{flex:1}.set-row span{color:var(--dim)}
+.set:has(.switch){display:flex;align-items:center;justify-content:space-between;gap:12px}.set:has(.switch)>span{margin:0}
+.switch{appearance:none;flex:none;width:44px;height:24px;border-radius:12px;background:#0b2a36;border:1px solid #1d5566;position:relative;cursor:pointer;transition:background .2s}
+.switch:after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--dim);transition:transform .2s,background .2s}
+.switch:checked{background:#0b3a33;border-color:var(--green)}.switch:checked:after{transform:translateX(20px);background:var(--green)}
+.switch:focus-visible{box-shadow:0 0 0 2px var(--cy)}
+body.bigtext{font-size:17px}body.bigtext .list b{font-size:1.18rem}body.bigtext .said{font-size:1.25rem}
+
+/* Phone: Jarvis small at the top, your day stacked under him, the bar and the command always clear of the content */
+@media (max-width:700px){
+  .app{padding:14px 14px calc(92px + env(safe-area-inset-bottom))}
+  body.has-now .app{padding-bottom:calc(160px + env(safe-area-inset-bottom))}
+  .head{padding-bottom:10px}.brand small:first-child{display:none}.brand h1{margin:0;font-size:1.3rem}.clock small{margin-top:4px}
+  .hud{gap:14px;padding-top:12px}
+  .core{order:-1}
+  .reactor,body.has-now:not([data-scene]) .reactor{width:min(50vw,200px)}
+  .reactor-read .state{font-size:1.05rem}.reactor-read .hintline{font-size:.48rem}.vu{height:24px}
+  .col{display:flex;flex-direction:column;gap:12px}
+  .card{padding:10px 12px;background:#031a2599;border:1px solid var(--line)}
+  .panel h2{margin-bottom:8px}
+  .serverstrip{max-width:100%;font-size:.5rem;letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nowbar{position:fixed;z-index:4;left:12px;right:12px;bottom:calc(74px + env(safe-area-inset-bottom));width:auto;margin:0}
+  .nowbar .np:nth-child(2){display:none}
+  .np{grid-template-columns:36px 1fr auto;gap:10px;padding:7px 8px}
+  .np img{width:36px;height:52px}
+  .np-btns .np-forward,.np-btns .np-quieter,.np-btns .np-louder{display:none}
+  .np-btns button{width:44px;height:44px}
+  .command{left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom))}
+  .mic{width:60px}.mic svg{width:26px;height:26px}
+  .command input{padding:15px 12px}
+}
+[data-scene] .reactor-read .state,[data-scene] .reactor-read .hintline{display:none}
+[data-scene] .vu{height:calc(var(--rs) * .2);gap:calc(var(--rs) * .02)}[data-scene] .vu i{width:calc(var(--rs) * .025)}
+[data-scene] .serverstrip{display:none}

@@ -4,7 +4,8 @@ importScripts("oww/ort.wasm.min.js?v=1.20.1");
 ort.env.wasm.numThreads = 1;
 ort.env.wasm.wasmPaths = new URL("oww/", self.location.href).href;
 
-const CHUNK = 1280, OVERLAP = 480, MEL_WINDOW = 76, EMBEDDINGS = 16, THRESHOLD = 0.5, MAX_BACKLOG = 12, SETTLE_FRAMES = 5;
+const CHUNK = 1280, OVERLAP = 480, MEL_WINDOW = 76, EMBEDDINGS = 16, MAX_BACKLOG = 12, SETTLE_FRAMES = 5;
+let threshold = 0.5;  // the page sets it from his sensitivity setting
 let mel, embed, wake, previous, melFrames, features, seen = 0, queue = [], busy = false, framesTimed = 0, msTotal = 0, peak = 0;
 
 function reset() {
@@ -53,7 +54,7 @@ async function drain() {
     msTotal += performance.now() - started; framesTimed++;
     if (++seen > SETTLE_FRAMES) {
       if (value > peak) peak = value;
-      if (value >= THRESHOLD) { postMessage({ type: "wake", score: value }); reset(); }
+      if (value >= threshold) { postMessage({ type: "wake", score: value }); reset(); }
     }
     if (framesTimed === 50) {
       postMessage({ type: "stats", ms: msTotal / framesTimed, peak });
@@ -65,6 +66,7 @@ async function drain() {
 
 self.onmessage = async e => {
   if (e.data && e.data.type === "reset") return reset();
+  if (e.data && e.data.type === "threshold") { threshold = Math.min(0.9, Math.max(0.2, Number(e.data.value) || 0.5)); return; }
   queue.push(e.data);
   if (wake) drain();
 };

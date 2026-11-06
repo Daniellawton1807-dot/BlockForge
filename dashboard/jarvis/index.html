@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="jarvis.css?v=15">
+<link rel="stylesheet" href="jarvis.css?v=16">
 </head>
 <body data-mode="idle">
 
@@ -45,31 +45,20 @@
       <h1>J.A.R.V.I.S.</h1>
       <small>PERSONAL COMMAND SYSTEM</small>
     </div>
-    <div class="link"><i id="linkDot"></i><span id="linkText">CONNECTING</span></div>
     <div class="mini" id="mini" aria-hidden="true"></div>
     <div class="clock"><b id="clock">--:--</b><small id="date"></small></div>
   </header>
 
   <main class="hud">
     <div class="col left">
-      <section class="panel"><h2>COMPUTE<em>01</em></h2>
-        <div class="row-big"><b id="cpu">--</b><small>CPU LOAD</small></div>
-        <svg class="spark" id="cpuSpark" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><polyline/></svg>
-        <small class="sub">PROCESSOR ACTIVITY / LIVE</small>
-      </section>
-      <section class="panel"><h2>MEMORY<em>02</em></h2>
-        <div class="ringrow"><div class="ring" id="memRing"><svg viewBox="0 0 60 60"><circle class="t" cx="30" cy="30" r="25"/><circle class="v" cx="30" cy="30" r="25" pathLength="100"/></svg><span></span></div>
-          <div><b id="memUsed">--</b><small id="memOf"></small></div></div>
-      </section>
-      <section class="panel"><h2>STORAGE<em>03</em></h2>
-        <div class="ringrow"><div class="ring" id="diskRing"><svg viewBox="0 0 60 60"><circle class="t" cx="30" cy="30" r="25"/><circle class="v" cx="30" cy="30" r="25" pathLength="100"/></svg><span></span></div>
-          <div><b id="diskFree">--</b><small>GIB FREE / SYSTEM DISK</small></div></div>
-      </section>
+      <button class="panel card" id="cardWeather" data-ask="what's the weather" hidden><h2>WEATHER<em id="wxPlace"></em></h2>
+        <div class="wxnow"><b id="wxTemp"></b><div><span id="wxSky"></span><small id="wxMore"></small></div></div></button>
+      <button class="panel card" id="cardCalendar" data-ask="what's on my calendar" hidden><h2>COMING UP</h2><ul class="list" id="calList"></ul></button>
+      <button class="panel card" id="cardBuses" data-ask="when's the next bus" hidden><h2>NEXT BUSES</h2><ul class="list" id="busList"></ul></button>
+      <button class="panel card" id="cardHome" data-ask="what's downloading" hidden><h2>AT HOME</h2><ul class="list" id="homeList"></ul></button>
     </div>
 
     <div class="core">
-      <div class="core-title">SYSTEM REACTOR</div>
-      <div class="core-sub" id="coreSub">Awaiting telemetry</div>
       <div class="reactor" aria-hidden="true">
         <svg viewBox="0 0 400 400">
           <g class="brackets"><path d="M60 40H22V22M340 40h38V22M60 360H22v18M340 360h38v18" transform="translate(0 0)"/></g>
@@ -80,17 +69,17 @@
           <g class="spin s3"><circle class="arc a3" cx="200" cy="200" r="116" pathLength="360" stroke-dasharray="110 30 20 200"/></g>
           <circle class="r r1" cx="200" cy="200" r="104"/>
           <circle class="face" cx="200" cy="200" r="100"/>
-          <circle class="load" id="loadArc" cx="200" cy="200" r="145" pathLength="100" stroke-dasharray="0 100" transform="rotate(-90 200 200)"/>
+          <circle class="level" cx="200" cy="200" r="104"/>
         </svg>
         <div class="reactor-read">
-          <small id="modeLabel">COMPUTE ACTIVITY</small>
-          <div class="big"><b id="coreCpu">--</b><i>%</i></div>
-          <hr>
-          <small>PROCESSOR LOAD</small>
-          <small class="amber" id="coreTemp"></small>
+          <small>J.A.R.V.I.S.</small>
+          <b class="state" id="modeLabel">READY</b>
+          <div class="vu"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <small class="hintline" id="hintLine">SAY "HEY JARVIS" OR TAP THE MIC</small>
         </div>
       </div>
-      <div class="telemetry" id="telemetry">TELEMETRY / CONNECTING</div>
+      <button class="serverstrip" id="serverStrip" type="button" title="Server details"><i id="linkDot"></i><span id="stripText">SERVER / CONNECTING</span></button>
+      <div class="nowbar" id="nowbar" hidden></div>
       <div class="wakestate" id="wakeState" hidden></div>
       <p class="said" id="said" role="status" aria-live="polite"></p>
       <div class="voicewarn" id="voiceWarn" hidden></div>
@@ -98,28 +87,18 @@
     </div>
 
     <div class="col right">
-      <section class="panel"><h2>MINECRAFT<em>04</em></h2>
-        <div class="ringrow"><div class="ring amber" id="mcRing"><svg viewBox="0 0 60 60"><circle class="t" cx="30" cy="30" r="25"/><circle class="v" cx="30" cy="30" r="25" pathLength="100"/></svg><span></span></div>
-          <div><b class="amber-text" id="mcState">--</b><small id="mcWho">MAIN WORLD</small></div></div>
-      </section>
-      <section class="panel"><h2>NETWORK I/O<em>05</em></h2>
-        <div class="row-big"><b id="netDown">--</b><small>KIB/S DOWN</small></div>
-        <svg class="spark" id="netSpark" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true"><polyline/></svg>
-        <div class="sub split"><span id="netUp"></span><span class="green" id="netName"></span></div>
-      </section>
-      <section class="panel"><h2>SESSION<em>06</em></h2>
-        <div class="row-big"><b id="uptime">--</b></div>
-        <small class="sub">UPTIME / HOME SERVER</small>
-      </section>
+      <button class="panel card" id="cardSport" data-ask="how did my team get on" hidden><h2>YOUR TEAMS</h2><ul class="list" id="sportList"></ul></button>
+      <button class="panel card" id="cardF1" data-ask="when's the next f1 session" hidden><h2>FORMULA 1</h2><ul class="list" id="f1List"></ul></button>
+      <button class="panel card" id="cardNews" data-ask="what's the news" hidden><h2>HEADLINES<em>BBC</em></h2><ul class="list" id="newsList"></ul></button>
     </div>
   </main>
 
   <nav class="dock">
-    <button data-sheet="tvs"><span><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/></svg></span><b>TVS</b><small id="dockTv">Now playing</small></button>
-    <button data-sheet="minecraft"><span><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></span><b>MINECRAFT</b><small>Server status</small></button>
+    <button data-sheet="history"><span><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 103-6.7M3 4v4h4M12 7v5l3 2"/></svg></span><b>HISTORY</b><small>Earlier answers</small></button>
     <button data-sheet="log"><span><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg></span><b>ACTIVITY</b><small>Every action</small></button>
     <button id="wakeToggle" aria-pressed="false"><span><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span><b>LISTEN</b><small id="wakeLabel">Off</small></button>
     <button id="voiceToggle" aria-pressed="true"><span><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 010 7"/></svg></span><b>VOICE</b><small id="voiceState">On</small></button>
+    <button data-sheet="settings"><span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg></span><b>SETTINGS</b><small>Voice, teams, quiet hours</small></button>
     <button id="signOut"><span><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg></span><b>LOCK</b><small>Ask for the PIN</small></button>
   </nav>
 
@@ -136,6 +115,6 @@
   <div id="sheetBody"></div>
 </aside>
 <script src="speech-end.js?v=1"></script>
-<script src="jarvis.js?v=29"></script>
+<script src="jarvis.js?v=30"></script>
 </body>
 </html>
