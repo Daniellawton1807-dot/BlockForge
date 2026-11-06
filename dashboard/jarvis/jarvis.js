@@ -170,6 +170,7 @@
      It plays ElevenLabs as the audio arrives; if that fails, the browser's own voice takes over and the page says so. */
   const SILENCE = "data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiJrDCQBTcu3UrAIwUdkRgQbFAZC1CQEwTJ9mjRvBA4UOLD8nKVOWfh+UlK3z/177OXrfOdKl7pyn3Xf//WreyTRUoAWgBgkOAGbZHBgG1OF6zM82DWbZaUmMBptgQhGjsyYqc9ae9XFz280948NMBWInljyzsNRFLPWdnZGWrddDsjK1unuSrVN9jJsK8KuQtQCtMBjCEtImISdNKJOopIpBFpNSMbIHCSRpRR5iakjTiyzLhchUUBwCgyKiweBv/7UsQbg8isVNoMPMjAAAA0gAAABEVFGmgqK////9bP/6XCykxBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqq";
   const player = new Audio();
+  let paused = null;  // his reply, paused while someone talks over him
   let voiceRefused = false, speaking = false, voiceOn = store.get("jarvis.voice") !== "off", unlocked = false, speechQueue = [], speechToken = 0;
   let askedBack = false, address = "sir", turnOpen = false, acked = false, ackClips = [], ackNext = 0, ackLoading = false;
   const ACK_LINES = ["Right away", "Certainly", "At once"];
@@ -208,7 +209,7 @@
     if (!speaking) nextSpeech();
   }
   function stopSpeech() {
-    askedBack = false;
+    askedBack = false; paused = null;
     speechToken++; speechQueue = [];
     player.pause(); player.removeAttribute("src");
     if (window.speechSynthesis) speechSynthesis.cancel();
@@ -1008,8 +1009,13 @@
   const WAKE_COOLDOWN_MS = 2500, NOISE_CAP = 0.05;
   const WAKE_WORD = /\b(?:j[ae]rv[iu]s|javis)\b[\s,.!?:;-]*/ig;
   const JUST_STOP = /^(stop|be quiet|quiet|shut up|never mind|nevermind|cancel)\W*$/i;
+  const ENOUGH = /^(?:(?:ok|okay|alright|right|yeah|yes)[\s,]*)?(stop|be quiet|quiet|shut up|never mind|nevermind|cancel|ok|okay|that's enough|enough|thanks|thank you|got it|cheers)\W*$/i;
+  /* Talking over him (Daniel, 2026-11-06): while he speaks, a voice that's clearly louder than the room for about half a second pauses him and
+     records. "Stop" ends his reply, a new request replaces it, and nothing intelligible (the TV, a cough) lets him carry on where he paused.
+     Echo cancellation keeps most of his own voice out. The two numbers are guesses until tried in the real room. */
+  const BARGE_BLOCKS = 6, BARGE_RATIO = 8, BARGE_FLOOR = 0.02;
   let wakeOn = store.get("jarvis.wake") === "on", mic = null, worker = null, wakeReady = false, recording = null;
-  let guardTimer = null, preroll = [], noise = 0.003, wakeLock = null, lastWake = 0, chimeCtx = null, spokeLast = false;
+  let guardTimer = null, preroll = [], noise = 0.003, wakeLock = null, lastWake = 0, chimeCtx = null, spokeLast = false, loudFor = 0;
 
   function wakeStatus(text, warn) {
     $("wakeState").hidden = !text; $("wakeState").textContent = text || "";
@@ -1071,6 +1077,8 @@
     for (let i = 0; i < block.length; i++) sum += block[i] * block[i];
     const level = Math.sqrt(sum / block.length);
     if (recording) return recordBlock(block, level);
+    loudFor = speaking && level > Math.max(noise * BARGE_RATIO, BARGE_FLOOR) ? loudFor + 1 : 0;
+    if (loudFor >= BARGE_BLOCKS) { loudFor = 0; preroll.push(block); return bargeIn(); }
     // follows the quiet between words: drops quickly, rises slowly, so speech never counts as background noise
     noise = Math.min(NOISE_CAP, level < noise ? noise * 0.7 + level * 0.3 : noise * 0.998 + level * 0.002);
     preroll.push(block);
@@ -1083,6 +1091,19 @@
     const finished = window.jarvisSpeech.heard(r, level, noise) || r.total >= MAX_BLOCKS;
     // after the wake word, a short quiet means check what's already been said rather than wait
     if (finished || (r.afterWake && !r.speech && r.total >= QUICK_BLOCKS) || (!r.speech && r.total >= NO_SPEECH_BLOCKS)) finishRecording();
+  }
+  function bargeIn() {
+    paused = { token: speechToken };
+    player.pause();
+    if (window.speechSynthesis && speechSynthesis.speaking) speechSynthesis.pause();
+    recording = { blocks: preroll.slice(-(BARGE_BLOCKS + 4)), afterWake: false, total: 0, speech: BARGE_BLOCKS, silent: 0, barge: true };
+    armGuard(); setHearing(true);
+  }
+  function carryOn() {  // talked over by something that wasn't for him
+    const p = paused; paused = null;
+    if (!p || p.token !== speechToken) return;
+    if (window.speechSynthesis && speechSynthesis.paused) speechSynthesis.resume();
+    else if (player.src) player.play().catch(() => nextSpeech());
   }
   function setHearing(on) { hearing = on; $("mic").setAttribute("aria-pressed", String(on)); showMode(); }
 
@@ -1124,7 +1145,7 @@
     recording = null; setHearing(false);
     afterRecording();
     if (r) console.debug("recorded", r.total, "blocks,", r.speech, "speech,", r.silent, "quiet, noise", noise.toFixed(4));
-    if (!r || (!r.afterWake && r.speech < MIN_SPEECH_BLOCKS)) return;  // nothing said, and sending silence makes speech models invent words
+    if (!r || (!r.afterWake && r.speech < MIN_SPEECH_BLOCKS)) return r && r.barge ? carryOn() : undefined;  // nothing said, and sending silence makes speech models invent words
     transcribing = true; showMode();
     let res = null, data = {};
     try {
@@ -1133,7 +1154,7 @@
     } catch { /* shown below */ }
     transcribing = false; showMode();
     if (res && res.status === 401) return signedOut(data.code);
-    if (!res || !res.ok) { $("said").textContent = data.error || "I couldn't reach speech recognition just now."; return; }
+    if (!res || !res.ok) { if (r.barge) return carryOn(); $("said").textContent = data.error || "I couldn't reach speech recognition just now."; return; }
     let heard = String(data.text || "").trim();
     if (r.afterWake) {
       // Whisper is the second opinion: no "Jarvis" in what it heard means the wake word fired on something else
@@ -1148,6 +1169,13 @@
       }
     } else {
       heard = heard.replace(/^(?:(?:hey|hi|ok|okay)[\s,]+)?(?:j[ae]rv[iu]s|javis)\b[\s,.!?:;-]*/i, "").trim();
+    }
+    if (r.barge) {
+      const p = paused; paused = null;
+      const meant = heard.replace(/[^a-z]/gi, "").length >= 2;
+      if (!meant) { paused = p; return carryOn(); }
+      stopSpeech();
+      if (ENOUGH.test(heard)) { $("said").textContent = ""; return; }
     }
     if (!heard) { $("said").textContent = pendingQuestion; return; }
     $("said").textContent = heard;
