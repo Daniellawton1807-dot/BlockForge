@@ -330,11 +330,19 @@
     if (!s) return;
     status = { ...status, ...s };
     drawStrip();
+    drawMinecraft();
     if (status.memory && status.storage) $("mini").textContent = "CPU " + num(status.cpu) + "%   MEM " + num(status.memory.percent) + "%   DISK " + num(status.storage.percent) + "%";
     drawNowBar();
     if (sheetKind === "server") renderSheet();
   }
   $("serverStrip").addEventListener("click", () => openSheet("server", "SERVER"));
+  function drawMinecraft() {
+    const m = status.minecraft;
+    card("cardMinecraft", !!m);
+    if (!m) return;
+    $("cardMinecraft").classList.toggle("on", !!m.running);
+    fill("mcList", [li(m.starting ? "Starting up" : m.running ? "Running" : "Off", m.running ? ((m.online || 0) + " of " + (m.max || "?") + " playing" + (m.players && m.players.length ? ": " + m.players.join(", ") : "")) : "Ask Jarvis to start it", m.running ? "live-mc" : "")]);
+  }
 
   /* Now playing: every TV that has something on, with the buttons you'd reach for. They go straight to the TV: no model, nothing spoken. */
   const ICONS = {
@@ -1420,9 +1428,6 @@
     const ev = d.calendar && d.calendar.events;
     card("cardCalendar", !!d.calendar);
     if (d.calendar) fill("calList", ev.length ? ev.map(e => li(e.title, cap(e.day) + " · " + e.time + (e.location ? " · " + e.location : ""))) : [li("Nothing in the diary", "Today or tomorrow")]);
-    const bus = d.buses && d.buses.arrivals;
-    card("cardBuses", !!(bus && bus.length));
-    if (bus) fill("busList", bus.map(b => { const n = li(b.line + " to " + b.to, b.stop.replace(/\s*\(stop \w+\)/i, "")); n.prepend(el("i", "due", b.in)); return n; }));
     const teams = d.sport && d.sport.teams;
     card("cardSport", !!(teams && teams.length));
     if (teams) {
@@ -1435,12 +1440,19 @@
     const news = d.news && d.news.headlines;
     card("cardNews", !!(news && news.length));
     if (news) fill("newsList", news.slice(0, window.innerWidth < 700 ? 4 : 3).map(h => li(h)));
-    const dl = d.downloads && d.downloads.items, shop = d.shopping;
-    card("cardHome", !!(d.downloads || shop));
-    const home = [];
-    if (dl) home.push(...(dl.length ? dl.map(x => li(x.title, [x.percent != null ? Math.round(x.percent) + "%" : "", x.left ? x.left + " left" : "", x.stage || ""].filter(Boolean).join(" · "))) : [li("Nothing downloading")]));
-    if (shop) home.push(li("Shopping list", shop.count ? shop.count + " to get: " + shop.items.join(", ") : "Nothing on it"));
-    fill("homeList", home);
+    const dl = d.downloads && d.downloads.items;
+    card("cardHome", !!d.downloads);
+    if (dl) fill("homeList", dl.length ? dl.map(x => li(x.title, [x.percent != null ? Math.round(x.percent) + "%" : "", x.left ? x.left + " left" : "", x.stage || ""].filter(Boolean).join(" · "))) : [li("Nothing downloading")]);
+    const drive = d.drive;
+    card("cardDrive", !!drive);
+    if (drive) {
+      $("driveFree").textContent = drive.free + " free";
+      $("driveOf").textContent = "of " + drive.size + " · " + drive.percent + "% used";
+      $("driveBar").style.width = drive.percent + "%";
+      $("cardDrive").classList.toggle("warn", drive.percent > 80);
+      $("driveNote").textContent = drive.full_in_days != null ? (drive.full_in_days > 730 ? "Filling slowly: years of space left" : "Full in about " + (drive.full_in_days > 60 ? Math.round(drive.full_in_days / 30) + " months" : drive.full_in_days + " days") + " at " + drive.per_day + " GB a day")
+        : drive.per_day != null ? "Not filling up lately" : "Working out how fast it fills: give it a couple of days";
+    }
   }
   document.querySelectorAll(".card[data-ask]").forEach(c => c.addEventListener("click", () => { spokeLast = false; sendCommand(c.dataset.ask); }));
 

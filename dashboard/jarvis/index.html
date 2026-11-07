@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="jarvis.css?v=16">
+<link rel="stylesheet" href="jarvis.css?v=17">
 </head>
 <body data-mode="idle">
 
@@ -54,8 +54,9 @@
       <button class="panel card" id="cardWeather" data-ask="what's the weather" hidden><h2>WEATHER<em id="wxPlace"></em></h2>
         <div class="wxnow"><b id="wxTemp"></b><div><span id="wxSky"></span><small id="wxMore"></small></div></div></button>
       <button class="panel card" id="cardCalendar" data-ask="what's on my calendar" hidden><h2>COMING UP</h2><ul class="list" id="calList"></ul></button>
-      <button class="panel card" id="cardBuses" data-ask="when's the next bus" hidden><h2>NEXT BUSES</h2><ul class="list" id="busList"></ul></button>
-      <button class="panel card" id="cardHome" data-ask="what's downloading" hidden><h2>AT HOME</h2><ul class="list" id="homeList"></ul></button>
+      <button class="panel card" id="cardHome" data-ask="what's downloading" hidden><h2>DOWNLOADS</h2><ul class="list" id="homeList"></ul></button>
+      <button class="panel card" id="cardDrive" data-ask="how much space have I got" hidden><h2>MEDIA DRIVE</h2>
+        <div class="drive"><b id="driveFree"></b><small id="driveOf"></small></div><div class="drivebar"><i id="driveBar"></i></div><small class="drivenote" id="driveNote"></small></button>
     </div>
 
     <div class="core">
@@ -89,6 +90,7 @@
     <div class="col right">
       <button class="panel card" id="cardSport" data-ask="how did my team get on" hidden><h2>YOUR TEAMS</h2><ul class="list" id="sportList"></ul></button>
       <button class="panel card" id="cardF1" data-ask="when's the next f1 session" hidden><h2>FORMULA 1</h2><ul class="list" id="f1List"></ul></button>
+      <button class="panel card" id="cardMinecraft" data-ask="is anyone on minecraft" hidden><h2>MINECRAFT</h2><ul class="list" id="mcList"></ul></button>
       <button class="panel card" id="cardNews" data-ask="what's the news" hidden><h2>HEADLINES<em>BBC</em></h2><ul class="list" id="newsList"></ul></button>
     </div>
   </main>
@@ -115,6 +117,6 @@
   <div id="sheetBody"></div>
 </aside>
 <script src="speech-end.js?v=1"></script>
-<script src="jarvis.js?v=30"></script>
+<script src="jarvis.js?v=31"></script>
 </body>
 </html>

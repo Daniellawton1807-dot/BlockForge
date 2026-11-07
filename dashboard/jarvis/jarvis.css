@@ -627,3 +627,9 @@ body.bigtext{font-size:17px}body.bigtext .list b{font-size:1.18rem}body.bigtext 
 [data-scene] .reactor-read .state,[data-scene] .reactor-read .hintline{display:none}
 [data-scene] .vu{height:calc(var(--rs) * .2);gap:calc(var(--rs) * .02)}[data-scene] .vu i{width:calc(var(--rs) * .025)}
 [data-scene] .serverstrip{display:none}
+
+.drive{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.drive b{font:500 1.5rem var(--head);color:var(--text)}.drive small{font-family:var(--body);font-size:.92rem;letter-spacing:0}
+.drivebar{height:6px;margin:8px 0 6px;background:var(--line);border-radius:3px;overflow:hidden}.drivebar i{display:block;height:100%;width:0;background:var(--cy);box-shadow:0 0 8px #22d3ee88;transition:width .6s}
+.card.warn .drivebar i{background:var(--amber)}
+.drivenote{display:block;font-family:var(--body);font-size:.92rem;letter-spacing:0;color:#8fb6c3}
+.list li.live-mc b{color:var(--green)}
