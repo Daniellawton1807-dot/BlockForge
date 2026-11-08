@@ -170,6 +170,11 @@
     if (sheetKind === "history") renderSheet();
   }
   function showReply(r) {
+    if (r.overheard) {  // the TV or the room, not him: nothing to show, and the screen stays as it was
+      $("said").textContent = "THAT DIDN'T SOUND LIKE IT WAS FOR ME";
+      $("stage").classList.remove("stale");
+      return;
+    }
     remember(r);
     const type = r.view && r.view.type;
     seenView = r.view_at || seenView;
@@ -206,6 +211,7 @@
   const player = new Audio();
   let paused = null;  // his reply, paused while someone talks over him
   let voiceRefused = false, speaking = false, voiceOn = store.get("jarvis.voice") !== "off", unlocked = false, speechQueue = [], speechToken = 0;
+  let followUps = 0;  // times it's opened the mic by itself since he last started a command
   let askedBack = false, address = "sir", turnOpen = false, acked = false, ackClips = [], ackNext = 0, ackLoading = false;
   const ACK_LINES = ["Right away", "Certainly", "At once"];
   /* Clips fetched ahead, so the acknowledgement plays with no trip to the server. They're cached there, so this costs nothing after the first time. */
@@ -256,7 +262,7 @@
     if (!item) {
       setSpeaking(false);
       // a spoken command that ends in a question gets a spoken answer: listen by itself
-      if ((spokeLast && askedBack) || pendingTool) { askedBack = false; startListening(); }
+      if (((spokeLast && askedBack) || pendingTool) && followUps < 2) { askedBack = false; followUps++; startListening(); }
       return;
     }
     setSpeaking(true);
@@ -303,6 +309,7 @@
   function closeTurn() { turnOpen = false; }
   // after "Right away, sir", a success needs no follow-up; failures and answers are still spoken
   function speakReply(data) {
+    if (data.overheard) { askedBack = false; return; }  // said nothing, so nothing to answer
     askedBack = /\?\s*$/.test(data.text || "");
     if (data.quiet && acked) return;
     say(data.text);
@@ -311,7 +318,7 @@
       if (!speaking) nextSpeech();
     }
     // a question for permission is answered out loud, however the command was given
-    if (!voiceOn && ((spokeLast && askedBack) || pendingTool || data.awaiting_confirmation)) { askedBack = false; startListening(); }
+    if (!voiceOn && ((spokeLast && askedBack) || pendingTool || data.awaiting_confirmation) && followUps < 2) { askedBack = false; followUps++; startListening(); }
   }
 
   /* The server, on one line under the reactor: tap it for the details */
@@ -1274,6 +1281,7 @@
   }
   let micPress = null;
   $("mic").addEventListener("pointerdown", () => {
+    followUps = 0;
     if (hearing) { micPress = null; return; }
     micPress = { at: Date.now() };
     startListening();
@@ -1319,6 +1327,7 @@
   }
   function onWake(score) {
     const now = Date.now();
+    followUps = 0;
     console.debug("wake word heard", score.toFixed(3));
     if (recording || now - lastWake < WAKE_COOLDOWN_MS) return;
     lastWake = now;
@@ -1341,7 +1350,7 @@
     const box = $("command"), text = box.value.trim();
     if (!text) return;
     box.value = "";
-    spokeLast = false;
+    spokeLast = false; followUps = 0;
     sendCommand(text);
   });
   $("stopAll").addEventListener("click", () => { spokeLast = false; sendCommand("stop everything", { keep: true, silent: true }); });
