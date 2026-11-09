@@ -2,7 +2,7 @@
 // straight into her Sonarr ("Sonarr Mum", its /mum tv folder) or Radarr's "Movies - Mum" folder.
 // Picks and trending come from tvbot (Seerr/TMDB); what she already has comes from her Sonarr and Radarr.
 // A film Daniel already has can't go into Radarr twice, so tvbot hardlinks its folder into hers instead.
-import { arrCall, arrService } from "./arr.js";
+import { arrCall, arrService, searchEpisodesOneByOne } from "./arr.js";
 import { json, loginConfigured, mumCookie, mumSession } from "./downloads-auth.js";
 
 export const MUM_USER = "Mum";
@@ -121,11 +121,12 @@ export async function requestTitle(env, type, tmdb) {
   if (type === "tv") {
     payload.seasonFolder = true;
     payload.seriesType = meta.seriesType || "standard";
-    payload.addOptions = { monitor: "all", searchForMissingEpisodes: true, searchForCutoffUnmetEpisodes: false };
+    payload.addOptions = { monitor: "all", searchForMissingEpisodes: false, searchForCutoffUnmetEpisodes: false };
   } else {
     payload.minimumAvailability = meta.minimumAvailability || "released";
     payload.addOptions = { searchForMovie: true };
   }
-  await arrCall(env, service, "api/v3/" + (type === "tv" ? "series" : "movie"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+  const created = await arrCall(env, service, "api/v3/" + (type === "tv" ? "series" : "movie"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+  if (type === "tv") await searchEpisodesOneByOne(env, service, created?.id);
   return { status: "coming", title: String(meta.title || "") };
 }

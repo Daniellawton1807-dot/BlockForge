@@ -174,3 +174,19 @@ export function normalizeLibraryItem(service, item) {
 export function arrServices() {
   return ARR_SERVICES;
 }
+
+// A newly added show is searched for episode by episode, in order, rather than as a season pack: episode 1 is
+// watchable within minutes and the next ones are there by the time it ends. Best effort; Autopilot searches again later.
+export async function searchEpisodesOneByOne(env, service, seriesId) {
+  if (!Number.isSafeInteger(Number(seriesId)) || Number(seriesId) <= 0) return 0;
+  try {
+    const episodes = await arrCall(env, service, "api/v3/episode?seriesId=" + Number(seriesId));
+    const now = new Date().toISOString();
+    const wanted = (Array.isArray(episodes) ? episodes : [])
+      .filter(e => e.monitored && !e.hasFile && e.seasonNumber > 0 && (e.airDateUtc || "9") <= now)
+      .sort((a, b) => a.seasonNumber - b.seasonNumber || a.episodeNumber - b.episodeNumber);
+    if (!wanted.length) return 0;
+    await arrCall(env, service, "api/v3/command", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "EpisodeSearch", episodeIds: wanted.map(e => e.id) }) });
+    return wanted.length;
+  } catch { return 0; }
+}

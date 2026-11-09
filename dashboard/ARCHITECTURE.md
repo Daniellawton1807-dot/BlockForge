@@ -80,6 +80,12 @@ after they're saved, so retry the latest deployment after changing one.
 A small Python service on the server (`~/tvbot`, Docker, port 8765) that drives the TVs (Fire TVs over adb, the
 Apple TV over pyatv) and talks to Jellyfin. Routes Homebase uses:
 
+**New shows download episode by episode, not as a season pack** (2026-11-09). Seerr's own search is off on all three Sonarr servers
+(`preventSearch`). tvbot's `requestflow.py` watches Seerr every 15 s: it searches each wanted, aired episode in order once Seerr has put
+the show in Sonarr, and sends Mum's requests to her Sonarr (her Seerr account has no auto-approve for TV, so they wait as pending until tvbot
+points them at server 1 and approves). Homebase's own add paths (`api/media/add.js`, `_utils/mum.js`) do the same through
+`searchEpisodesOneByOne` in `_utils/arr.js`. Sonarr keys for this live in tvbot's `config.json` under `sonarr`.
+
 - `GET /api/status?tv=` now playing; `GET /api/foryou` recommendations from watch history (Seerr), with poster and backdrop
 - `GET /api/discover` Seerr trending (or `?q=` a search), trimmed to poster cards (`&details=1` adds genres, network, seasons, status, trailer, released); `GET /api/foryou?user=Mum` her picks
   (only users in config `foryou_users`, default Mum)

@@ -1,4 +1,4 @@
-import { arrCall, arrService, arrServiceStatus } from "../../_utils/arr.js";
+import { arrCall, arrService, arrServiceStatus, searchEpisodesOneByOne } from "../../_utils/arr.js";
 import { json, loginConfigured, readJsonBody, validRequestOrigin, validSession } from "../../_utils/downloads-auth.js";
 
 function safeId(value) {
@@ -63,7 +63,7 @@ export async function onRequest({ request, env }) {
       payload.seriesType = ["standard", "daily", "anime"].includes(body.seriesType) ? body.seriesType : "standard";
       payload.addOptions = {
         ...(metadata.addOptions || {}),
-        searchForMissingEpisodes: body.searchOnAdd !== false,
+        searchForMissingEpisodes: false, // searched below, episode by episode
         monitor: ["all", "future", "missing", "existing", "latestSeason", "firstSeason", "none"].includes(body.monitorType) ? body.monitorType : "all"
       };
     } else {
@@ -75,6 +75,7 @@ export async function onRequest({ request, env }) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload)
     });
+    if (service.type === "tv" && body.searchOnAdd !== false) await searchEpisodesOneByOne(env, service, created?.id);
     return json({ accepted: true, item: {
       id: Number(created?.id) || null,
       title: String(created?.title || metadata.title || "Added media"),
