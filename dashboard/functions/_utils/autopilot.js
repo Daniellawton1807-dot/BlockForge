@@ -82,6 +82,7 @@ export function plainReason(messages) {
 }
 const NOT_UPGRADE = /not an upgrade|not a (quality |custom format )?upgrade|same or better|existing file .* (meets|better)/i;
 const ALREADY_THERE = /already (been )?imported|already exists|already has a file|episode file already|destination already exists/i;
+const TBA_HOLD = /tba title|title.*\btba\b|recently aired/i;
 const TRANSIENT = /locked|in use by another|being used by another|path does not exist|inaccessible|not accessible|no such file|temporar|try again|timed out/i;
 const VIDEO = /\.(mkv|mp4|avi|m4v|mov|wmv|ts|m2ts)$/i;
 const JUNK = /sample|no files found are eligible|no video files?|contains no video|dangerous|executable|\.(exe|lnk|scr|bat|cmd)\b/i;
@@ -107,6 +108,11 @@ async function qbit(env) {
   return { torrents: Array.isArray(torrents) ? torrents : [], connection: String(transfer?.connection_status || "") };
 }
 
+// how good a copy is: resolution, then WEB/Blu-ray over TV captures, then custom-format score, then size
+export function qualityRank(quality, score, size) {
+  const q = quality?.quality || quality || {}, source = String(q.source || q.name || "").toLowerCase();
+  return (Number(q.resolution) || 0) * 1e12 + (/web|blu/.test(source) ? 1 : 0) * 1e11 + (Number(score) || 0) * 1e9 + Math.min(Number(size) || 0, 9e8);
+}
 async function queueOf(env, service) {
   const include = service.type === "tv" ? "&includeSeries=true&includeEpisode=true" : "&includeMovie=true";
   const response = await arrCall(env, service, "api/v3/queue?page=1&pageSize=200" + include);
@@ -121,7 +127,7 @@ async function queueOf(env, service) {
       title: name ? String(name).slice(0, 160) + code : String(r.title || "Download").slice(0, 200), release: String(r.title || ""),
       state: String(r.trackedDownloadState || "").toLowerCase(), health: String(r.trackedDownloadStatus || "").toLowerCase(),
       status: String(r.status || "").toLowerCase(), episodeId: Number(r.episodeId) || 0, movieId: Number(r.movieId) || 0,
-      seriesId: Number(r.seriesId) || 0, season: ep ? Number(ep.seasonNumber) : null, episode: ep ? Number(ep.episodeNumber) : null,
+      quality: r.quality, rank: qualityRank(r.quality, r.customFormatScore, r.size), seriesId: Number(r.seriesId) || 0, season: ep ? Number(ep.seasonNumber) : null, episode: ep ? Number(ep.episodeNumber) : null,
       added: String(r.added || ""), messages: [...new Set(messages)]
     };
   });
@@ -210,6 +216,19 @@ export async function runAutopilot(env, trigger) {
     }
   }
 
+  // 1b. the same episode downloaded more than once (Sonarr keeps grabbing better releases while an import waits for the episode's
+  // title): once every copy has finished, keep the best one and drop the extras from the queue and the download client
+  if (rules.importBlocked) {
+    const byEpisode = new Map();
+    for (const r of queue) if (r.service.type === "tv" && r.episodeId) (byEpisode.get(r.service.key + ":" + r.episodeId) || byEpisode.set(r.service.key + ":" + r.episodeId, []).get(r.service.key + ":" + r.episodeId)).push(r);
+    for (const copies of byEpisode.values()) {
+      if (copies.length < 2 || copies.some(r => !["importpending", "importblocked"].includes(r.state))) continue;
+      const keep = copies.reduce((a, b) => (b.rank > a.rank ? b : a));
+      for (const r of copies) if (r !== keep && r.downloadId !== keep.downloadId)
+        await act(r, { blocklist: false, redownload: false }, "importBlocked", "A better copy of the same episode had also finished downloading, so this extra copy was removed.");
+    }
+  }
+
   // 2. imports that are blocked or waiting with a warning
   for (const record of queue) {
     if (handled.has(record.downloadId || record.id)) continue;
@@ -217,6 +236,7 @@ export async function runAutopilot(env, trigger) {
     if (!stuck) continue;
     const text = record.messages.join(" · ");
     if (rules.autoImport && record.downloadId && handled.has(record.service.key + ":" + record.downloadId)) continue;   // a pack, already dealt with
+    if (handled.has(record.downloadId || record.id)) continue;                                                      // removed above
     const key = record.service.key + ":" + (record.downloadId || record.id), tries = state.importTried[key] || 0;
     if (rules.importBlocked && NOT_UPGRADE.test(text)) await act(record, { blocklist: false, redownload: false }, "importBlocked", "You already had it in the same or better quality, so it was removed from the queue.");
     else if (rules.importBlocked && ALREADY_THERE.test(text)) await act(record, { blocklist: false, redownload: false }, "importBlocked", "It was already imported, so the leftover copy was removed from the queue.");
@@ -234,6 +254,17 @@ export async function runAutopilot(env, trigger) {
       state.importTried[key] = tries + 1;
       const group = queue.filter(r => r.service === record.service && r.downloadId === record.downloadId);
       try {
+        if (record.service.type === "tv") {   // never put a worse copy over what's already in the library
+          const have = await arrCall(env, record.service, "api/v3/episode/" + record.episodeId);
+          if (have?.hasFile && have.episodeFileId) {
+            const file = await arrCall(env, record.service, "api/v3/episodefile/" + have.episodeFileId);
+            if (qualityRank(file?.quality, 0, 0) >= qualityRank(record.quality, 0, 0)) {
+              state.importTried[key] = 0;
+              await act(record, { blocklist: false, redownload: false }, "importBlocked", "The library already has this episode in the same or better quality, so this copy was removed from the queue.");
+              continue;
+            }
+          }
+        }
         const n = await manualImport(env, group);
         if (n) { budget--; log("autoImport", record.title, "Sonarr/Radarr couldn't match it by itself, so Autopilot did the Manual Import (" + n + " file" + (n === 1 ? "" : "s") + ").", record.service); }
         else needsYou.push({ title: record.title, reason: plainReason(text) || "Import is blocked.", detail: "Autopilot couldn't match the files safely. " + text.slice(0, 260), service: record.service.name });
