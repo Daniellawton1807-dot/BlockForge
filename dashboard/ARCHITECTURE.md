@@ -126,6 +126,11 @@ or "Check now" on the Autopilot tab:
   grabbing better releases, so one episode can sit in the queue 3 times. Once every copy has finished, Autopilot keeps the best
   (`qualityRank`: resolution, WEB/Blu-ray over HDTV, custom-format score, size), removes the rest, and imports it unless the library
   already has the same or better.
+- *Retry failed* (`retryFailed`): a failed download (broken Usenet repair, unpack, dead torrent, stalled) is blocklisted and Autopilot
+  searches for a different release itself, up to 3 failures per episode/film in 72 h (counted from Sonarr/Radarr history); after
+  that it rests and the re-search rule tries again later. Sonarr/Radarr's own `autoRedownloadFailed` is switched off by Autopilot
+  (`ensureRedownloadOff`, restored if the rule is turned off) so it is the only thing retrying. Failures from before it first looked
+  are ignored; a failed upgrade attempt on something already in the library is ignored too (and hidden on the Downloads page).
 - *Re-search:* monitored, aired, missing episodes/films → `EpisodeSearch`/`MoviesSearch` after 1 h, 6 h, 1 day, 3 days,
   then weekly; at most 10 per instance per run. At most 6 queue removals per run. Library files are never deleted.
 - State (rule switches, last 150 log entries, back-off) is one JSON value in KV, read and written through the bridge

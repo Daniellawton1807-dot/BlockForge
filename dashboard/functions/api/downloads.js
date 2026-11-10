@@ -439,11 +439,12 @@ export async function onRequest({ env, request }) {
   const historyResults = await Promise.all(arrServices().map(async service => {
     if (!arrServiceStatus(env, service).configured) return [];
     try {
-      const response = await arrCall(env, service, "api/v3/history?page=1&pageSize=30&sortKey=date&sortDirection=descending");
+      const response = await arrCall(env, service, "api/v3/history?page=1&pageSize=30&sortKey=date&sortDirection=descending" + (service.type === "tv" ? "&includeEpisode=true" : "&includeMovie=true"));
       const records = Array.isArray(response) ? response : Array.isArray(response?.records) ? response.records : [];
       return records.filter(record => /downloadfolderimported|downloaded|imported|fail|error/i.test(String(record.eventType || record.event || ""))).map((record, index) => {
         const event = String(record.eventType || record.event || "");
         const failed = /fail|error/i.test(event);
+        if (failed && (record.episode?.hasFile || record.movie?.hasFile)) return null;   // a failed upgrade attempt: the copy in the library is fine
         const title = displayName(record.sourceTitle || record.data?.sourceTitle || record.series?.title || record.movie?.title || record.message || "Media download");
         return {
           id: "arr-" + service.key + "-" + String(record.id || index),
@@ -461,10 +462,10 @@ export async function onRequest({ env, request }) {
       });
     } catch { return []; }
   }));
-  const lifecycleItems = historyResults.flat().sort((a,b) => Date.parse(b.eventDate || 0) - Date.parse(a.eventDate || 0)).slice(0, 12);
+  const lifecycleItems = historyResults.flat().filter(Boolean).sort((a,b) => Date.parse(b.eventDate || 0) - Date.parse(a.eventDate || 0)).slice(0, 12);
   const seen = new Set(items.map(item => item.name.toLowerCase()));
   for (const item of lifecycleItems) {
-    if (!seen.has(item.name.toLowerCase())) items.push(item);
+    if (!seen.has(item.name.toLowerCase())) { items.push(item); seen.add(item.name.toLowerCase()); }   // a season pack imports as many identical rows: show one
   }
 
   return json({

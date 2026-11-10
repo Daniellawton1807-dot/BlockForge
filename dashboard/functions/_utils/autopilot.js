@@ -9,16 +9,17 @@ const BRIDGE = "ARR_BRIDGE";
 const DEFAULT_QBITTORRENT_URL = "https://qb.danielvault.uk";
 const HOUR = 3600 * 1000;
 const BACKOFF = [HOUR, 6 * HOUR, 24 * HOUR, 72 * HOUR, 168 * HOUR];   // an hour after it goes missing, then 6 h, a day, 3 days, then weekly
-const MAX_LOG = 150, MAX_FIXES_PER_RUN = 6, MAX_SEARCHES_PER_SERVICE = 10;
+const MAX_TRIES = 3, FAIL_WINDOW = 72 * HOUR, MAX_LOG = 150, MAX_FIXES_PER_RUN = 6, MAX_SEARCHES_PER_SERVICE = 10;
 
 export const RULES = {
   stalled: { title: "Replace stalled downloads", detail: "A torrent with no progress for a while, or a failed Usenet job, is blocklisted and Sonarr/Radarr look for another release." },
   importBlocked: { title: "Clear stuck imports", detail: "\"Not an upgrade\" and already-imported copies are removed from the queue; samples, missing video and suspicious files are blocklisted and replaced. Anything else is listed under Needs you." },
+  retryFailed: { title: "Retry failed downloads with another release", detail: "When a download fails (a broken Usenet file, an archive that won't unpack, a dead torrent) Autopilot works out why, blocklists that release and tries a different one, up to 3 releases in all. If those fail too, or no other release exists, it stops and tries again later as more releases appear. A failed upgrade attempt on something you already have is just ignored." },
   autoImport: { title: "Import stuck downloads by itself", detail: "When Sonarr/Radarr can't tell which episode or film a finished download is, Autopilot does the Manual Import for you: it matches files to the episode in the queue (or by the S01E02 in the file name) and imports them. Locked or unreachable files are retried. Only what it can't match safely is listed under Needs you." },
   research: { title: "Search again for missing episodes", detail: "Monitored episodes and films that aired but never downloaded are searched again after 1 hour, 6 hours and a day, then less often (3 days, then weekly)." },
   upgrade: { title: "Upgrade the library overnight", detail: "Each night (3–5 am) up to 10 episodes and 2 films below your quality target are searched for a better copy, a few at a time so downloads never pile up. Anything tried waits three weeks before its next turn." }
 };
-export const DEFAULT_SETTINGS = { rules: { stalled: true, importBlocked: true, autoImport: true, research: true, upgrade: true }, stallMinutes: 30 };
+export const DEFAULT_SETTINGS = { rules: { stalled: true, importBlocked: true, autoImport: true, retryFailed: true, research: true, upgrade: true }, stallMinutes: 30 };
 const UPGRADE_EPISODES = 10, UPGRADE_FILMS = 2, UPGRADE_RETRY = 21 * 24 * HOUR, UPGRADE_HOURS = [3, 4, 5], UPGRADE_BUSY_QUEUE = 5;
 export const STALL_CHOICES = [15, 30, 60, 120, 240];
 
@@ -43,6 +44,8 @@ export async function loadState(env) {
     backoff: state.backoff && typeof state.backoff === "object" ? state.backoff : {},
     upgradeDay: state.upgradeDay || "",
     upgradeTried: state.upgradeTried && typeof state.upgradeTried === "object" ? state.upgradeTried : {},
+    failSeen: Array.isArray(state.failSeen) ? state.failSeen : null,
+    redownloadOff: state.redownloadOff && typeof state.redownloadOff === "object" ? state.redownloadOff : {},
     importTried: state.importTried && typeof state.importTried === "object" ? state.importTried : {},
     push: state.push && typeof state.push === "object" ? state.push : {},
     lastRun: state.lastRun || null
@@ -71,6 +74,7 @@ const REASONS = [
   [/locked|in use by another/i, "The file is locked by another program; it will retry."],
   [/stalled|no connections/i, "Stalled: nobody is sharing this release right now."],
   [/unpack|extract|password|encrypted/i, "The download couldn't be unpacked (a password or a broken archive)."],
+  [/repair failed|not enough repair blocks|par2|missing articles|article.*(not found|missing)|too many .*missing/i, "The Usenet files were damaged or had missing parts, beyond repair."],
   [/missing articles|incomplete|aborted|failed/i, "The download failed or came through incomplete."],
   [/not wanted in profile|quality .* not (wanted|allowed)/i, "This quality isn't allowed by the title's quality profile."]
 ];
@@ -171,6 +175,36 @@ export async function manualImport(env, group) {
   return out.length;
 }
 
+// A failed download (broken Usenet file, bad archive, dead torrent): the release is already blocklisted; look for a different one,
+// up to MAX_TRIES releases in all. Sonarr/Radarr's own automatic redownload is switched off (see ensureRedownloadOff) so this is the
+// only thing retrying, and it can stop. When nothing else exists the item simply stays missing and the re-search rule tries again later.
+async function failuresOf(env, service, item) {
+  const tv = service.type === "tv";
+  const events = await arrCall(env, service, tv ? "api/v3/history?page=1&pageSize=60&sortKey=date&sortDirection=descending&episodeId=" + item
+    : "api/v3/history/movie?movieId=" + item);
+  const since = Date.now() - FAIL_WINDOW;
+  return (Array.isArray(events) ? events : events?.records || []).filter(e => /failed/i.test(String(e.eventType)) && Date.parse(e.date) >= since).length;
+}
+async function retryAfterFailure(env, service, item) {
+  if (!item) return "";
+  const tv = service.type === "tv", n = await failuresOf(env, service, item);
+  if (n >= MAX_TRIES) return "That's " + n + " releases that have failed, so it's resting for now. Autopilot will search again later as more releases appear.";
+  await arrCall(env, service, "api/v3/command", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify(tv ? { name: "EpisodeSearch", episodeIds: [item] } : { name: "MoviesSearch", movieIds: [item] }) });
+  return "Trying a different release (attempt " + (n + 1) + " of " + MAX_TRIES + ").";
+}
+async function ensureRedownloadOff(env, service, state, on, notes) {
+  try {
+    const cfg = await arrCall(env, service, "api/v3/config/downloadclient");
+    const want = !on;   // rule on -> their own redownload off
+    if (cfg && cfg.autoRedownloadFailed === want && cfg.autoRedownloadFailedFromInteractiveSearch === want) return;
+    if (!on && !state.redownloadOff[service.key]) return;   // rule off and we never touched it: leave their setting alone
+    await arrCall(env, service, "api/v3/config/downloadclient", { method: "PUT", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...cfg, autoRedownloadFailed: want, autoRedownloadFailedFromInteractiveSearch: want }) });
+    if (on) state.redownloadOff[service.key] = true; else delete state.redownloadOff[service.key];
+  } catch (error) { notes.push(service.name + ": " + error.message); }
+}
+
 // ---------- one pass ----------
 export async function runAutopilot(env, trigger) {
   const state = await loadState(env);
@@ -190,7 +224,13 @@ export async function runAutopilot(env, trigger) {
   const act = async (record, options, rule, detail) => {
     if (!budget || handled.has(record.downloadId || record.id)) return;
     handled.add(record.downloadId || record.id); budget--;
-    try { await removeFromQueue(env, record, options); log(rule, record.title, detail, record.service); }
+    const retry = Boolean(options.redownload && rules.retryFailed);   // failures are retried by Autopilot itself, capped
+    try {
+      await removeFromQueue(env, record, retry ? { ...options, redownload: false } : options);
+      let more = "";
+      if (retry) { try { more = " " + await retryAfterFailure(env, record.service, record.service.type === "tv" ? record.episodeId : record.movieId); } catch (error) { notes.push(record.service.name + ": " + error.message); } }
+      log(rule, record.title, retry ? detail.replace(/ and searched for another release\./, ".") + more : detail, record.service);
+    }
     catch (error) { needsYou.push({ title: record.title, reason: "Autopilot couldn't remove it: " + error.message, service: record.service.name }); }
   };
 
@@ -227,6 +267,35 @@ export async function runAutopilot(env, trigger) {
       for (const r of copies) if (r !== keep && r.downloadId !== keep.downloadId)
         await act(r, { blocklist: false, redownload: false }, "importBlocked", "A better copy of the same episode had also finished downloading, so this extra copy was removed.");
     }
+  }
+
+  // 1c. downloads that failed on their own and left the queue (Usenet repair failed, unpack failed...): sort out what's wrong and retry
+  for (const service of services) await ensureRedownloadOff(env, service, state, rules.retryFailed, notes);
+  if (rules.retryFailed) {
+    const firstRun = state.failSeen === null, seen = new Set(state.failSeen || []), queuedItems = new Set(queue.map(r => r.service.key + ":" + (r.episodeId || r.movieId)));
+    const searched = new Set();
+    for (const service of services) {
+      try {
+        const tv = service.type === "tv";
+        const response = await arrCall(env, service, "api/v3/history?page=1&pageSize=100&sortKey=date&sortDirection=descending" + (tv ? "&includeEpisode=true" : "&includeMovie=true"));
+        const records = Array.isArray(response) ? response : Array.isArray(response?.records) ? response.records : [];
+        for (const e of records.filter(r => /failed/i.test(String(r.eventType))).reverse()) {
+          const id = service.key + "#" + e.id;
+          if (seen.has(id)) continue;
+          seen.add(id);
+          if (firstRun || Date.parse(e.date) < now - 6 * HOUR) continue;   // what happened before Autopilot looked is history
+          const item = tv ? Number(e.episodeId) : Number(e.movieId), key = service.key + ":" + item;
+          const label = tv ? (e.series?.title || "Download") + (e.episode ? " S" + String(e.episode.seasonNumber).padStart(2, "0") + "E" + String(e.episode.episodeNumber).padStart(2, "0") : "") : (e.movie?.title || "Download");
+          const why = (plainReason(e.data?.message || e.data?.reason || "") || "The download failed.").replace(/\.$/, "");
+          if (!item || searched.has(key) || queuedItems.has(key)) continue;   // a retry is already on its way
+          searched.add(key);
+          if ((tv ? e.episode?.hasFile : e.movie?.hasFile)) { log("retryFailed", label, "A download for this failed (" + why + "), but the copy you already have is fine, so nothing more to do.", service); continue; }
+          if (!budget) continue; budget--;
+          log("retryFailed", label, why + ". Blocklisted that release. " + await retryAfterFailure(env, service, item), service);
+        }
+      } catch (error) { notes.push(service.name + ": " + error.message); }
+    }
+    state.failSeen = [...seen].slice(-600);
   }
 
   // 2. imports that are blocked or waiting with a warning

@@ -1,7 +1,7 @@
 /* Homebase weekly report: /api/report (library, Autopilot, disk) plus /api/health (are the apps answering). */
 (() => {
   const { $, el, api, errorText, gate } = Hub;
-  const RULE_WORDS = { stalled: "stalled", importBlocked: "blocked imports", autoImport: "manual imports", research: "re-searches", upgrade: "upgrades" };
+  const RULE_WORDS = { stalled: "stalled", importBlocked: "blocked imports", autoImport: "manual imports", retryFailed: "retries", research: "re-searches", upgrade: "upgrades" };
   const gb = b => b >= 1e12 ? (b / 1e12).toFixed(1) + " TB" : Math.round(b / 1073741824) + " GB";
   const day = iso => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
   const when = iso => new Date(iso).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
