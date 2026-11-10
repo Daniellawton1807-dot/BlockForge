@@ -13,11 +13,12 @@ const MAX_LOG = 150, MAX_FIXES_PER_RUN = 6, MAX_SEARCHES_PER_SERVICE = 10;
 
 export const RULES = {
   stalled: { title: "Replace stalled downloads", detail: "A torrent with no progress for a while, or a failed Usenet job, is blocklisted and Sonarr/Radarr look for another release." },
-  importBlocked: { title: "Clear stuck imports", detail: "\"Not an upgrade\" is removed from the queue; samples, missing video and suspicious files are blocklisted and replaced. Anything else is listed under Needs you." },
+  importBlocked: { title: "Clear stuck imports", detail: "\"Not an upgrade\" and already-imported copies are removed from the queue; samples, missing video and suspicious files are blocklisted and replaced. Anything else is listed under Needs you." },
+  autoImport: { title: "Import stuck downloads by itself", detail: "When Sonarr/Radarr can't tell which episode or film a finished download is, Autopilot does the Manual Import for you: it matches files to the episode in the queue (or by the S01E02 in the file name) and imports them. Locked or unreachable files are retried. Only what it can't match safely is listed under Needs you." },
   research: { title: "Search again for missing episodes", detail: "Monitored episodes and films that aired but never downloaded are searched again after 1 hour, 6 hours and a day, then less often (3 days, then weekly)." },
   upgrade: { title: "Upgrade the library overnight", detail: "Each night (3–5 am) up to 10 episodes and 2 films below your quality target are searched for a better copy, a few at a time so downloads never pile up. Anything tried waits three weeks before its next turn." }
 };
-export const DEFAULT_SETTINGS = { rules: { stalled: true, importBlocked: true, research: true, upgrade: true }, stallMinutes: 30 };
+export const DEFAULT_SETTINGS = { rules: { stalled: true, importBlocked: true, autoImport: true, research: true, upgrade: true }, stallMinutes: 30 };
 const UPGRADE_EPISODES = 10, UPGRADE_FILMS = 2, UPGRADE_RETRY = 21 * 24 * HOUR, UPGRADE_HOURS = [3, 4, 5], UPGRADE_BUSY_QUEUE = 5;
 export const STALL_CHOICES = [15, 30, 60, 120, 240];
 
@@ -42,6 +43,7 @@ export async function loadState(env) {
     backoff: state.backoff && typeof state.backoff === "object" ? state.backoff : {},
     upgradeDay: state.upgradeDay || "",
     upgradeTried: state.upgradeTried && typeof state.upgradeTried === "object" ? state.upgradeTried : {},
+    importTried: state.importTried && typeof state.importTried === "object" ? state.importTried : {},
     push: state.push && typeof state.push === "object" ? state.push : {},
     lastRun: state.lastRun || null
   };
@@ -79,6 +81,9 @@ export function plainReason(messages) {
   return text.slice(0, 200);
 }
 const NOT_UPGRADE = /not an upgrade|not a (quality |custom format )?upgrade|same or better|existing file .* (meets|better)/i;
+const ALREADY_THERE = /already (been )?imported|already exists|already has a file|episode file already|destination already exists/i;
+const TRANSIENT = /locked|in use by another|being used by another|path does not exist|inaccessible|not accessible|no such file|temporar|try again|timed out/i;
+const VIDEO = /\.(mkv|mp4|avi|m4v|mov|wmv|ts|m2ts)$/i;
 const JUNK = /sample|no files found are eligible|no video files?|contains no video|dangerous|executable|\.(exe|lnk|scr|bat|cmd)\b/i;
 
 // ---------- reading the queues ----------
@@ -116,6 +121,7 @@ async function queueOf(env, service) {
       title: name ? String(name).slice(0, 160) + code : String(r.title || "Download").slice(0, 200), release: String(r.title || ""),
       state: String(r.trackedDownloadState || "").toLowerCase(), health: String(r.trackedDownloadStatus || "").toLowerCase(),
       status: String(r.status || "").toLowerCase(), episodeId: Number(r.episodeId) || 0, movieId: Number(r.movieId) || 0,
+      seriesId: Number(r.seriesId) || 0, season: ep ? Number(ep.seasonNumber) : null, episode: ep ? Number(ep.episodeNumber) : null,
       added: String(r.added || ""), messages: [...new Set(messages)]
     };
   });
@@ -129,6 +135,34 @@ export async function arrDelete(env, service, path) {
 async function removeFromQueue(env, record, { blocklist, redownload }) {
   const query = "removeFromClient=true&blocklist=" + Boolean(blocklist) + "&skipRedownload=" + !redownload;
   await arrDelete(env, record.service, "api/v3/queue/" + record.id + "?" + query);
+}
+
+// Manual Import done by Autopilot: only files it can match with certainty (the queue entry's own episode or film, or the S01E02 in the
+// file name against that download's episodes). Returns how many files it imported; the rest is left for the person.
+export async function manualImport(env, group) {
+  const { service, downloadId } = group[0], tv = service.type === "tv";
+  const found = await arrCall(env, service, "api/v3/manualimport?downloadId=" + encodeURIComponent(downloadId) + "&filterExistingFiles=false");
+  const files = (Array.isArray(found) ? found : []).filter(c => VIDEO.test(String(c.path || "")) && !/(^|[\\/._ -])sample([\\/._ -]|$)/i.test(String(c.path || "")) && Number(c.size) > 20e6);
+  if (!files.length) return 0;
+  const out = [];
+  if (tv) {
+    const byCode = new Map(group.filter(r => r.season != null).map(r => [r.season + "x" + r.episode, r]));
+    for (const c of files) {
+      const m = /s(\d{1,2})[ ._-]?e(\d{1,3})/i.exec(c.path) || /\b(\d{1,2})x(\d{2,3})\b/i.exec(c.path);
+      let rec = m ? byCode.get(Number(m[1]) + "x" + Number(m[2])) : null;
+      if (!rec && group.length === 1 && files.length === 1) rec = group[0];   // one file for one queued episode
+      if (rec) out.push({ path: c.path, quality: c.quality, languages: c.languages, releaseGroup: c.releaseGroup, downloadId, indexerFlags: c.indexerFlags || 0, seriesId: rec.seriesId, episodeIds: [rec.episodeId], releaseType: "singleEpisode" });
+    }
+  } else {
+    const movieId = group[0].movieId, sorted = [...files].sort((a, b) => Number(b.size) - Number(a.size));
+    if (movieId && (sorted.length === 1 || Number(sorted[0].size) > 3 * Number(sorted[1].size))) {   // the film itself, not a pile of similar files
+      const c = sorted[0];
+      out.push({ path: c.path, quality: c.quality, languages: c.languages, releaseGroup: c.releaseGroup, downloadId, indexerFlags: c.indexerFlags || 0, movieId });
+    }
+  }
+  if (!out.length) return 0;
+  await arrCall(env, service, "api/v3/command", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "ManualImport", files: out, importMode: "auto" }) });
+  return out.length;
 }
 
 // ---------- one pass ----------
@@ -182,10 +216,34 @@ export async function runAutopilot(env, trigger) {
     const stuck = record.state === "importblocked" || (record.state === "importpending" && record.health !== "ok" && record.messages.length);
     if (!stuck) continue;
     const text = record.messages.join(" · ");
+    if (rules.autoImport && record.downloadId && handled.has(record.service.key + ":" + record.downloadId)) continue;   // a pack, already dealt with
+    const key = record.service.key + ":" + (record.downloadId || record.id), tries = state.importTried[key] || 0;
     if (rules.importBlocked && NOT_UPGRADE.test(text)) await act(record, { blocklist: false, redownload: false }, "importBlocked", "You already had it in the same or better quality, so it was removed from the queue.");
+    else if (rules.importBlocked && ALREADY_THERE.test(text)) await act(record, { blocklist: false, redownload: false }, "importBlocked", "It was already imported, so the leftover copy was removed from the queue.");
     else if (rules.importBlocked && JUNK.test(text)) await act(record, { blocklist: true, redownload: true }, "importBlocked", plainReason(text).replace(/\.$/, "") + ". Blocklisted it and searched for another release.");
+    else if (rules.autoImport && TRANSIENT.test(text) && tries < 4) {
+      state.importTried[key] = tries + 1;
+      if (!handled.has("scan:" + record.service.key)) {
+        handled.add("scan:" + record.service.key);
+        try { await arrCall(env, record.service, "api/v3/command", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "ProcessMonitoredDownloads" }) }); log("autoImport", record.title, "It couldn't be read just then (" + plainReason(text).replace(/\.$/, "") + "). Asked " + record.service.name + " to try the import again.", record.service); }
+        catch (error) { notes.push(record.service.name + ": " + error.message); }
+      }
+    }
+    else if (rules.autoImport && tries < 2 && budget && !handled.has(record.service.key + ":" + record.downloadId) && record.downloadId && (record.seriesId || record.movieId)) {
+      handled.add(record.service.key + ":" + record.downloadId);
+      state.importTried[key] = tries + 1;
+      const group = queue.filter(r => r.service === record.service && r.downloadId === record.downloadId);
+      try {
+        const n = await manualImport(env, group);
+        if (n) { budget--; log("autoImport", record.title, "Sonarr/Radarr couldn't match it by itself, so Autopilot did the Manual Import (" + n + " file" + (n === 1 ? "" : "s") + ").", record.service); }
+        else needsYou.push({ title: record.title, reason: plainReason(text) || "Import is blocked.", detail: "Autopilot couldn't match the files safely. " + text.slice(0, 260), service: record.service.name });
+      } catch (error) { needsYou.push({ title: record.title, reason: "Autopilot's manual import didn't work: " + error.message, detail: text.slice(0, 300), service: record.service.name }); }
+    }
     else if (!needsYou.some(n => n.title === record.title)) needsYou.push({ title: record.title, reason: plainReason(text) || "Import is blocked.", detail: text.slice(0, 300), service: record.service.name });
   }
+  // forget the tries of downloads that have left the queue
+  const inQueue = new Set(queue.map(r => r.service.key + ":" + (r.downloadId || r.id)));
+  for (const k of Object.keys(state.importTried)) if (!inQueue.has(k)) delete state.importTried[k];
 
   // 3. aired but never downloaded: search again with back-off
   const stillMissing = new Set();

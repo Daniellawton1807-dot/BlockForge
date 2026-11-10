@@ -118,6 +118,10 @@ or "Check now" on the Autopilot tab:
   qBittorrent is disconnected or every torrent is stalled at once (VPN down), which is listed under Needs you instead.
 - *Import blocked:* "not an upgrade" → removed from client and queue (no blocklist); sample/no video/suspicious file →
   blocklist and replace; anything else → Needs you, in plain English (`plainReason`, also used on Downloads rows).
+- *Auto import* (`autoImport`): an import Sonarr/Radarr can't match → Autopilot does the Manual Import itself (`manualImport()`): a
+  file goes to the queued episode when it is the only one, or when the S01E02 in its name matches an episode of that download; a film
+  takes its largest file when that clearly dominates. Samples and ambiguous files are never guessed (→ Needs you after 2 tries).
+  Locked/unreachable files → `ProcessMonitoredDownloads` (up to 4 tries); "already imported" leftovers are removed from the queue.
 - *Re-search:* monitored, aired, missing episodes/films → `EpisodeSearch`/`MoviesSearch` after 1 h, 6 h, 1 day, 3 days,
   then weekly; at most 10 per instance per run. At most 6 queue removals per run. Library files are never deleted.
 - State (rule switches, last 150 log entries, back-off) is one JSON value in KV, read and written through the bridge
