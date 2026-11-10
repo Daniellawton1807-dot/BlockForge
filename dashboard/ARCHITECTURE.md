@@ -14,6 +14,7 @@ No secret values live here or anywhere in this public repo, only the names of Cl
 | `/remote/` | `remote/index.html`, `remote.js` | TV remote: now playing, transport, commands, D-pad/touchpad |
 | `/mum/` | `mum/index.html`, `mum.js`, `mum.css`, manifest + icons | Mum's request page (not linked anywhere), installed on her Samsung as a home-screen app |
 | `/jarvis/` | `jarvis/index.html`, `jarvis.js`, `jarvis.css`, manifest + icons | Jarvis, Daniel's voice assistant. Its own look and own app, deliberately not linked from the nav. Replies carry a `view` that its response stage draws (see `app/views.py` on the server) |
+| `/pitwall/` | `pitwall/index.html` | Sign-in hand-off for Pitwall (F1 TV multiviewer). The app itself is served by `/api/pitwall/` from the server (`~/f1/web`, not in this repo), because the Homebase cookie only reaches `/api` |
 | shared | `cinema.css` | The "Cinema" look (warm charcoal, amber accent, serif headings, rise-in animation), loaded after `hub.css`; also the Overview hero (`#ovHero`, filled by `overview.js`) |
 | shared | `hub.js`, `hub.css` | `window.Hub`: sign-in gate, theme, icons, sheet (closes on Back), toast, `api()`, skeletons, rails |
 
@@ -36,6 +37,7 @@ All of these except `/api/metrics` need the Homebase session cookie (`functions/
 | `storage` | GET drives, fill-up forecast and suggestions (`?summary=1`: drives + forecast only, for the Overview tile); POST `{action:"delete", confirm:true, items}` removes picked titles with their files |
 | `mum/setup`, `home`, `search`, `request` | Mum's page. Own cookie (`homebase_mum`, path `/api/mum`, ~13 months, renews itself), set once by Daniel's sign-in on her phone; it can't open the rest of Homebase |
 | `jarvis/[[path]]` | Jarvis's API, via the bridge (`x-homebase-service: jarvis`). Streams `events`. Jarvis also needs its own PIN |
+| `pitwall/[[path]]` | Pitwall Web, via the bridge (`x-homebase-service: pitwall`): app files, F1 TV catalogue, OpenF1 (server-side login), live-timing and device-bus streams. GET/POST only; signed-out page loads redirect to `/pitwall/` |
 | `metrics` | Glances, public by design (Glances only sees the system disk) |
 
 ## The private bridge
@@ -50,6 +52,7 @@ Home services are never exposed to the internet for Homebase. Pages calls the Wo
 | `VPC_RADARR` | Radarr | 7878 |
 | `VPC_TVBOT` (`homebase-tvbot`) | tvbot | 8765 |
 | `VPC_JARVIS` (`homebase-jarvis`) | Jarvis | 8770 |
+| `VPC_PITWALL` (`homebase-pitwall`) | Pitwall Web (secret `PITWALL_TOKEN`) | 8774 |
 
 The Worker also has a KV namespace `AUTOPILOT` (`homebase-autopilot`) and a cron trigger every 15 minutes, see Autopilot below.
 

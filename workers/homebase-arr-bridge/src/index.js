@@ -80,6 +80,32 @@ async function jarvis(request, env, path) {
   return new Response(upstream.body, { status: upstream.status, headers: out });
 }
 
+// Pitwall Web (F1 multi-viewer, ~/f1/web on the server). The Pages Function has already checked the Homebase sign-in.
+// Only this Worker holds PITWALL_TOKEN. Streams the live-timing feed and the device bus (server-sent events).
+const PITWALL_PATH = /^[A-Za-z0-9._~\/-]{0,300}$/;
+async function pitwall(request, env, url) {
+  const method = request.method.toUpperCase(), path = url.pathname.replace(/^\/+/, "");
+  if (!["GET", "POST"].includes(method)) return json({ error: "Method not allowed." }, 405);
+  if (!PITWALL_PATH.test(path) || path.includes("..")) return json({ error: "Not available." }, 404);
+  if (!env.PITWALL_TOKEN || !env.VPC_PITWALL) return json({ error: "Pitwall is not set up on the bridge." }, 503);
+  const body = method === "POST" ? await request.arrayBuffer() : undefined;
+  if (body && body.byteLength > 600000) return json({ error: "Request body is too large." }, 413);
+  const headers = new Headers({ "x-pitwall-token": env.PITWALL_TOKEN, "accept": request.headers.get("accept") || "*/*" });
+  for (const name of ["content-type", "x-poll"]) { const v = request.headers.get(name); if (v) headers.set(name, v); }
+  let upstream;
+  try {
+    upstream = await env.VPC_PITWALL.fetch(new Request("http://192.168.8.150:8774/" + path + url.search, { method, headers, body }));
+  } catch {
+    return json({ error: "Pitwall is unavailable." }, 503);
+  }
+  const out = new Headers({ "cache-control": upstream.headers.get("cache-control") || "no-store" });
+  for (const name of ["content-type", "content-length", "retry-after"]) {
+    const value = upstream.headers.get(name);
+    if (value) out.set(name, value);
+  }
+  return new Response(upstream.body, { status: upstream.status, headers: out });
+}
+
 export default {
   async scheduled(event, env, ctx) {
     if (!env.AUTOPILOT_TOKEN) return;
@@ -99,6 +125,9 @@ export default {
     }
     if (request.headers.get("x-homebase-service") === "jarvis") {
       return jarvis(request, env, new URL(request.url).pathname.replace(/^\/+/, ""));
+    }
+    if (request.headers.get("x-homebase-service") === "pitwall") {
+      return pitwall(request, env, new URL(request.url));
     }
     if (request.headers.get("x-homebase-service") === "autopilot") {
       return autopilot(request, env, new URL(request.url).pathname.replace(/^\/+/, ""));

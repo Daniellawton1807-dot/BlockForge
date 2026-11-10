@@ -37,3 +37,8 @@ service_id = "01a1891d-e23e-7202-9f78-5112942ddb45"
 [[vpc_services]]
 binding = "VPC_JARVIS"
 service_id = "01a1a6c0-cf6a-7713-b01f-9039650edbef"
+
+# Pitwall Web (F1 multi-viewer) on the server, port 8774 (Workers VPC service "homebase-pitwall"; secret PITWALL_TOKEN).
+[[vpc_services]]
+binding = "VPC_PITWALL"
+service_id = "01a1c5d1-62d2-7802-8c2c-ee88b295d36f"
