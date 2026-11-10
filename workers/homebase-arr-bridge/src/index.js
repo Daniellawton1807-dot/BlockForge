@@ -106,8 +106,20 @@ async function pitwall(request, env, url) {
   return new Response(upstream.body, { status: upstream.status, headers: out });
 }
 
+// Pitwall "session starting" notifications: ask the Pitwall server what is due (it marks them sent), push them to Homebase's phones.
+async function pitwallNotify(env) {
+  if (!env.PITWALL_TOKEN || !env.VPC_PITWALL) return;
+  try {
+    const r = await env.VPC_PITWALL.fetch(new Request("http://192.168.8.150:8774/notify/due", { headers: { "x-pitwall-token": env.PITWALL_TOKEN } }));
+    if (!r.ok) { console.log("pitwall notify: HTTP " + r.status); return; }
+    for (const m of ((await r.json()).due || []).slice(0, 3))
+      await push(new Request("https://bridge/push/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(m) }), env, "push/send");
+  } catch (error) { console.log("pitwall notify failed: " + error.message); }
+}
+
 export default {
   async scheduled(event, env, ctx) {
+    if (event.cron === "*/5 * * * *") { ctx.waitUntil(pitwallNotify(env)); return; }
     if (!env.AUTOPILOT_TOKEN) return;
     const base = String(env.HOMEBASE_URL || "https://dashboard.danielvault.uk").replace(/\/+$/, "");
     ctx.waitUntil(fetch(base + "/api/autopilot/run", {

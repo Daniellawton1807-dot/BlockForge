@@ -7,7 +7,8 @@ export const PUSH_TYPES = {
   requests: "Mum requested a show or film",
   attention: "A download needs you",
   disk: "The media drive is nearly full",
-  minecraft: "The Minecraft server stopped"
+  minecraft: "The Minecraft server stopped",
+  f1: "An F1 session starts in 10 minutes (Pitwall)"
 };
 
 export async function bridgePush(env, path, body) {

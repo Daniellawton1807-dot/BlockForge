@@ -77,7 +77,7 @@ export async function push(request, env, path) {
 
   if (path === "push/send") {
     // {type, title, body, url, tag, only?: deviceId}
-    const message = { title: String(body.title || "Homebase").slice(0, 120), body: String(body.body || "").slice(0, 400), url: String(body.url || "/").slice(0, 300), tag: body.tag ? String(body.tag).slice(0, 64) : undefined, type: String(body.type || "") };
+    const message = { title: String(body.title || "Homebase").slice(0, 120), body: String(body.body || "").slice(0, 400), url: String(body.url || "/").slice(0, 300), tag: body.tag ? String(body.tag).slice(0, 64) : undefined, type: String(body.type || ""), urgent: !!body.urgent };
     const targets = list.filter(s => (body.only ? s.id === body.only : true) && (body.only || s.prefs?.[message.type] !== false));
     let sent = 0; const gone = new Set();
     await Promise.all(targets.map(async s => {

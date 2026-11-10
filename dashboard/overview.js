@@ -187,7 +187,7 @@
   }
 
   // ---------- notifications on this device ----------
-  const PUSH_ORDER = ["ready", "requests", "attention", "disk", "minecraft"];
+  const PUSH_ORDER = ["ready", "requests", "attention", "disk", "minecraft", "f1"];
   const keyBytes = k => Uint8Array.from(atob(k.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((k.length + 3) % 4)), c => c.charCodeAt(0));
   const deviceName = () => /iPhone/.test(navigator.userAgent) ? "iPhone" : /iPad/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ? "iPad" : /Android/.test(navigator.userAgent) ? "Android phone" : /Mac/.test(navigator.platform) ? "Mac" : "Computer";
   async function loadNotify() {

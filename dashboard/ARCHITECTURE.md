@@ -54,7 +54,7 @@ Home services are never exposed to the internet for Homebase. Pages calls the Wo
 | `VPC_JARVIS` (`homebase-jarvis`) | Jarvis | 8770 |
 | `VPC_PITWALL` (`homebase-pitwall`) | Pitwall Web (secret `PITWALL_TOKEN`) | 8774 |
 
-The Worker also has a KV namespace `AUTOPILOT` (`homebase-autopilot`) and a cron trigger every 15 minutes, see Autopilot below.
+The Worker also has a KV namespace `AUTOPILOT` (`homebase-autopilot`) and a cron trigger every 15 minutes, see Autopilot below. A second cron (every 5 minutes) asks the Pitwall server `GET /notify/due` for F1 sessions starting within ~12 minutes and pushes them (type `f1`, opens `/pitwall/`); the Pages Function refuses `notify`/`setup` paths so browsers can't trigger it.
 
 The Worker only forwards allow-listed paths (`SAFE_PATHS` in `src/index.js`). **A new tvbot route
 needs adding in three places:** tvbot itself, `SAFE_PATHS.tvbot` in the bridge, and `ROUTES` in

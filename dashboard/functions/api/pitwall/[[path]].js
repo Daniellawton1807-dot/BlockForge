@@ -17,6 +17,7 @@ export async function onRequest({ request, env, params }) {
     return page ? Response.redirect(url.origin + "/pitwall/" + (url.search || ""), 302) : json({ code: "login_required", error: "Sign in to use Pitwall." }, 401);
   }
   if (path === "" && !url.pathname.endsWith("/")) return Response.redirect(url.origin + "/api/pitwall/" + url.search, 302); // relative links need the slash
+  if (/^(notify|setup)\b/.test(path)) return json({ code: "not_found", error: "Not available." }, 404); // server-to-server only
   if (!PATH.test(path) || path.includes("..")) return json({ code: "not_found", error: "Not available." }, 404);
   if (!env.ARR_BRIDGE) return json({ code: "binding_missing", error: "Private bridge is not bound." }, 503);
 
