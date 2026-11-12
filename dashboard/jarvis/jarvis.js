@@ -65,6 +65,8 @@
     connect();
     setWake(wakeOn);
     fetchToday(true);
+    api("settings").then(r => { if (r.ok && Array.isArray(r.data.vocab)) vocabTerms = r.data.vocab; });  // names and titles for the device's recogniser
+    spawnWorker();  // speech detection ready for the first command, not only from the second
   }
 
   function applyView(v) {
@@ -465,7 +467,7 @@
 
   /* Scenes. Each reply says what it wants shown, and the whole page rearranges for it: the side panels slide out, the reactor flies to
      wherever that scene leaves room, and the content takes the page. Text only, never HTML from data. */
-  const SCENES = { report: "report", weather: "weather", media: "cinema", options: "wall", table: "reading", sections: "reading", suggestions: "reading", error: "alert", web: "web", race: "race", route: "map", flights: "reading" };
+  const SCENES = { answer: "reading", report: "report", weather: "weather", media: "cinema", options: "wall", table: "reading", sections: "reading", suggestions: "reading", error: "alert", web: "web", race: "race", route: "map", flights: "reading" };
   const CALM = window.matchMedia("(prefers-reduced-motion: reduce)");
   const HOME_AFTER_MS = 300000;
   let noticeTimer = null, sceneTimer = null, cineTimer = null, webState = null, walkTimer = null, ambientKey = "";
@@ -780,6 +782,20 @@
       const again = el("button", "act", "TRY AGAIN"); again.type = "button";
       again.addEventListener("click", () => { spokeLast = false; sendCommand("try again"); });
       box.append(again); stage.append(box);
+    } else if (v.type === "answer") {  // thinking harder or the web: the answer, what backs it, and where it came from
+      const stage = openStage(v.title, scene);
+      stage.append(el("p", "verdict", v.say));
+      if (v.points && v.points.length) { const u = el("ul", "points"); v.points.forEach((t, i) => { const li = el("li", "", t); li.style.animationDelay = i * 60 + "ms"; u.append(li); }); stage.append(u); }
+      if (v.sources && v.sources.length) {
+        const box = el("div", "sources"); box.append(el("small", "", "SOURCES"));
+        v.sources.forEach(s => {
+          let site = s.url; try { site = new URL(s.url).hostname.replace(/^www\./, ""); } catch { /* shown as it is */ }
+          const a = el("a", "", s.title || site); a.href = s.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+          a.append(el("span", "", site)); box.append(a);
+        });
+        stage.append(box);
+      }
+      if (v.meta) stage.append(el("p", "hint", v.meta));
     } else if (v.type === "table") {
       const stage = openStage(v.title, scene), scroll = el("div", "scrollx"), table = el("table", "compare");
       if (v.columns && v.columns.length) { const tr = el("tr"); v.columns.forEach(c => tr.append(el("th", "", c))); table.append(tr); }
@@ -1111,6 +1127,27 @@
   const WAKE_LEVELS = { low: 0.65, normal: 0.5, high: 0.35 };
   let wakeOn = store.get("jarvis.wake") === "on", mic = null, worker = null, wakeReady = false, recording = null;
   let guardTimer = null, preroll = [], noise = 0.003, wakeLock = null, lastWake = 0, chimeCtx = null, spokeLast = false, loudFor = 0;
+  let vadReady = false, workerWake = false;  // Silero loaded in the worker; the worker is listening for the wake word (not only detecting speech)
+  /* The device's own speech recognition (Daniel, 2026-11-12): on his iPhone that's Apple's, which already hears him through the noise; in
+     Chrome it's Google's. Used when he taps the mic or Jarvis is waiting for an answer, alongside the recording, which goes to the server
+     if the device's recogniser fails or hears nothing. After "Hey Jarvis" it isn't used: it would miss the words said straight after. */
+  const DeviceSR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const deviceOn = () => Boolean(DeviceSR) && (store.get("jarvis.recogniser") || "device") === "device";
+  let vocabTerms = [];
+  /* The TV near this device goes quiet while he talks (TV Bot mutes it, and unmutes it after 30 seconds whatever happens) */
+  let hushed = "", unhushTimer = null;
+  function hushTv() {
+    const tv = store.get("jarvis.hush") || "off";
+    clearTimeout(unhushTimer);
+    if (tv === "off" || hushed) return;
+    hushed = tv;
+    api("control", { action: "hush", tv }).then(r => console.debug("hush:", r.data && r.data.text)).catch(() => {});
+  }
+  function unhushTv() {  // a moment later, so a quick answer to his question doesn't make the TV flicker on and off
+    clearTimeout(unhushTimer);
+    if (!hushed) return;
+    unhushTimer = setTimeout(() => { const tv = hushed; hushed = ""; api("control", { action: "unhush", tv }).catch(() => {}); }, 2500);
+  }
 
   function wakeStatus(text, warn) {
     $("wakeState").hidden = !text; $("wakeState").textContent = text || "";
@@ -1180,19 +1217,41 @@
     if (preroll.length > PREROLL_BLOCKS) preroll.shift();
     if (worker && wakeReady && !document.hidden) { const copy = block.slice(); worker.postMessage(copy, [copy.buffer]); }
   }
+  function newRecording(blocks, extra) {
+    recording = { blocks, base: blocks.length, total: 0, judged: 0, speech: 0, silent: 0, afterWake: false, waiting: [], vad: vadReady && wakeReady && Boolean(worker) && store.get("jarvis.vad") !== "off", ...extra };
+    setWorkerMode();
+    return recording;
+  }
   function recordBlock(block, level) {
     setLevel(level / 0.06);
     const r = recording;
     r.blocks.push(block); r.total++;
-    const finished = window.jarvisSpeech.heard(r, level, noise) || r.total >= MAX_BLOCKS;
+    if (r.total >= MAX_BLOCKS) return finishRecording();
+    if (r.vad && worker && wakeReady) {  // Silero's verdict on this block comes back in a few milliseconds (onVad)
+      r.waiting.push(level);
+      const copy = block.slice(); worker.postMessage(copy, [copy.buffer]);
+      if (r.waiting.length > 10) { r.vad = false; console.debug("speech detection fell behind: going by loudness"); r.waiting.splice(0).forEach(l => judge(r, -1, l)); }
+      return;
+    }
+    judge(r, -1, level);
+  }
+  function judge(r, p, level) {  // p: Silero's speech probability, or -1 to go by loudness alone
+    if (recording !== r) return;
+    r.judged++;
+    const finished = p < 0 ? window.jarvisSpeech.heard(r, level, noise) : window.jarvisSpeech.heardVad(r, p, level, noise);
     // after the wake word, a short quiet means check what's already been said rather than wait
-    if (finished || (r.afterWake && !r.speech && r.total >= QUICK_BLOCKS) || (!r.speech && r.total >= NO_SPEECH_BLOCKS)) finishRecording();
+    if (finished || (r.afterWake && !r.speech && r.judged >= QUICK_BLOCKS) || (!r.speech && r.judged >= NO_SPEECH_BLOCKS)) finishRecording();
+  }
+  function onVad(p) {
+    const r = recording;
+    if (!r || !r.vad || !r.waiting.length) return;
+    judge(r, p, r.waiting.shift());
   }
   function bargeIn() {
     paused = { token: speechToken };
     player.pause();
     if (window.speechSynthesis && speechSynthesis.speaking) speechSynthesis.pause();
-    recording = { blocks: preroll.slice(-(BARGE_BLOCKS + 4)), afterWake: false, total: 0, speech: BARGE_BLOCKS, silent: 0, barge: true };
+    newRecording(preroll.slice(-(BARGE_BLOCKS + 4)), { speech: BARGE_BLOCKS, barge: true });
     armGuard(); setHearing(true);
   }
   function carryOn() {  // talked over by something that wasn't for him
@@ -1203,13 +1262,52 @@
   }
   function setHearing(on) { hearing = on; $("mic").setAttribute("aria-pressed", String(on)); showMode(); }
 
+  let phrasesWork = true;  // Chrome has the setting for words to expect, but refuses it unless it's recognising on the device itself
+  function startDevice(r) {
+    if (!deviceOn()) return;
+    let rec;
+    try { rec = new DeviceSR(); } catch { return; }
+    rec.lang = "en-GB"; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+    try {
+      if (phrasesWork && vocabTerms.length && window.SpeechRecognitionPhrase && "phrases" in rec) rec.phrases = vocabTerms.slice(0, 100).map(t => new window.SpeechRecognitionPhrase(t, 5));
+    } catch { /* not every browser takes phrases */ }
+    const d = r.device = { rec, text: "", final: false, ended: false, failed: "", waiters: [] };
+    rec.onresult = e => {
+      let text = "";
+      for (const res of e.results) text += res[0].transcript;
+      d.text = text.trim(); d.final = e.results[e.results.length - 1].isFinal;
+      if (recording === r && d.text) $("said").textContent = d.text;
+    };
+    rec.onerror = e => {
+      if (e.error === "phrases-not-supported" && phrasesWork) { phrasesWork = false; d.restart = true; return; }  // once more, without them
+      d.failed = e.error || "error"; console.debug("device recogniser failed:", d.failed);
+    };
+    rec.onend = () => {
+      if (d.restart) { if (recording === r) startDevice(r); return; }
+      d.ended = true; d.waiters.splice(0).forEach(f => f());
+      if (recording === r && d.final && d.text) finishRecording();  // it heard him finish: no need to wait for the quiet
+      if (IOS && wakeOn) setTimeout(() => { if (!micAlive() && !recording) { stopCapture(); startCapture(); } }, 400);  // iOS may take the mic for itself
+    };
+    try { rec.start(); } catch (error) { d.failed = String(error); d.ended = true; }
+  }
+  async function deviceHeard(r) {  // what the device's recogniser made of it, waiting a moment for its final words; "" to use the server
+    const d = r.device;
+    if (!d || d.failed) return "";
+    if (!d.ended) {
+      try { d.rec.stop(); } catch { /* already stopping */ }
+      await new Promise(done => { d.waiters.push(done); setTimeout(done, 1500); });
+    }
+    return d.failed ? "" : d.text;
+  }
   function startListening(fromWake) {
     const earlier = fromWake === true ? preroll.slice() : [];
     stopSpeech(); stopListening();
-    recording = { blocks: earlier, afterWake: fromWake === true, total: 0, speech: 0, silent: 0 };
-    armGuard();
+    const r = newRecording(earlier, { afterWake: fromWake === true });
+    armGuard(); hushTv();
+    if (fromWake !== true) startDevice(r);
+    else if (!worker) spawnWorker();
     setHearing(true); $("said").textContent = pendingQuestion;  // the question stays up while it waits for the answer
-    openMic().then(ok => { if (!ok) { recording = null; setHearing(false); } });
+    openMic().then(ok => { if (!ok) { recording = null; setHearing(false); } else if (!worker) spawnWorker(); });
   }
   function armGuard() {  // in case the mic goes quiet for good and blocks stop arriving
     clearTimeout(guardTimer);
@@ -1217,11 +1315,13 @@
   }
   function stopListening() {
     clearTimeout(guardTimer);
+    if (recording && recording.device && !recording.device.ended) { try { recording.device.rec.abort(); } catch { /* already gone */ } }
     recording = null; setHearing(false);
     afterRecording();
   }
   function afterRecording() {
     if (worker) worker.postMessage({ type: "reset" });
+    setWorkerMode(); unhushTv();
     preroll = [];
     if (!wakeOn && !IOS) closeMic();
   }
@@ -1240,18 +1340,22 @@
     clearTimeout(guardTimer);
     recording = null; setHearing(false);
     afterRecording();
-    if (r) console.debug("recorded", r.total, "blocks,", r.speech, "speech,", r.silent, "quiet, noise", noise.toFixed(4));
-    if (!r || (!r.afterWake && r.speech < MIN_SPEECH_BLOCKS)) return r && r.barge ? carryOn() : undefined;  // nothing said, and sending silence makes speech models invent words
-    transcribing = true; showMode();
-    let res = null, data = {};
-    try {
-      res = await fetch("/api/jarvis/stt", { method: "POST", headers: { "x-jarvis-session": session, "content-type": "audio/wav" }, body: wavFrom(window.jarvisSpeech.kept(r)) });
-      data = await res.json().catch(() => ({}));
-    } catch { /* shown below */ }
-    transcribing = false; showMode();
-    if (res && res.status === 401) return signedOut(data.code);
-    if (!res || !res.ok) { if (r.barge) return carryOn(); $("said").textContent = data.error || "I couldn't reach speech recognition just now."; return; }
-    let heard = String(data.text || "").trim();
+    if (r) console.debug("recorded", r.total, "blocks,", r.speech, "speech,", r.silent, "quiet, noise", noise.toFixed(4), r.vad ? "(Silero)" : "(loudness)");
+    let heard = r ? await deviceHeard(r) : "";
+    if (heard) console.debug("device recogniser:", heard);
+    else {
+      if (!r || (!r.afterWake && r.speech < MIN_SPEECH_BLOCKS)) return r && r.barge ? carryOn() : undefined;  // nothing said, and sending silence makes speech models invent words
+      transcribing = true; showMode();
+      let res = null, data = {};
+      try {
+        res = await fetch("/api/jarvis/stt", { method: "POST", headers: { "x-jarvis-session": session, "content-type": "audio/wav" }, body: wavFrom(window.jarvisSpeech.kept(r)) });
+        data = await res.json().catch(() => ({}));
+      } catch { /* shown below */ }
+      transcribing = false; showMode();
+      if (res && res.status === 401) return signedOut(data.code);
+      if (!res || !res.ok) { if (r.barge) return carryOn(); $("said").textContent = data.error || "I couldn't reach speech recognition just now."; return; }
+      heard = String(data.text || "").trim();
+    }
     if (r.afterWake) {
       // Whisper is the second opinion: no "Jarvis" in what it heard means the wake word fired on something else
       const words = [...heard.matchAll(WAKE_WORD)], last = words[words.length - 1];
@@ -1259,8 +1363,8 @@
       heard = heard.slice(last.index + last[0].length).trim();
       if (!heard) {  // said only "Hey Jarvis", so now wait for the command, keeping anything said during that check
         if (recording) return;
-        recording = { blocks: preroll.slice(-REARM_BLOCKS), afterWake: false, total: 0, speech: 0, silent: 0 };
-        armGuard(); setHearing(true);
+        startDevice(newRecording(preroll.slice(-REARM_BLOCKS)));
+        armGuard(); setHearing(true); hushTv();
         return;
       }
     } else {
@@ -1301,29 +1405,46 @@
   function stopCapture() {
     recording = null; if (hearing) setHearing(false);
     if (worker) worker.terminate();
-    worker = null; wakeReady = false;
+    worker = null; wakeReady = false; vadReady = false; workerWake = false;
     closeMic(); releaseScreen();
   }
-  async function startCapture() {
-    if (worker || !wakeOn) return;
-    wakeStatus("STARTING WAKE WORD");
-    if (!await openMic() || !wakeOn) return wakeOn ? wakeStatus("WAKE WORD FAILED / USE THE MIC BUTTON", true) : undefined;
+  function spawnWorker() {
     if (worker) return;
-    const failed = text => { stopCapture(); wakeStatus("WAKE WORD FAILED / USE THE MIC BUTTON", true); if (text) console.warn("wake word:", text); };
-    worker = new Worker("wake-worker.js?v=2");
+    const failed = text => {
+      if (workerWake) { stopCapture(); wakeStatus("WAKE WORD FAILED / USE THE MIC BUTTON", true); }
+      else { if (worker) worker.terminate(); worker = null; wakeReady = false; vadReady = false; }
+      if (text) console.warn("listening worker:", text);
+    };
+    worker = new Worker("wake-worker.js?v=3");
     worker.onerror = () => failed();
     worker.onmessage = e => {
       const m = e.data;
-      if (m.type === "ready") {
-        wakeReady = true;
+      if (m.type === "vad") onVad(m.p);
+      else if (m.type === "ready") {
+        wakeReady = true; vadReady = Boolean(m.vad);
         worker.postMessage({ type: "threshold", value: WAKE_LEVELS[store.get("jarvis.wakesens") || "normal"] || 0.5 });
-        const running = mic && mic.ctx.state === "running";
-        wakeStatus(running ? 'LISTENING FOR "HEY JARVIS"' : "TAP THE PAGE TO START LISTENING", !running);
-        holdScreen();
+        setWorkerMode();
+        if (workerWake) wakeListening();
       } else if (m.type === "failed") failed(m.error);
       else if (m.type === "stats") console.debug("wake stats", m.ms.toFixed(1) + " ms per block", "peak " + m.peak.toFixed(3));
       else if (m.type === "wake") onWake(m.score);
     };
+  }
+  function wakeListening() {
+    const running = mic && mic.ctx.state === "running";
+    wakeStatus(running ? 'LISTENING FOR "HEY JARVIS"' : "TAP THE PAGE TO START LISTENING", !running);
+    holdScreen();
+  }
+  function setWorkerMode() {  // the wake word while waiting; speech detection while recording a command
+    if (worker && wakeReady) worker.postMessage({ type: "mode", wake: workerWake && !recording, vad: Boolean(recording) && vadReady });
+  }
+  async function startCapture() {
+    if ((worker && workerWake) || !wakeOn) return;
+    wakeStatus("STARTING WAKE WORD");
+    if (!await openMic() || !wakeOn) return wakeOn ? wakeStatus("WAKE WORD FAILED / USE THE MIC BUTTON", true) : undefined;
+    workerWake = true;
+    if (worker) { setWorkerMode(); if (wakeReady) wakeListening(); return; }  // already running for speech detection
+    spawnWorker();
   }
   function onWake(score) {
     const now = Date.now();
@@ -1342,7 +1463,7 @@
   $("wakeToggle").addEventListener("click", () => setWake(!wakeOn));
   document.addEventListener("pointerdown", () => {
     if (mic && mic.ctx.state !== "running") mic.ctx.resume().then(() => { if (wakeReady) wakeStatus('LISTENING FOR "HEY JARVIS"'); }).catch(() => {});
-    else if (wakeOn && !worker && !$("app").hidden) startCapture();
+    else if (wakeOn && !(worker && workerWake) && !$("app").hidden) startCapture();
   });
 
   $("commandForm").addEventListener("submit", e => {
@@ -1486,6 +1607,10 @@
       v => { store.set("jarvis.wakesens", v); if (worker) worker.postMessage({ type: "threshold", value: WAKE_LEVELS[v] }); }));
     body.append(choice("Talking over him", "talkover", [["off", "Off"], ["low", "Only when you're loud"], ["normal", "Normal"], ["high", "Stops easily"]], store.get("jarvis.talkover") || "normal",
       v => { store.set("jarvis.talkover", v); bargeRatio = BARGE_RATIOS[v] ?? 8; }));
+    if (DeviceSR) body.append(choice("Speech recognition", "recogniser", [["device", IOS ? "This iPhone's own (Apple)" : "This browser's own"], ["jarvis", "Jarvis's (sent to the server)"]],
+      store.get("jarvis.recogniser") || "device", v => store.set("jarvis.recogniser", v)));
+    body.append(choice("Quieten a TV while listening", "hush", [["off", "Off"], ["living room", "Living Room TV (mutes it, then back)"]],
+      store.get("jarvis.hush") || "off", v => { store.set("jarvis.hush", v); }));
     body.append(choice("Text size", "text", [["normal", "Normal"], ["large", "Large"]], store.get("jarvis.text") || "normal", setTextSize));
     body.append(el("h3", "set-head", "FOR EVERY DEVICE"));
     const wait = el("p", "hint", "Loading…"); body.append(wait);

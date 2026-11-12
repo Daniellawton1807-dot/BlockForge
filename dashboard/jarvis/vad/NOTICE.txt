@@ -1,0 +1,2 @@
+silero_vad.onnx: Silero VAD v5.1.2, https://github.com/snakers4/silero-vad (MIT License, Copyright (c) 2020-present Silero Team).
+Used by wake-worker.js to tell speech from noise while a command is recorded.

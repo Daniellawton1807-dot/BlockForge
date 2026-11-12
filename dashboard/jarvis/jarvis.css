@@ -633,3 +633,12 @@ body.bigtext{font-size:17px}body.bigtext .list b{font-size:1.18rem}body.bigtext 
 .card.warn .drivebar i{background:var(--amber)}
 .drivenote{display:block;font-family:var(--body);font-size:.92rem;letter-spacing:0;color:#8fb6c3}
 .list li.live-mc b{color:var(--green)}
+
+/* the answer card (thinking harder, the web) */
+ul.points{margin:14px 0 0;padding:0;list-style:none;display:grid;gap:8px}
+ul.points li{position:relative;padding:8px 10px 8px 22px;background:#03172233;border:1px solid var(--line);border-radius:5px;overflow-wrap:anywhere;animation:rise .3s ease-out backwards}
+ul.points li:before{content:"";position:absolute;left:9px;top:15px;width:5px;height:5px;border-radius:50%;background:var(--cy);box-shadow:0 0 5px var(--cy)}
+.sources{margin-top:14px;display:grid;gap:6px}
+.sources a{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:8px 10px;color:var(--text);text-decoration:none;border:1px solid var(--line);border-radius:5px;overflow-wrap:anywhere}
+.sources a span{color:var(--dim);font-size:.85rem}
+.sources a:hover,.sources a:focus-visible{border-color:var(--cy);outline:0}
