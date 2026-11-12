@@ -642,3 +642,10 @@ ul.points li:before{content:"";position:absolute;left:9px;top:15px;width:5px;hei
 .sources a{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:8px 10px;color:var(--text);text-decoration:none;border:1px solid var(--line);border-radius:5px;overflow-wrap:anywhere}
 .sources a span{color:var(--dim);font-size:.85rem}
 .sources a:hover,.sources a:focus-visible{border-color:var(--cy);outline:0}
+
+/* which Claude answers (Daniel, 2026-11-12): Haiku as usual, Sonnet or Opus picked for harder questions */
+.command .modelpick{flex:none;min-width:64px;padding:0 10px;border-right:1px solid var(--line);font:500 .6rem var(--head);letter-spacing:.14em;color:var(--dim)}
+.command .modelpick[data-model=sonnet]{color:var(--cy);background:#062a36}
+.command .modelpick[data-model=opus]{color:var(--amber);background:#2a1d08}
+.command .modelpick:hover,.command .modelpick:focus-visible{outline:0;box-shadow:inset 0 0 0 1px var(--cy)}
+@media (max-width:520px){.command .modelpick{min-width:52px;padding:0 6px;font-size:.52rem;letter-spacing:.08em}}

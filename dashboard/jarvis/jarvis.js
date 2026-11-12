@@ -1475,6 +1475,26 @@
     sendCommand(text);
   });
   $("stopAll").addEventListener("click", () => { spokeLast = false; sendCommand("stop everything", { keep: true, silent: true }); });
+  /* The model button: Haiku as usual; Sonnet or Opus for a harder question. It stays as picked until he changes it, or for
+     10 minutes after his last request, then goes back to Haiku, so the dear one is never left on by accident. */
+  const MODELS = ["haiku", "sonnet", "opus"], MODEL_KEEP_MS = 600000;
+  const MODEL_HINT = { haiku: "Haiku: quick, under 1p a request", sonnet: "Sonnet: cleverer, about 5p a request", opus: "Opus: cleverest, about 10p a request" };
+  function pickedModel() {
+    const m = store.get("jarvis.model") || "haiku", at = Number(store.get("jarvis.modelAt") || 0);
+    if (m !== "haiku" && Date.now() - at > MODEL_KEEP_MS) { store.set("jarvis.model", "haiku"); showModel("haiku"); return "haiku"; }
+    return MODELS.includes(m) ? m : "haiku";
+  }
+  function showModel(m) {
+    const b = $("modelPick");
+    b.dataset.model = m; b.textContent = m.toUpperCase(); b.title = MODEL_HINT[m];
+    b.setAttribute("aria-label", "Claude model for your requests: " + MODEL_HINT[m] + ". Tap to change");
+  }
+  $("modelPick").addEventListener("click", () => {
+    const next = MODELS[(MODELS.indexOf(pickedModel()) + 1) % MODELS.length];
+    store.set("jarvis.model", next); store.set("jarvis.modelAt", String(Date.now())); showModel(next);
+    $("said").textContent = MODEL_HINT[next];
+  });
+  showModel(pickedModel());
   async function sendCommand(text, extra) {
     const { keep, ...more } = extra || {};
     if (!more.silent) lastSaid = text;
@@ -1483,7 +1503,9 @@
     clearInterval(walkTimer);
     // what's on screen stays, dimmed, until there's something to replace it, so the page never jumps home and back
     if (!keep) $("stage").classList.add("stale");
-    const r = await api("chat", { text, scene: document.body.dataset.scene || "", narrow: window.innerWidth < 700, ...more });
+    const model = pickedModel();
+    if (model !== "haiku") store.set("jarvis.modelAt", String(Date.now()));  // in use: the 10 minutes start again
+    const r = await api("chat", { text, scene: document.body.dataset.scene || "", narrow: window.innerWidth < 700, ...(model !== "haiku" ? { model } : {}), ...more });
     closeTurn();
     if (r.ok && r.data.stopped) return;  // the stop's own reply says so
     if (r.ok && r.data.silent) { if (!live) { showReply(r.data); setPending(null); } return; }  // the stop button: everything stops, and he doesn't answer
