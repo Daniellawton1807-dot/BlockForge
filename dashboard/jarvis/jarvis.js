@@ -60,6 +60,7 @@
   async function boot() {
     const r = await api("state");
     if (!r.ok) { if (r.status !== 401) showGate(session ? "pin" : "login", r.data.error || "Jarvis isn't reachable."); return; }
+    if (r.data.renewed && r.data.renewed.session) { session = r.data.renewed.session; store.set("jarvis.session", session); }  // stays signed in: a year from each visit
     $("gate").hidden = true; $("app").hidden = false;
     applyView(r.data);
     connect();
