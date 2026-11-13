@@ -143,7 +143,7 @@
       case "status": setStatus(e.status); break;
       case "mode": setMode(e.mode); break;
       case "you": pushLog(e); lastSaid = e.text || lastSaid; $("said").textContent = ""; break;
-      case "reply": if (e.text) pushLog(e); showReply(e); setPending(e.awaiting_confirmation ? { tool: e.tool, question: e.text } : null); break;
+      case "reply": if (e.text) pushLog(e); showReply(e); break;
       case "action":
         pushLog(e);
         window.dispatchEvent(new CustomEvent("jarvis:tool", { detail: e.tool }));  // lights the tool up in the brain
@@ -160,7 +160,7 @@
   }
   /* History (Daniel, 2026-11-06): the last answers, each one tappable to bring back, so nothing's lost when it's closed */
   const SCENE_NAMES = { weather: "WEATHER", report: "REPORT", media: "PLAYING", options: "CHOICES", table: "TABLE", sections: "EXPLAINED", suggestions: "IDEAS", error: "PROBLEM", web: "WEB", race: "F1", route: "MAP", flights: "FLIGHTS" };
-  let history = [], lastSaid = "";
+  let history = [], lastSaid = "", pendingReplyDisplay = null;
   try { history = JSON.parse(sessionStorage.getItem("jarvis.history") || "[]"); } catch { history = []; }
   function remember(r) {
     if (!r.text && !(r.view && SCENES[r.view.type])) return;
@@ -181,11 +181,22 @@
       return;
     }
     remember(r);
+    // Keep the new answer and its view together until audio playback actually begins.
+    if (voiceOn && r.text && !(r.quiet && acked)) { pendingReplyDisplay = r; return; }
+    revealReply(r);
+  }
+  function revealPendingReply(fallback) {
+    const r = pendingReplyDisplay || fallback;
+    pendingReplyDisplay = null;
+    if (r) revealReply(r);
+  }
+  function revealReply(r) {
     const type = r.view && r.view.type;
     seenView = r.view_at || seenView;
     $("said").textContent = ["notice", "error", "web", "media", "home"].includes(type) ? "" : r.text;
     $("stage").classList.remove("stale");
     if (type !== "notice") hideToast();
+    setPending(r.awaiting_confirmation ? { tool: r.tool, question: r.text } : null);
     if (!r.view && r.awaiting_confirmation) return;  // a question stays over whatever's on screen
     renderView(r.view);
   }
@@ -248,12 +259,13 @@
   document.addEventListener("pointerdown", () => { if (voiceRefused) unlockAudio(); });
   function setSpeaking(on) { speaking = on; showMode(); }
   function warnVoice(text) { $("voiceWarn").hidden = !text; $("voiceWarn").textContent = text || ""; }
-  function say(text) {
-    if (!voiceOn || !text) return;
-    speechQueue.push(text);
+  function say(text, onStart) {
+    if (!voiceOn || !text) { if (onStart) onStart(); return; }
+    speechQueue.push(onStart ? { text, onStart } : text);
     if (!speaking) nextSpeech();
   }
   function stopSpeech() {
+    revealPendingReply();
     askedBack = false; paused = null;
     speechToken++; speechQueue = [];
     player.pause(); player.removeAttribute("src");
@@ -272,7 +284,10 @@
     }
     setSpeaking(true);
     const token = ++speechToken;
+    let started = false;
+    const onStart = () => { if (!started && token === speechToken) { started = true; if (item.onStart) item.onStart(); } };
     if (item.clip) {
+      player.onplaying = onStart;
       player.onended = player.onerror = () => { if (token === speechToken) nextSpeech(); };
       player.src = item.clip;
       player.play().catch(() => { if (token === speechToken) nextSpeech(); });
@@ -280,20 +295,22 @@
     }
     const r = await api("tts", { text });
     if (token !== speechToken) return;
-    if (!r.ok) return browserVoice(text, token, r.data.error);
-    const failed = () => { if (token === speechToken) { speechToken++; browserVoice(text, speechToken, "ElevenLabs failed"); } };
+    if (!r.ok) return browserVoice(text, token, r.data.error, onStart);
+    const failed = () => { if (token === speechToken) browserVoice(text, token, "ElevenLabs failed", onStart); };
+    player.onplaying = onStart;
     player.onended = () => { if (token === speechToken) nextSpeech(); };
     player.onerror = failed;
     player.src = "/api/jarvis/tts/" + r.data.id;
-    player.play().then(() => warnVoice("")).catch(e => { if (e.name === "NotAllowedError") { voiceRefused = true; unlocked = false; setSpeaking(false); speechQueue = []; warnVoice("TAP THE PAGE ONCE TO ALLOW SOUND"); } else failed(); });
+    player.play().then(() => { warnVoice(""); onStart(); }).catch(e => { if (e.name === "NotAllowedError") { onStart(); voiceRefused = true; unlocked = false; setSpeaking(false); speechQueue = []; warnVoice("TAP THE PAGE ONCE TO ALLOW SOUND"); } else failed(); });
   }
-  function browserVoice(text, token, why) {
+  function browserVoice(text, token, why, onStart) {
     warnVoice("USING THE BROWSER'S VOICE" + (why ? " / " + String(why).toUpperCase() : ""));
-    if (!window.speechSynthesis) return nextSpeech();
+    if (!window.speechSynthesis) { if (onStart) onStart(); return nextSpeech(); }
     const u = new SpeechSynthesisUtterance(text);
     const voices = speechSynthesis.getVoices();
     u.voice = voices.find(v => /en-GB/i.test(v.lang) && /male|daniel|arthur|george/i.test(v.name)) || voices.find(v => /en-GB/i.test(v.lang)) || null;
     u.lang = "en-GB";
+    u.onstart = () => { if (onStart) onStart(); };
     u.onend = u.onerror = () => { if (token === speechToken) nextSpeech(); };
     speechSynthesis.speak(u);
   }
@@ -316,8 +333,9 @@
   function speakReply(data) {
     if (data.overheard) { askedBack = false; return; }  // said nothing, so nothing to answer
     askedBack = /\?\s*$/.test(data.text || "");
-    if (data.quiet && acked) return;
-    say(data.text);
+    if (data.quiet && acked) { if (pendingReplyDisplay) revealPendingReply(); return; }
+    if (voiceOn && data.text) say(data.text, () => revealPendingReply(data));
+    else if (!data.text && pendingReplyDisplay) revealPendingReply();
     if (data.view && data.view.type === "web" && data.view.mode === "walk" && voiceOn) {
       data.view.points.forEach((p, i) => { speechQueue.push({ text: p.text, before: () => showPoint(i) }); });
       if (!speaking) nextSpeech();
@@ -1512,10 +1530,10 @@
     closeTurn();
     if (r.ok && r.data.stopped) return;  // the stop's own reply says so
     if (r.ok && r.data.silent) { if (!live) { showReply(r.data); setPending(null); } return; }  // the stop button: everything stops, and he doesn't answer
+    if (r.ok && !live) showReply(r.data);
     if (r.ok) speakReply(r.data);
     if (!r.ok) $("stage").classList.remove("stale");
     if (!r.ok && r.status !== 401) $("said").textContent = r.data.error || "That didn't go through.";
-    else if (r.ok && !live) { showReply(r.data); setPending(r.data.awaiting_confirmation ? { tool: r.data.tool, question: r.data.text } : null); }
   }
   $("signOut").addEventListener("click", () => { stopListening(); stopSpeech(); stopCapture(); wakeStatus(""); session = ""; store.del("jarvis.session"); stopLive(); closeSheet(); goHome(); showGate("pin", "Locked. Enter your PIN."); });
 
