@@ -844,8 +844,8 @@
       renderCinema(v, stage);
     } else if (v.type === "options") renderWall(v, openStage(v.title, scene));
     else if (v.type === "error") {
-      const stage = openStage(null, scene), box = el("div", "alertbox"), head = el("div", "errhead"), close = stageHead("").querySelector("button");
-      head.append(el("i", "", "!"), el("h3", "", v.title), close);
+      const stage = openStage(v.title || "JARVIS NEEDS ATTENTION", scene), box = el("div", "alertbox"), head = el("div", "errhead");
+      head.append(el("i", "", "!"), el("h3", "", v.title));
       box.append(head);
       const part = (label, text) => { const d = el("p", "diag"); d.append(el("small", "", label), document.createTextNode(text)); box.append(d); };
       part("WHAT HAPPENED", v.what);
