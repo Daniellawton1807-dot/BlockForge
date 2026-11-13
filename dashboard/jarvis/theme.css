@@ -816,7 +816,7 @@ body.has-now:not([data-scene]) .reactor{width:min(100%,430px,48vh)}
 @media(min-width:1001px){
   body:not([data-scene]) .dock{position:fixed;top:auto!important;right:20px;bottom:20px;width:280px}
 }
-@media(min-width:1001px) and (max-height:1000px){
+@media(min-width:1001px) and (max-height:1300px){
   body:not([data-scene]) .core{top:clamp(220px,26vh,290px)!important}
   body:not([data-scene]) .core .reactor{width:clamp(148px,18vh,180px)!important}
   body:not([data-scene]) .dock{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;bottom:18px}
