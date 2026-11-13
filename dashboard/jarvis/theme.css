@@ -396,3 +396,12 @@ body:not([data-scene])[data-mode=speaking] .reactor .arc{stroke:var(--jarvis-cya
   body:not([data-scene]) .core{padding:0;margin:18px auto 28px}
   body:not([data-scene]) .core .reactor{margin:8px auto 0}
 }
+
+/* Friendly emoji controls for voice, stop, and send actions. */
+.command .emoji-action{display:grid;place-items:center;min-width:48px;padding:0 12px;border-left:1px solid var(--edge);letter-spacing:0;color:var(--text);line-height:1}
+.command .emoji-action .emoji-icon{display:block;font-family:system-ui,-apple-system,"Apple Color Emoji","Segoe UI Emoji",sans-serif;font-size:1.22rem;line-height:1;letter-spacing:0;transition:transform .16s ease,filter .16s ease}
+.command .emoji-action:hover .emoji-icon,.command .emoji-action:focus-visible .emoji-icon{transform:translateY(-1px) scale(1.12);filter:drop-shadow(0 0 5px #62d9ff88)}
+.command .emoji-action:focus-visible{outline:2px solid #62d9ff;outline-offset:-3px}
+.command .mic[aria-pressed=true]{background:#0a2342}
+.command .mic[aria-pressed=true] .emoji-icon{filter:drop-shadow(0 0 7px #62d9ff);transform:scale(1.08)}
+.command .stopall .emoji-icon{font-size:1.12rem}
