@@ -61,6 +61,7 @@
     const r = await api("state");
     if (!r.ok) { if (r.status !== 401) showGate(session ? "pin" : "login", r.data.error || "Jarvis isn't reachable."); return; }
     if (r.data.renewed && r.data.renewed.session) { session = r.data.renewed.session; store.set("jarvis.session", session); }  // stays signed in: a year from each visit
+    window.dispatchEvent(new CustomEvent("jarvis:ready", { detail: { api } }));  // the brain (brain.js) asks for its map with the same session
     $("gate").hidden = true; $("app").hidden = false;
     applyView(r.data);
     connect();
@@ -145,6 +146,7 @@
       case "reply": if (e.text) pushLog(e); showReply(e); setPending(e.awaiting_confirmation ? { tool: e.tool, question: e.text } : null); break;
       case "action":
         pushLog(e);
+        window.dispatchEvent(new CustomEvent("jarvis:tool", { detail: e.tool }));  // lights the tool up in the brain
         if (e.tier >= 2) openAction(e);
         // only the device that gave the command speaks, and it speaks before the action happens
         if (e.tier >= 2 && turnOpen) acknowledge();
