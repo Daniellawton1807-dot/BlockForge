@@ -192,13 +192,20 @@
   }
   function revealReply(r) {
     const type = r.view && r.view.type;
+    const plainAnswer = !r.view && r.text && !r.awaiting_confirmation;
+    const autoDismiss = Boolean((plainAnswer || (r.view && !keepResultUntilClosed(r.view))) && voiceOn && r.text);
+    clearTimeout(resultDismissTimer); resultAutoDismiss = false;
     seenView = r.view_at || seenView;
-    $("said").textContent = ["notice", "error", "web", "media", "home"].includes(type) ? "" : r.text;
+    $("said").textContent = plainAnswer || ["notice", "error", "web", "media", "home"].includes(type) ? "" : r.text;
     $("stage").classList.remove("stale");
     if (type !== "notice") hideToast();
     setPending(r.awaiting_confirmation ? { tool: r.tool, question: r.text } : null);
     if (!r.view && r.awaiting_confirmation) return;  // a question stays over whatever's on screen
-    renderView(r.view);
+    if (plainAnswer) {
+      const stage = openStage("JARVIS", "answer"), card = el("div", "answer-card");
+      appendReadableText(card, r.text, "readable-copy"); stage.append(card);
+    } else renderView(r.view);
+    resultAutoDismiss = autoDismiss;
   }
   function pushLog(e) { log.push(e); if (log.length > 100) log.shift(); if (sheetKind === "log") renderSheet(); }
 
@@ -280,6 +287,7 @@
       setSpeaking(false);
       // a spoken command that ends in a question gets a spoken answer: listen by itself
       if (((spokeLast && askedBack) || pendingTool) && followUps < 2) { askedBack = false; followUps++; startListening(); }
+      scheduleResultDismiss();
       return;
     }
     setSpeaking(true);
@@ -491,7 +499,7 @@
   const SCENES = { answer: "reading", report: "report", weather: "weather", media: "cinema", options: "wall", table: "reading", sections: "reading", suggestions: "reading", error: "alert", web: "web", race: "race", route: "map", flights: "reading" };
   const CALM = window.matchMedia("(prefers-reduced-motion: reduce)");
   const HOME_AFTER_MS = 300000;
-  let noticeTimer = null, sceneTimer = null, cineTimer = null, webState = null, walkTimer = null, ambientKey = "";
+  let noticeTimer = null, sceneTimer = null, cineTimer = null, webState = null, walkTimer = null, ambientKey = "", resultAutoDismiss = false, resultDismissTimer = null;
 
   function setScene(name) {
     const body = document.body, was = body.dataset.scene || "";
@@ -510,10 +518,13 @@
   }
   document.addEventListener("pointerdown", () => keepScene());
   function emptyStage() {
-    clearInterval(cineTimer); clearInterval(walkTimer);
-    webState = null;
+    clearInterval(cineTimer); clearInterval(walkTimer); clearTimeout(resultDismissTimer);
+    webState = null; resultAutoDismiss = false;
     const stage = $("stage");
     stage.hidden = true; stage.replaceChildren(); stage.className = "stage";
+    const core = document.querySelector(".core");
+    if (core && stage.parentElement !== core) core.append(stage);
+    $("resultScrim").hidden = true;
   }
   function goHome() {
     emptyStage(); setAmbient(); setScene(null);
@@ -521,18 +532,62 @@
   }
   function openStage(title, scene) {
     emptyStage();
+    if (document.body.dataset.scene) setScene(null);
     const stage = $("stage");
-    stage.hidden = false;
-    setScene(scene);
-    if (title !== null) stage.append(stageHead(title));
-    keepScene();
+    stage.hidden = false; stage.className = "stage result-window";
+    $("app").append(stage);
+    $("resultScrim").hidden = false; $("resultScrim").classList.remove("is-closing");
+    stage.append(stageHead(title || String(scene || "JARVIS").toUpperCase()));
     return stage;
+  }
+  function dismissResultWindow() {
+    const stage = $("stage");
+    if (!stage || !stage.classList.contains("result-window")) return;
+    stage.classList.add("is-closing"); $("resultScrim").classList.add("is-closing");
+    setTimeout(() => { $("resultScrim").classList.remove("is-closing"); goHome(); }, 260);
+  }
+  function scheduleResultDismiss() {
+    if (!resultAutoDismiss || speaking || askedBack || pendingTool) return;
+    clearTimeout(resultDismissTimer);
+    resultDismissTimer = setTimeout(dismissResultWindow, 2400);
+  }
+  function keepResultUntilClosed(v) {
+    if (!v) return false;
+    if (["flights", "media", "route", "weather", "race", "options", "table", "sections", "suggestions", "report", "error"].includes(v.type)) return true;
+    if (v.type === "web") return Boolean(v.facts?.length || v.points?.length || v.hero || v.mode === "walk");
+    if (v.type === "answer") return Boolean(v.points?.length);
+    return false;
+  }
+  function appendReadableText(container, text, className) {
+    const lines = String(text || "").replace(/\r/g, "").split(/\n+/).map(line => line.trim()).filter(Boolean);
+    let pending = [];
+    const flush = () => { if (pending.length) { container.append(el("p", className || "readable-copy", pending.join(" "))); pending = []; } };
+    for (const line of lines) {
+      if (/^(?:[-*•]|\d+[.)])\s+/.test(line)) {
+        flush();
+        let list = container.lastElementChild;
+        if (!list || !list.classList.contains("readable-list")) { list = el("ul", "readable-list"); container.append(list); }
+        list.append(el("li", "", line.replace(/^(?:[-*•]|\d+[.)])\s+/, "")));
+      } else pending.push(line);
+    }
+    flush();
+    if (lines.length === 1 && lines[0].length > 260 && !/[\n]/.test(String(text || ""))) {
+      const p = container.querySelector("." + (className || "readable-copy"));
+      if (p) {
+        const sentences = p.textContent.match(/[^.!?]+[.!?]+(?:[”’'"])?|[^.!?]+$/g) || [p.textContent];
+        if (sentences.length > 3) {
+          const paragraphs = [];
+          for (let i = 0; i < sentences.length; i += 2) paragraphs.push(sentences.slice(i, i + 2).join("").trim());
+          p.replaceWith(...paragraphs.map(part => el("p", className || "readable-copy", part)));
+        }
+      }
+    }
   }
   function stageHead(title) {
     const head = el("div", "stage-head");
     head.append(el("h3", "", title));
     const close = el("button", "stage-close", "×");
-    close.type = "button"; close.setAttribute("aria-label", "Close"); close.addEventListener("click", () => { $("said").textContent = ""; goHome(); });
+    close.type = "button"; close.setAttribute("aria-label", "Close result"); close.addEventListener("click", () => { $("said").textContent = ""; dismissResultWindow(); });
     head.append(close);
     return head;
   }
@@ -670,7 +725,6 @@
     [["High", shown.high + "°"], ["Low", shown.low + "°"], ["Rain", shown.rain + "%"], ["Wind", v.now.wind + " mph"], v.now.humidity != null ? ["Humidity", v.now.humidity + "%"] : ["Day", new Date(shown.date + "T12:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })], ["Sun", v.sunrise + " – " + v.sunset]]
       .forEach(([a, b], i) => { const t = el("div", "wx-tile"); t.style.animationDelay = 120 + i * 40 + "ms"; t.append(el("small", "", a), el("b", "", b)); tiles.append(t); });
     hero.append(big, head, tiles);
-    const close = stageHead("").querySelector("button"); close.classList.add("floating");
     const hours = el("div", "wx-hours");
     v.hours.forEach((h, i) => {
       const isNow = i === 0 && !v.label;
@@ -692,12 +746,11 @@
       days.append(r);
     });
     lower.append(charts, days);
-    stage.append(close, hero, hours, lower);
+    stage.append(hero, hours, lower);
   }
 
   /* Formula 1: the next race, a countdown, its weekend and the rest of the season */
   function renderRace(v, stage) {
-    const close = stageHead("").querySelector("button"); close.classList.add("floating");
     const hero = el("div", "gp"), name = el("div", "gp-name"), count = el("div", "gp-count");
     name.append(el("small", "", "ROUND " + v.round + "  /  " + v.season), el("h2", "", v.name), el("p", "", v.circuit + "  ·  " + v.place), el("p", "gp-when", v.day + (v.time ? "  ·  " + v.time : "")));
     hero.append(name);
@@ -723,13 +776,12 @@
       const row = el("div", "gp-row");
       row.append(el("span", "", r.name), el("span", "dim", r.day)); box.append(row);
     }));
-    stage.append(close, hero, lower);
+    stage.append(hero, lower);
   }
 
   /* A title on screen: cinema, with its backdrop behind the whole page */
   function renderCinema(v, stage) {
     const [main, ...others] = v.items, clock = s => { const m = Math.floor((s || 0) / 60); return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0"); };
-    setBackdrop(main.backdrop || main.image);
     const hero = el("div", "cine"), txt = el("div", "cine-text");
     if (main.image) hero.append(poster(main.image, main.title));
     txt.append(el("small", "", (main.paused ? "PAUSED ON " : "NOW PLAYING ON ") + String(main.tv || "").toUpperCase()), el("h2", "", main.title));
@@ -783,13 +835,12 @@
       const stage = openStage(v.title, scene);
       if (v.cards && v.cards.length) { const g = el("div", "cards"); v.cards.forEach((c, i) => g.append(drawTile(c, i))); stage.append(g); }
       if (v.charts && v.charts.length) { const g = el("div", "chartgrid"); v.charts.forEach(c => g.append(drawChart(c))); stage.append(g); }
-    } else if (v.type === "weather") renderWeather(v, openStage(null, scene));
-    else if (v.type === "race") renderRace(v, openStage(null, scene));
+    } else if (v.type === "weather") renderWeather(v, openStage((v.place || "Local") + " WEATHER", scene));
+    else if (v.type === "race") renderRace(v, openStage(v.name || "FORMULA 1", scene));
     else if (v.type === "route") renderRoute(v, openStage(v.title, scene));
     else if (v.type === "flights") renderFlights(v, openStage(v.title, scene));
     else if (v.type === "media") {
-      const stage = openStage(null, scene), close = stageHead("").querySelector("button");
-      close.classList.add("floating"); stage.append(close);
+      const stage = openStage(v.items?.[0]?.title || "NOW PLAYING", scene);
       renderCinema(v, stage);
     } else if (v.type === "options") renderWall(v, openStage(v.title, scene));
     else if (v.type === "error") {
@@ -804,8 +855,9 @@
       again.addEventListener("click", () => { spokeLast = false; sendCommand("try again"); });
       box.append(again); stage.append(box);
     } else if (v.type === "answer") {  // thinking harder or the web: the answer, what backs it, and where it came from
-      const stage = openStage(v.title, scene);
-      stage.append(el("p", "verdict", v.say));
+      const stage = openStage(v.title || "JARVIS ANSWER", scene), card = el("div", "answer-card");
+      appendReadableText(card, v.say, "readable-copy");
+      stage.append(card);
       if (v.points && v.points.length) { const u = el("ul", "points"); v.points.forEach((t, i) => { const li = el("li", "", t); li.style.animationDelay = i * 60 + "ms"; u.append(li); }); stage.append(u); }
       if (v.sources && v.sources.length) {
         const box = el("div", "sources"); box.append(el("small", "", "SOURCES"));
@@ -977,9 +1029,12 @@
     const w = webState, stage = $("stage");
     let root = stage.querySelector(".web");
     if (!root) {
-      stage.hidden = false; stage.replaceChildren();
-      setScene("web"); keepScene();
-      stage.append(stageHead(""));
+      clearInterval(cineTimer); clearInterval(walkTimer);
+      if (document.body.dataset.scene) setScene(null);
+      stage.hidden = false; stage.className = "stage result-window";
+      $("app").append(stage);
+      $("resultScrim").hidden = false;
+      stage.replaceChildren(stageHead("WEB ANSWER"));
       root = el("div", "web");
       const browser = el("div", "browser"), bar = el("div", "bar"), view = el("div", "view");
       bar.append(el("span", "lamp"), el("span", "addr"));
@@ -1080,6 +1135,7 @@
       const answerCard = el("section", "answer-card");
       answerCard.append(el("small", "answer-kicker", "JARVIS · ANSWER"));
       answerCard.append(el("p", "answer", String(w.answer || "").replace(/\s*\[\d+\]/g, "").replace(/[ \t]{2,}/g, " ").trim()));
+      appendReadableText(answerCard, String(w.answer || "").replace(/\s*\[\d+\]/g, "").replace(/[ \t]{2,}/g, " ").trim(), "answer");
       side.append(answerCard);
     }
     if (!w.live && w.facts.length) {

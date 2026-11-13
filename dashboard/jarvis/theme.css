@@ -454,3 +454,42 @@ body:not([data-scene])[data-mode=speaking] .reactor .arc{stroke:var(--jarvis-cya
 @keyframes peek-in{from{opacity:0;transform:translate(-50%,5px)}to{opacity:1;transform:translate(-50%,0)}}
 @media(max-width:1000px){.web-search-peek{bottom:calc(74px + env(safe-area-inset-bottom));width:min(560px,calc(100vw - 24px))}.web-search-summary{min-height:46px;padding:9px 12px}}
 @media(prefers-reduced-motion:reduce){.web-search-peek,.web-search-detail{animation:none}.web-search-pulse{animation:none}}
+
+/* Compact result window over the live Jarvis map. */
+.result-scrim{position:fixed;inset:0;z-index:8;background:rgba(2,8,18,.48);backdrop-filter:blur(4px);opacity:1;transition:opacity .24s ease}
+.result-scrim[hidden]{display:none}
+.result-scrim.is-closing{opacity:0}
+.stage.result-window{position:fixed;z-index:9;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,calc(100vw - 36px));max-height:min(78dvh,760px);margin:0;padding:20px 22px 24px;overflow:auto;overscroll-behavior:contain;background:linear-gradient(150deg,rgba(10,27,49,.98),rgba(5,15,30,.985));border:1px solid #2b5885;border-radius:22px;box-shadow:0 28px 90px #000a,0 0 36px #1a76b522;scrollbar-width:thin;scrollbar-color:#315678 transparent;animation:result-pop .28s cubic-bezier(.2,.9,.25,1) both}
+.stage.result-window.is-closing{opacity:0;transform:translate(-50%,-48%) scale(.98);transition:opacity .24s ease,transform .24s ease}
+.stage.result-window .stage-head{position:sticky;top:-20px;margin:-20px -22px 18px;padding:15px 16px 13px 20px;background:rgba(8,22,40,.96);border-bottom:1px solid #1c3c5e;backdrop-filter:blur(12px)}
+.stage.result-window .stage-head h3{color:#9fdcff;font:600 .7rem var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.stage.result-window .stage-close{width:32px;height:32px;background:#0c2039;border-color:#2b527a;color:#c4e2fa}
+.stage.result-window .stage-close:hover{border-color:#6bd0ff;color:#fff}
+.stage.result-window .web{gap:16px;grid-template-columns:minmax(0,1fr) minmax(260px,.9fr)}
+.stage.result-window .web.solo{display:block;max-width:none;margin:0}
+.stage.result-window .web .side{display:flex;flex-direction:column;gap:12px}
+.stage.result-window .answer-card{padding:20px 22px;background:linear-gradient(145deg,#0b1d34,#081426);border:1px solid #234a73;border-left:3px solid #50bfff;border-radius:16px;box-shadow:none}
+.stage.result-window .answer-kicker{display:block;margin-bottom:13px;color:#77c8ff;font:600 .62rem var(--mono);letter-spacing:.15em}
+.stage.result-window .answer-card .answer,.stage.result-window .answer-card .readable-copy{margin:0 0 12px;color:#e7f2ff;font:400 clamp(1rem,1.45vw,1.2rem)/1.58 var(--body);overflow-wrap:anywhere;animation:none}
+.stage.result-window .answer-card .answer:last-child,.stage.result-window .answer-card .readable-copy:last-child{margin-bottom:0}
+.stage.result-window .readable-list{display:grid;gap:9px;margin:6px 0 14px;padding-left:1.2rem;color:#e7f2ff;font-size:1rem;line-height:1.5}
+.stage.result-window .readable-list li::marker{color:#65c9ff}
+.stage.result-window .preview-toggle{align-self:flex-start}
+.stage.result-window .web .browser{position:relative;top:auto;max-height:54vh;overflow:auto}
+.stage.result-window .web .view{aspect-ratio:16/10;max-height:45vh}
+.stage.result-window .cards,.stage.result-window .chartgrid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.stage.result-window .wx-hours{overflow-x:auto}
+.stage.result-window .route-map{min-height:240px}
+.stage.result-window .cine{grid-template-columns:minmax(110px,170px) minmax(0,1fr)}
+.stage.result-window .cine img{max-height:270px}
+@keyframes result-pop{from{opacity:0;transform:translate(-50%,-47%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@media(max-width:700px){
+  .result-scrim{backdrop-filter:blur(3px)}
+  .stage.result-window{width:calc(100vw - 22px);max-height:min(82dvh,900px);padding:15px 15px 20px;border-radius:18px}
+  .stage.result-window .stage-head{top:-15px;margin:-15px -15px 14px;padding:11px 11px 10px 15px}
+  .stage.result-window .web,.stage.result-window .web[data-mode=answer]{display:block}
+  .stage.result-window .web .browser{margin-top:12px;max-height:48vh}
+  .stage.result-window .web .answer-card{padding:16px}
+  .stage.result-window .cine{grid-template-columns:minmax(80px,110px) minmax(0,1fr);gap:12px}
+}
+@media(prefers-reduced-motion:reduce){.result-scrim,.stage.result-window{animation:none;transition:none}}
