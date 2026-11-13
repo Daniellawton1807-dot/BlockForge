@@ -274,7 +274,7 @@ body:not([data-scene]) .reactor .level{stroke:var(--cy);stroke-width:2}
 body:not([data-scene]) .reactor:before{inset:4%;border-color:color-mix(in srgb,var(--cy) 30%,transparent);box-shadow:0 0 20px color-mix(in srgb,var(--cy) 14%,transparent)}
 body:not([data-scene]) .reactor:after{inset:18%;border:1px dashed color-mix(in srgb,var(--cy) 32%,transparent);opacity:.48}
 body:not([data-scene]) .reactor-read{padding:0;gap:12px}
-body:not([data-scene]) .reactor-name{font:600 clamp(1.05rem,1.5vw,1.3rem)/1 var(--mono);letter-spacing:.22em;color:#D9F5EC;text-shadow:0 0 16px color-mix(in srgb,var(--cy) 65%,transparent)}
+body:not([data-scene]) .reactor-name{font:600 clamp(.72rem,1vw,.9rem)/1 var(--mono);letter-spacing:.16em;white-space:nowrap;color:#D9F5EC;text-shadow:0 0 16px color-mix(in srgb,var(--cy) 65%,transparent)}
 body:not([data-scene]) .reactor-read .vu{height:24px;gap:5px}
 body:not([data-scene]) .reactor-read .vu i{width:4px}
 body:not([data-scene]) .core-controls{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
@@ -308,9 +308,9 @@ body:not([data-scene])[data-mode=speaking] .reactor .spin{animation:spin 26s lin
 body:not([data-scene])[data-mode=speaking] .reactor .a1{animation:pulse 1.05s ease-in-out infinite,signal-flow 3s linear infinite}
 body:not([data-scene])[data-mode=idle] .reactor:before{animation:reactor-breathe 3.8s ease-in-out infinite}
 @keyframes status-blink{to{opacity:.45;transform:scale(.8)}}
-@media (min-width:1001px){body:not([data-scene]) .core{top:270px;width:300px}
-  body:not([data-scene]) .dock{top:660px;width:280px;right:20px}}
-@media (min-width:1001px) and (max-height:820px){body:not([data-scene]) .core{top:245px;width:260px;padding:14px}
+@media (min-width:1001px){body:not([data-scene]) .core{top:340px;width:300px}
+  body:not([data-scene]) .dock{top:740px;width:280px;right:20px}}
+@media (min-width:1001px) and (max-height:820px){body:not([data-scene]) .core{top:310px;width:260px;padding:14px}
   body:not([data-scene]) .core .reactor{width:208px}
   body:not([data-scene]) .core-status,body:not([data-scene]) #modelPick{min-height:38px;padding:6px 9px}
   body:not([data-scene]) #modelPick{min-width:92px}
