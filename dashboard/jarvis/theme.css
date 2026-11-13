@@ -493,3 +493,10 @@ body:not([data-scene])[data-mode=speaking] .reactor .arc{stroke:var(--jarvis-cya
   .stage.result-window .cine{grid-template-columns:minmax(80px,110px) minmax(0,1fr);gap:12px}
 }
 @media(prefers-reduced-motion:reduce){.result-scrim,.stage.result-window{animation:none;transition:none}}
+
+/* The app shell ignores pointer input on the home map; explicitly enable the modal stack. */
+.result-scrim{pointer-events:auto!important}
+.stage.result-window{pointer-events:auto!important;width:min(1120px,calc(100vw - 64px));height:min(780px,calc(100dvh - 96px));max-height:none;min-height:min(520px,calc(100dvh - 96px))}
+@media(max-width:700px){
+  .stage.result-window{width:calc(100vw - 24px);height:calc(100dvh - 32px);max-height:none;min-height:0;padding:15px 15px 20px}
+}
