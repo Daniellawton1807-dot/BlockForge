@@ -16,8 +16,8 @@
   const PULSE_MS = 3200;
   let api = null, nodes = [], links = [], by = {}, adj = {}, hidden = {}, sel = null, hover = null, query = "", labels = true;
   let alpha = 0, raf = 0, view = { k: 0.6, px: 0, py: 0 }, drag = null, press = null, pulses = {}, fitted = false, repel = 90, linkLen = 46;
-  let box = null, canvas = null, ctx = null, inspect = null, note = null, w = 0, h = 0, dpr = 1, lastFrame = 0;
-  const camera = { pitch: 0.48, yaw: 0, focal: 760, spin: 0.00022 }; // slow, continuous 3D orbit while the brain is visible
+  let box = null, canvas = null, ctx = null, inspect = null, note = null, w = 0, h = 0, dpr = 1;
+  const camera = { pitch: 0.48, yaw: 0, focal: 760 };
 
   window.addEventListener("jarvis:ready", e => { api = e.detail.api; if (!nodes.length) load(); });
   window.addEventListener("jarvis:tool", e => pulse("t:" + e.detail));
@@ -157,12 +157,10 @@
   function frame() {
     raf = 0;
     if (!active()) return;
-    const now = performance.now(), busy = true; // keep the slow camera orbit alive while this view is on screen
-    if (lastFrame) camera.yaw = (camera.yaw + Math.min(48, now - lastFrame) * camera.spin) % (Math.PI * 2);
-    lastFrame = now;
+    const now = performance.now(), busy = alpha > 0.004 || drag || Object.values(pulses).some(t => t > now) || document.body.dataset.mode === "thinking";
     if (alpha > 0.004 || drag) tick();
     draw();
-    if (busy) raf = setTimeout(() => requestAnimationFrame(frame), 40);
+    if (busy) raf = requestAnimationFrame(frame);
   }
 
   function tick() {
@@ -297,7 +295,11 @@
     if (press) {
       if (Math.abs(e.clientX - press.sx) + Math.abs(e.clientY - press.sy) > 4) press.moved = true;
       if (drag) { const p = at(e), depth = project(drag); drag.x += (p.x - depth.x) / depth.scale; drag.y += (p.y - depth.y) / depth.scale / Math.cos(camera.pitch); alpha = Math.max(alpha, 0.15); wake(); }
-      else if (prev) { view.px += e.clientX - prev.x; view.py += e.clientY - prev.y; draw(); }
+      else if (prev) {
+        if (e.shiftKey) { view.px += e.clientX - prev.x; view.py += e.clientY - prev.y; }
+        else { camera.yaw += (e.clientX - prev.x) * 0.004; camera.pitch = Math.max(-0.9, Math.min(0.9, camera.pitch + (e.clientY - prev.y) * 0.003)); }
+        draw();
+      }
       return;
     }
     const h2 = at(e).node;
