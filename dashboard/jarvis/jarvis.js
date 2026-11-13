@@ -193,7 +193,7 @@
   function revealReply(r) {
     const type = r.view && r.view.type;
     const plainAnswer = !r.view && r.text && !r.awaiting_confirmation;
-    const autoDismiss = Boolean((plainAnswer || (r.view && !keepResultUntilClosed(r.view))) && voiceOn && r.text);
+    const autoDismiss = Boolean((plainAnswer || (r.view && !keepResultUntilClosed(r.view, r.text))) && voiceOn && r.text);
     clearTimeout(resultDismissTimer); resultAutoDismiss = false;
     seenView = r.view_at || seenView;
     $("said").textContent = plainAnswer || ["notice", "error", "web", "media", "home"].includes(type) ? "" : r.text;
@@ -547,11 +547,13 @@
     setTimeout(() => { $("resultScrim").classList.remove("is-closing"); goHome(); }, 260);
   }
   function scheduleResultDismiss() {
-    if (!resultAutoDismiss || speaking || askedBack || pendingTool) return;
+    if (!resultAutoDismiss || speaking || hearing || recording || askedBack || pendingTool) return;
     clearTimeout(resultDismissTimer);
     resultDismissTimer = setTimeout(dismissResultWindow, 2400);
   }
-  function keepResultUntilClosed(v) {
+  function keepResultUntilClosed(v, spokenText = "") {
+    const details = (JSON.stringify(v || {}) + " " + spokenText).toLowerCase();
+    if (/\b(flights?|airfare|boarding pass|cinema|movie times|showtimes|tickets?)\b/.test(details)) return true;
     if (!v) return false;
     if (["flights", "media", "route", "weather", "race", "options", "table", "sections", "suggestions", "report", "error"].includes(v.type)) return true;
     if (v.type === "web") return Boolean(v.facts?.length || v.points?.length || v.hero || v.mode === "walk");
@@ -1009,6 +1011,7 @@
     $("webSearchQuery").textContent = w.query || "Finding the information you asked for";
     $("webSearchStatus").textContent = w.status || "Searching the web";
   }
+  $("resultScrim").addEventListener("click", dismissResultWindow);
   $("webSearchToggle").addEventListener("click", () => {
     const button = $("webSearchToggle"), detail = $("webSearchDetail"), expanded = button.getAttribute("aria-expanded") !== "true";
     button.setAttribute("aria-expanded", String(expanded));
