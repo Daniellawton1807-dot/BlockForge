@@ -15,6 +15,7 @@
   const KIND_NAMES = { core: "Jarvis", skill: "Skill", tool: "Tool", service: "Service", show: "Show", film: "Film", person: "Person", memory: "Memory" };
   const PULSE_MS = 3200;
   let api = null, nodes = [], links = [], by = {}, adj = {}, hidden = {}, sel = null, hover = null, query = "", labels = true;
+  let graphData = null, archiveExpanded = false, archiveCount = 0;
   let alpha = 0, raf = 0, view = { k: 0.6, px: 0, py: 0 }, drag = null, press = null, pulses = {}, fitted = false, repel = 90, linkLen = 46;
   let box = null, canvas = null, ctx = null, inspect = null, note = null, w = 0, h = 0, dpr = 1;
   const camera = { pitch: 0.48, yaw: 0, focal: 760 };
@@ -25,14 +26,20 @@
   async function load() {
     const r = await api("brain");
     if (!r.ok || !Array.isArray(r.data.nodes)) { const c = $("brainCount"); if (c) c.textContent = "The brain isn't reachable"; return; }
-    build(r.data);
+    graphData = r.data;
+    build(graphData);
     mount();
     alpha = 1; wake();
   }
 
   function build(data) {
     nodes = []; links = []; by = {}; adj = {};
-    data.nodes.forEach(n => {
+    const memories = data.nodes.filter(n => n.cat === "memory"), keep = 18;
+    archiveCount = Math.max(0, memories.length - keep);
+    const recentMemoryIds = new Set(memories.slice(-keep).map(n => n.id));
+    const graphNodes = data.nodes.filter(n => n.cat !== "memory" || archiveExpanded || recentMemoryIds.has(n.id));
+    if (archiveCount && !archiveExpanded) graphNodes.push({ id: "m:archive", label: `Earlier memories (${archiveCount})`, cat: "memory", archive: true });
+    graphNodes.forEach(n => {
       const node = { ...n, x: 0, y: 0, z: (Math.random() - 0.5) * ({ show: 210, film: 230, tool: 150 }[n.cat] || 120), vx: 0, vy: 0, vz: 0, deg: 0, r: RADIUS[n.cat] || 3 };
       const ring = { skill: 170, tool: 270, service: 230, show: 430, film: 470, person: 150, memory: 200 }[n.cat] || 0, a = Math.random() * Math.PI * 2;
       node.x = Math.cos(a) * ring * (0.7 + Math.random() * 0.6); node.y = Math.sin(a) * ring * (0.7 + Math.random() * 0.6);
@@ -40,14 +47,24 @@
       nodes.push(node); by[n.id] = node; adj[n.id] = [];
     });
     data.links.forEach(([a, b, len]) => {
-      if (!by[a] || !by[b]) return;
+      if (!by[a] || !by[b] || (by[a].archive || by[b].archive)) return;
       links.push({ a: by[a], b: by[b], len }); by[a].deg++; by[b].deg++; adj[a].push(by[b]); adj[b].push(by[a]);
     });
+    if (archiveCount && !archiveExpanded && by.core && by["m:archive"]) {
+      const a = by.core, b = by["m:archive"]; links.push({ a, b, len: 2.2 }); a.deg++; b.deg++; adj[a.id].push(b); adj[b.id].push(a);
+    }
     nodes.forEach(n => { if (n.cat === "skill") n.r = 4 + Math.sqrt(n.deg) * 1.3; if (n.cat === "service") n.r = 4 + Math.sqrt(n.deg) * 0.9; });
   }
 
   function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
   function button(text, cls, onClick) { const b = el("button", cls, text); b.type = "button"; b.addEventListener("click", onClick); return b; }
+
+  function rebuildMemories(expanded) {
+    archiveExpanded = expanded; hidden = {}; sel = null; hover = null;
+    build(graphData);
+    $("brainSide").replaceChildren(); $("brainFilter").replaceChildren();
+    sidebar(); filter(); alpha = 1; fitted = false; view.px = 0; view.py = 0; wake();
+  }
 
   function mount() {
     box = $("brain");
@@ -224,6 +241,18 @@
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
     const thinking = document.body.dataset.mode === "thinking";
+    if (thinking) {
+      const routes = links.filter(l => l.a.id === "core" && l.b.cat === "skill").slice(0, 8);
+      const phase = now / 1200;
+      routes.forEach((l, i) => {
+        const t = (phase + i / Math.max(1, routes.length)) % 1, a = project(l.a), b = project(l.b);
+        for (const trail of [0, 0.09, 0.18]) {
+          const q = (t - trail + 1) % 1; ctx.globalAlpha = (1 - trail * 3.4) * (0.72 + 0.28 * Math.sin(now / 90 + i));
+          ctx.fillStyle = trail ? "#75D8E8" : "#F6E7A8"; ctx.shadowColor = "#6EDAF3"; ctx.shadowBlur = trail ? 7 / k : 13 / k;
+          ctx.beginPath(); ctx.arc(a.x + (b.x - a.x) * q, a.y + (b.y - a.y) * q, (trail ? 1.7 : 2.5) / k, 0, Math.PI * 2); ctx.fill();
+        }
+      }); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    }
     for (const n of nodes) {
       if (!visible(n)) continue;
       const hit = query && n.label.toLowerCase().includes(query);
@@ -353,6 +382,8 @@
     });
     const acts = el("div", "acts"), ask = suggestion(sel);
     if (ask) { const go = button("Ask Jarvis", "go", () => { const c = $("command"); if (c) { c.value = ask; c.focus(); } }); go.title = ask; acts.append(go); }
+    if (sel.archive) acts.append(button("Expand older memories", "go", () => rebuildMemories(true)));
+    else if (archiveExpanded && sel.cat === "memory") acts.append(button("Collapse older memories", "", () => rebuildMemories(false)));
     acts.append(button("Clear", "", () => select(null)));
     inspect.append(k, el("b", "", sel.label), list, acts);
     draw();
