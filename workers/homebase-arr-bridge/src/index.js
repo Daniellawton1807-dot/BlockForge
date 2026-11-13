@@ -51,7 +51,7 @@ async function autopilot(request, env, path) {
 }
 
 // Jarvis: the Pages Function has already checked the Homebase sign-in. Only this Worker holds JARVIS_TOKEN.
-const JARVIS_PATHS = new RegExp("^(state|events|today|settings|control|pin|chat|confirm|stt|tts|tts/[a-f0-9]{40}|img/[A-Za-z0-9]{1,64})$");
+const JARVIS_PATHS = new RegExp("^(state|events|today|brain|settings|control|pin|chat|confirm|stt|tts|tts/[a-f0-9]{40}|img/[A-Za-z0-9]{1,64})$");
 async function jarvis(request, env, path) {
   const method = request.method.toUpperCase();
   if (!["GET", "POST"].includes(method)) return json({ error: "Method not allowed." }, 405);

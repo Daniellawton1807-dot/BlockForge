@@ -2,7 +2,7 @@ import { json, loginConfigured, readJsonBody, validRequestOrigin, validSession }
 
 // Jarvis (~/vault-claude/jarvis on the server), through the private bridge. Needs the Homebase sign-in;
 // Jarvis then asks for its own PIN. The bridge Worker holds the token, so it never reaches this code or the browser.
-const ROUTES = { GET: /^(state|events|today|settings|tts\/[a-f0-9]{40}|img\/[A-Za-z0-9]{1,64})$/, POST: /^(pin|chat|confirm|stt|tts|control|settings)$/ };
+const ROUTES = { GET: /^(state|events|today|brain|settings|tts\/[a-f0-9]{40}|img\/[A-Za-z0-9]{1,64})$/, POST: /^(pin|chat|confirm|stt|tts|control|settings)$/ };
 
 export async function onRequest({ request, env, params }) {
   const method = request.method.toUpperCase();
