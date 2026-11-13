@@ -17,6 +17,7 @@
   let api = null, nodes = [], links = [], by = {}, adj = {}, hidden = {}, sel = null, hover = null, query = "", labels = true;
   let alpha = 0, raf = 0, view = { k: 0.6, px: 0, py: 0 }, drag = null, press = null, pulses = {}, fitted = false, repel = 90, linkLen = 46;
   let box = null, canvas = null, ctx = null, inspect = null, note = null, w = 0, h = 0, dpr = 1;
+  const camera = { pitch: 0.34, focal: 760 }; // perspective depth, kept intentionally subtle
 
   window.addEventListener("jarvis:ready", e => { api = e.detail.api; if (!nodes.length) load(); });
   window.addEventListener("jarvis:tool", e => pulse("t:" + e.detail));
@@ -32,9 +33,10 @@
   function build(data) {
     nodes = []; links = []; by = {}; adj = {};
     data.nodes.forEach(n => {
-      const node = { ...n, x: 0, y: 0, vx: 0, vy: 0, deg: 0, r: RADIUS[n.cat] || 3 };
+      const node = { ...n, x: 0, y: 0, z: (Math.random() - 0.5) * ({ show: 210, film: 230, tool: 150 }[n.cat] || 120), vx: 0, vy: 0, vz: 0, deg: 0, r: RADIUS[n.cat] || 3 };
       const ring = { skill: 170, tool: 270, service: 230, show: 430, film: 470, person: 150, memory: 200 }[n.cat] || 0, a = Math.random() * Math.PI * 2;
       node.x = Math.cos(a) * ring * (0.7 + Math.random() * 0.6); node.y = Math.sin(a) * ring * (0.7 + Math.random() * 0.6);
+      if (n.cat === "core") node.z = 0;
       nodes.push(node); by[n.id] = node; adj[n.id] = [];
     });
     data.links.forEach(([a, b, len]) => {
@@ -143,6 +145,11 @@
     return { l, r, t, b: bt };
   }
   function origin() { const s = space(); return { x: (s.l + s.r) / 2 + view.px, y: (s.t + s.b) / 2 + view.py }; }
+  function project(n) {
+    const c = Math.cos(camera.pitch), sn = Math.sin(camera.pitch), depth = n.y * sn + n.z * c;
+    const scale = camera.focal / Math.max(260, camera.focal + depth);
+    return { x: n.x * scale, y: (n.y * c - n.z * sn) * scale, scale, depth };
+  }
 
   function wake() { if (!raf && active()) raf = requestAnimationFrame(frame); }
 
@@ -159,21 +166,21 @@
     for (let i = 0; i < nodes.length; i++) {
       const p = nodes[i];
       for (let j = i + 1; j < nodes.length; j++) {
-        const q = nodes[j], dx = q.x - p.x, dy = q.y - p.y, d2 = dx * dx + dy * dy + 0.01;
+        const q = nodes[j], dx = q.x - p.x, dy = q.y - p.y, dz = q.z - p.z, d2 = dx * dx + dy * dy + dz * dz + 0.01;
         if (d2 > 160000) continue;
         const f = repel * (p.r + q.r + 2) * 0.6 / d2 * alpha;
-        p.vx -= dx * f; p.vy -= dy * f; q.vx += dx * f; q.vy += dy * f;
+        p.vx -= dx * f; p.vy -= dy * f; p.vz -= dz * f; q.vx += dx * f; q.vy += dy * f; q.vz += dz * f;
       }
     }
     for (const l of links) {
-      const ex = l.b.x - l.a.x, ey = l.b.y - l.a.y, d = Math.sqrt(ex * ex + ey * ey) || 1, g = (d - linkLen * l.len) / d * 0.06 * alpha;
-      l.a.vx += ex * g; l.a.vy += ey * g; l.b.vx -= ex * g; l.b.vy -= ey * g;
+      const ex = l.b.x - l.a.x, ey = l.b.y - l.a.y, ez = l.b.z - l.a.z, d = Math.sqrt(ex * ex + ey * ey + ez * ez) || 1, g = (d - linkLen * l.len) / d * 0.06 * alpha;
+      l.a.vx += ex * g; l.a.vy += ey * g; l.a.vz += ez * g; l.b.vx -= ex * g; l.b.vy -= ey * g; l.b.vz -= ez * g;
     }
     for (const n of nodes) {
-      if (n.id === "core") { n.x = 0; n.y = 0; n.vx = n.vy = 0; continue; }
-      n.vx -= n.x * 0.004 * alpha; n.vy -= n.y * 0.004 * alpha;
-      if (n === drag) { n.vx = n.vy = 0; continue; }
-      n.vx *= 0.6; n.vy *= 0.6; n.x += n.vx; n.y += n.vy;
+      if (n.id === "core") { n.x = 0; n.y = 0; n.z = 0; n.vx = n.vy = n.vz = 0; continue; }
+      n.vx -= n.x * 0.004 * alpha; n.vy -= n.y * 0.004 * alpha; n.vz -= n.z * 0.004 * alpha;
+      if (n === drag) { n.vx = n.vy = n.vz = 0; continue; }
+      n.vx *= 0.6; n.vy *= 0.6; n.vz *= 0.6; n.x += n.vx; n.y += n.vy; n.z += n.vz;
     }
     alpha *= 0.985;
     if (!fitted && alpha < 0.05) { fitted = true; view.px = 0; view.py = 0; view.k = fitScale(); }
@@ -185,8 +192,9 @@
     const s = space(), cx = (s.l + s.r) / 2, cy = (s.t + s.b) / 2, pad = 20, limits = [];
     for (const n of nodes) {
       if (n.cat === "core" || !visible(n)) continue;
-      const kx = n.x > 1 ? (s.r - cx - pad) / n.x : n.x < -1 ? (cx - s.l - pad) / -n.x : Infinity;
-      const ky = n.y > 1 ? (s.b - cy - pad) / n.y : n.y < -1 ? (cy - s.t - pad) / -n.y : Infinity;
+      const p = project(n);
+      const kx = p.x > 1 ? (s.r - cx - pad) / p.x : p.x < -1 ? (cx - s.l - pad) / -p.x : Infinity;
+      const ky = p.y > 1 ? (s.b - cy - pad) / p.y : p.y < -1 ? (cy - s.t - pad) / -p.y : Infinity;
       limits.push(Math.min(kx, ky));
     }
     if (!limits.length) return 0.5;
@@ -210,7 +218,9 @@
       const on = sel && (l.a === sel || l.b === sel), glow = (lit[l.a.id] && (lit[l.b.id] || l.b.id === "core")) || (lit[l.b.id] && (lit[l.a.id] || l.a.id === "core"));
       ctx.globalAlpha = glow ? 0.9 : sel ? (on ? 0.7 : 0.03) : 0.12;
       ctx.strokeStyle = glow ? "#ECEDEF" : on ? COLOR[l.a === sel ? l.b.cat : l.a.cat] : "#8C97A3";
-      ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.lineTo(l.b.x, l.b.y); ctx.stroke();
+      const a = project(l.a), b = project(l.b);
+      ctx.globalAlpha *= Math.max(0.035, 1 - Math.max(0, (a.depth + b.depth) / 2) / 900);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
     const thinking = document.body.dataset.mode === "thinking";
     for (const n of nodes) {
@@ -225,10 +235,12 @@
       }
       ctx.globalAlpha = lit[n.id] ? 1 : sel ? (near[n.id] ? 1 : 0.1) : query ? (hit ? 1 : 0.12) : 0.9;
       ctx.fillStyle = COLOR[n.cat];
-      ctx.beginPath(); ctx.arc(n.x, n.y, n.r + (lit[n.id] ? 2 : 0), 0, Math.PI * 2); ctx.fill();
+      const p = project(n), radius = (n.r + (lit[n.id] ? 2 : 0)) * p.scale;
+      ctx.globalAlpha *= Math.max(0.3, 1 - Math.max(0, p.depth) / 1100);
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2); ctx.fill();
       if (n === sel || n === hover || hit || lit[n.id]) {
         ctx.globalAlpha = lit[n.id] ? lit[n.id] : 1; ctx.strokeStyle = "#ECEDEF"; ctx.lineWidth = 1.4 / k;
-        ctx.beginPath(); ctx.arc(n.x, n.y, n.r + (lit[n.id] ? 6 : 3) / k, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 0.8 / k;
+        ctx.beginPath(); ctx.arc(p.x, p.y, radius + (lit[n.id] ? 6 : 3) / k, 0, Math.PI * 2); ctx.stroke(); ctx.lineWidth = 0.8 / k;
       }
     }
     if (labels) {
@@ -240,7 +252,9 @@
         if (!show) continue;
         ctx.globalAlpha = 1; ctx.fillStyle = n === sel || n.cat === "core" ? "#ECEDEF" : "#AEB3BA";
         if (n.cat === "core") { ctx.font = `600 ${12 / k}px Inter, system-ui, sans-serif`; ctx.fillText("Jarvis", 0, n.r + 10 / k); ctx.font = `${11 / k}px Inter, system-ui, sans-serif`; continue; }
-        ctx.fillText(n.label.length > 34 ? n.label.slice(0, 33) + "…" : n.label, n.x, n.y + n.r + 3 / k);
+        const p = project(n);
+        ctx.globalAlpha = Math.max(0.45, 1 - Math.max(0, p.depth) / 1100);
+        ctx.fillText(n.label.length > 34 ? n.label.slice(0, 33) + "…" : n.label, p.x, p.y + n.r * p.scale + 3 / k);
       }
     }
     ctx.globalAlpha = 1;
@@ -252,7 +266,7 @@
     let best = null, bd = Infinity;
     for (const n of nodes) {
       if (!visible(n)) continue;
-      const d = (n.x - x) ** 2 + (n.y - y) ** 2, r = n.r + 7 / k;
+      const p = project(n), d = (p.x - x) ** 2 + (p.y - y) ** 2, r = n.r * p.scale + 8 / k;
       if (d < r * r && d < bd) { bd = d; best = n; }
     }
     return { node: best, x, y, sx: e.clientX, sy: e.clientY };
@@ -279,7 +293,7 @@
     if (prev) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (press) {
       if (Math.abs(e.clientX - press.sx) + Math.abs(e.clientY - press.sy) > 4) press.moved = true;
-      if (drag) { const p = at(e); drag.x = p.x; drag.y = p.y; alpha = Math.max(alpha, 0.15); wake(); }
+      if (drag) { const p = at(e), depth = project(drag); drag.x += (p.x - depth.x) / depth.scale; drag.y += (p.y - depth.y) / depth.scale / Math.cos(camera.pitch); alpha = Math.max(alpha, 0.15); wake(); }
       else if (prev) { view.px += e.clientX - prev.x; view.py += e.clientY - prev.y; draw(); }
       return;
     }
