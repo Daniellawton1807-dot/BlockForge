@@ -692,3 +692,21 @@ body:not([data-scene])[data-mode=speaking] .reactor .arc{stroke:var(--jarvis-cya
 .stage.result-window .sug{border-left-color:var(--cy)!important}
 .stage.result-window .sug b{color:var(--text)}
 @media(prefers-reduced-motion:reduce){.stage.result-window .stage-close{transition:none}}
+
+/* Keep the Jarvis command box visible beneath the result window. */
+.stage.result-window{
+  --result-top:clamp(116px,14vh,164px);
+  --result-bottom:max(92px,calc(env(safe-area-inset-bottom) + 82px));
+  top:var(--result-top);right:auto;bottom:var(--result-bottom);left:50%;
+  width:min(1120px,calc(100vw - 64px));height:auto;max-height:none;min-height:0;
+  transform:translateX(-50%)
+}
+@keyframes result-pop{from{opacity:0;transform:translate(-50%,-24px) scale(.99)}to{opacity:1;transform:translate(-50%,0) scale(1)}}
+@keyframes result-exit{from{opacity:1;transform:translate(-50%,0) scale(1)}to{opacity:0;transform:translate(-50%,-24px) scale(.99)}}
+@media(max-width:700px){
+  .stage.result-window{
+    --result-top:clamp(92px,12vh,132px);
+    --result-bottom:max(104px,calc(env(safe-area-inset-bottom) + 96px));
+    width:calc(100vw - 24px);height:auto;max-height:none;min-height:0
+  }
+}
