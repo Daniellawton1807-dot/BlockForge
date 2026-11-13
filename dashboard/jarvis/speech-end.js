@@ -1,8 +1,8 @@
 /* Deciding when he's finished talking. Apart from the page so it can be run against pretend audio, where blocks are 80 ms each. */
 (function (root) {
   const SPEECH_FLOOR = 0.012, SPEECH_OVER_NOISE = 3, MIN_SPEECH_BLOCKS = 3;
-  // a short command ends after 1.2 s of quiet, a long request after 2 s (Daniel, 2026-11-12: 0.8 s cut him off when he paused to think)
-  const QUICK_QUIET = 15, LONG_QUIET = 25, QUICK_TALK = 12, LONG_TALK = 40;
+  // Allow natural pauses: short commands end after 2 s of quiet, longer requests after up to 3.2 s.
+  const QUICK_QUIET = 25, LONG_QUIET = 40, QUICK_TALK = 12, LONG_TALK = 40;
   // with Silero: speech starts at 0.5 and carries on down to 0.3, so a soft syllable doesn't break it; quieter than a quarter of his own
   // voice is still the TV or someone across the room, however speech-like
   const VAD_ON = 0.5, VAD_HOLD = 0.3, VAD_FLOOR = 0.004, VAD_OVER_NOISE = 2, VAD_SHARE = 0.4;  // 6 dB over the room as it was before he spoke: a TV's

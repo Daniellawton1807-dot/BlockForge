@@ -1135,7 +1135,7 @@
      The wake word models run on this device. Audio only leaves it as a recorded command, after the wake word or a tap on the mic.
      Browsers stop the mic when the tab is hidden or the phone locks, so hands-free needs the page open and the screen on. */
   // In 80 ms blocks. Detection lags the words, so about two seconds before it are kept, or "Hey Jarvis, what's the weather" would lose its start.
-  const PREROLL_BLOCKS = 28, REARM_BLOCKS = 6, QUICK_BLOCKS = 12, NO_SPEECH_BLOCKS = 62, MAX_BLOCKS = 380, MIN_SPEECH_BLOCKS = window.jarvisSpeech.MIN_SPEECH_BLOCKS;
+  const PREROLL_BLOCKS = 28, REARM_BLOCKS = 6, QUICK_BLOCKS = 12, NO_SPEECH_BLOCKS = 62, MAX_BLOCKS = 750, MIN_SPEECH_BLOCKS = window.jarvisSpeech.MIN_SPEECH_BLOCKS;
   const WAKE_COOLDOWN_MS = 2500, NOISE_CAP = 0.05;
   const WAKE_WORD = /\b(?:j[ae]rv[iu]s|javis)\b[\s,.!?:;-]*/ig;
   const JUST_STOP = /^(stop|be quiet|quiet|shut up|never mind|nevermind|cancel)\W*$/i;
@@ -1153,7 +1153,7 @@
      Chrome it's Google's. Used when he taps the mic or Jarvis is waiting for an answer, alongside the recording, which goes to the server
      if the device's recogniser fails or hears nothing. After "Hey Jarvis" it isn't used: it would miss the words said straight after. */
   const DeviceSR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const deviceOn = () => Boolean(DeviceSR) && (store.get("jarvis.recogniser") || "device") === "device";
+  const deviceOn = () => Boolean(DeviceSR) && (store.get("jarvis.recogniser") || "jarvis") === "device";
   let vocabTerms = [];
   /* The TV near this device goes quiet while he talks (TV Bot mutes it, and unmutes it after 30 seconds whatever happens) */
   let hushed = "", unhushTimer = null;
@@ -1411,11 +1411,6 @@
     micPress = { at: Date.now() };
     startListening();
   });
-  $("mic").addEventListener("pointerup", () => {
-    if (!micPress) return;
-    micPress.held = Date.now() - micPress.at > 450;
-    if (micPress.held && recording) { if (recording.speech >= MIN_SPEECH_BLOCKS) finishRecording(); else stopListening(); }
-  });
   $("mic").addEventListener("click", () => {
     if (micPress) { micPress = null; return; }  // its press already started (or finished) it
     if (!hearing) return startListening();
@@ -1650,8 +1645,8 @@
       v => { store.set("jarvis.wakesens", v); if (worker) worker.postMessage({ type: "threshold", value: WAKE_LEVELS[v] }); }));
     body.append(choice("Talking over him", "talkover", [["off", "Off"], ["low", "Only when you're loud"], ["normal", "Normal"], ["high", "Stops easily"]], store.get("jarvis.talkover") || "normal",
       v => { store.set("jarvis.talkover", v); bargeRatio = BARGE_RATIOS[v] ?? 8; }));
-    if (DeviceSR) body.append(choice("Speech recognition", "recogniser", [["device", IOS ? "This iPhone's own (Apple)" : "This browser's own"], ["jarvis", "Jarvis's (sent to the server)"]],
-      store.get("jarvis.recogniser") || "device", v => store.set("jarvis.recogniser", v)));
+    if (DeviceSR) body.append(choice("Speech recognition", "recogniser", [["jarvis", "Jarvis's server (recommended)"], ["device", IOS ? "This iPhone's own (Apple)" : "This browser's own"]],
+      store.get("jarvis.recogniser") || "jarvis", v => store.set("jarvis.recogniser", v)));
     body.append(choice("Quieten a TV while listening", "hush", [["off", "Off"], ["living room", "Living Room TV (mutes it, then back)"]],
       store.get("jarvis.hush") || "off", v => { store.set("jarvis.hush", v); }));
     body.append(choice("Text size", "text", [["normal", "Normal"], ["large", "Large"]], store.get("jarvis.text") || "normal", setTextSize));
