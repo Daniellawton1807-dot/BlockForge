@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="jarvis.css?v=22">
-<link rel="stylesheet" href="theme.css?v=22">
+<link rel="stylesheet" href="theme.css?v=24">
 </head>
 <body data-mode="idle">
 
@@ -74,6 +74,7 @@
         <div class="wxnow"><b id="wxTemp"></b><div><span id="wxSky"></span><small id="wxMore"></small></div></div></button>
       <button class="panel card" id="cardCalendar" data-ask="what's on my calendar" hidden><h2>COMING UP</h2><ul class="list" id="calList"></ul></button>
       <button class="panel card" id="cardHome" data-ask="what's downloading" hidden><h2>DOWNLOADS</h2><ul class="list" id="homeList"></ul></button>
+      <div class="nowbar" id="nowbar" hidden aria-label="Now playing"></div>
       <button class="panel card" id="cardDrive" data-ask="how much space have I got" hidden><h2>MEDIA DRIVE</h2>
         <div class="drive"><b id="driveFree"></b><small id="driveOf"></small></div><div class="drivebar"><i id="driveBar"></i></div><small class="drivenote" id="driveNote"></small></button>
       <button class="panel card" id="cardSport" data-ask="how did my team get on" hidden><h2>YOUR TEAMS</h2><ul class="list" id="sportList"></ul></button>
@@ -108,7 +109,6 @@
         <button type="button" id="modelPick" class="modelpick" data-model="haiku" aria-label="Claude model for your requests: Haiku. Tap to change">HAIKU</button>
       </div>
       <button class="serverstrip" id="serverStrip" type="button" title="Server details"><i id="linkDot"></i><span id="stripText">SERVER / CONNECTING</span></button>
-      <div class="nowbar" id="nowbar" hidden></div>
       <div class="wakestate" id="wakeState" hidden></div>
       <p class="said" id="said" role="status" aria-live="polite"></p>
       <div class="voicewarn" id="voiceWarn" hidden></div>
@@ -142,7 +142,7 @@
   <div id="sheetBody"></div>
 </aside>
 <script src="speech-end.js?v=3"></script>
-<script src="jarvis.js?v=47"></script>
+<script src="jarvis.js?v=48"></script>
 <script src="brain.js?v=5"></script>
 </body>
 </html>

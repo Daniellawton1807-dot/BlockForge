@@ -780,3 +780,33 @@ body:not([data-scene])[data-mode=speaking] .reactor .arc{stroke:var(--jarvis-cya
   .stage.result-window .web-stage-pulse,.stage.result-window .web-stage-track i{animation:none!important}
   .stage.result-window .web-stage-progress,.stage.result-window .web-stage-track i{transition:none!important}
 }
+
+
+/* Keep Now Playing with the left status cards instead of floating over the map. */
+.nowbar{position:static!important;inset:auto!important;display:grid;width:100%;max-width:none;margin:0;gap:10px;pointer-events:auto}
+.nowbar[hidden]{display:none!important}
+.np{grid-template-columns:42px minmax(0,1fr);gap:7px 10px;padding:10px;background:linear-gradient(145deg,var(--surface2),var(--bg2));border:1px solid var(--edge);border-radius:12px;box-shadow:inset 0 1px #ffffff08}
+.np img{width:42px;height:58px;border-radius:7px}
+.np-txt small{font-size:.58rem;letter-spacing:.1em;color:var(--cy)}
+.np-txt b{font:600 .98rem var(--head);color:var(--text)}
+.np-txt span{font-size:.8rem;color:var(--dim)}
+.np-prog{grid-column:2;height:4px;margin-top:-3px;background:var(--edge2)}
+.np-prog i{background:linear-gradient(90deg,var(--cy),var(--cy2))}
+.np.paused .np-prog i{background:var(--dim)}
+.np-btns{grid-column:1/-1;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;justify-items:center}
+.np-btns button{width:min(36px,100%);height:34px;border:1px solid var(--edge2);border-radius:9px;background:var(--surface);transition:transform .16s,border-color .16s,background .16s}
+.np-btns button:hover,.np-btns button:focus-visible{transform:translateY(-1px);border-color:var(--cy);background:color-mix(in srgb,var(--surface2) 78%,var(--cy) 22%);box-shadow:0 0 12px color-mix(in srgb,var(--cy) 18%,transparent);outline:0}
+.np-btns svg{width:16px;height:16px;stroke:var(--cy2)}
+.np-btns .np-toggle{border-color:color-mix(in srgb,var(--cy) 55%,var(--edge2));background:color-mix(in srgb,var(--surface2) 86%,var(--cy) 14%)}
+body.has-now:not([data-scene]) .reactor{width:min(100%,430px,48vh)}
+@media(max-width:700px){
+  body.has-now .app{padding-bottom:calc(92px + env(safe-area-inset-bottom))}
+  .nowbar{position:static!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;width:100%;margin:0}
+  .np{grid-template-columns:38px minmax(0,1fr);gap:7px 9px;padding:9px}
+  .np img{width:38px;height:54px}
+  .np-btns{gap:4px}
+  .np-btns button{width:min(40px,100%);height:38px}
+  .np-btns .np-forward,.np-btns .np-quieter,.np-btns .np-louder{display:grid}
+}
+
+@media(max-width:700px){body.has-now:not([data-scene]) .core .reactor{width:120px}}
