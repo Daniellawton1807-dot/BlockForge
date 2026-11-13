@@ -500,3 +500,17 @@ body:not([data-scene])[data-mode=speaking] .reactor .arc{stroke:var(--jarvis-cya
 @media(max-width:700px){
   .stage.result-window{width:calc(100vw - 24px);height:calc(100dvh - 32px);max-height:none;min-height:0;padding:15px 15px 20px}
 }
+
+/* Plain spoken answers still use the full result canvas, with the actual facts clearly grouped. */
+.stage.result-window>.plain-answer{width:min(100%,940px);min-height:calc(100% - 28px);margin:0 auto;display:flex;flex-direction:column;justify-content:center;gap:18px;padding:clamp(24px,4vw,48px);background:radial-gradient(ellipse at 50% 0%,#12345a66,transparent 65%),linear-gradient(145deg,#0b1d34,#071426);border-color:#2a5683;border-left:3px solid #50bfff;box-shadow:inset 0 1px #ffffff0a}
+.stage.result-window>.plain-answer .answer-kicker{margin:0;color:#81ceff;font:600 .68rem var(--mono);letter-spacing:.18em}
+.stage.result-window>.plain-answer .answer-context{display:block;padding:10px 14px;color:#a6bfd9;background:#09192d;border:1px solid #1d3c5c;border-radius:10px;font:500 .76rem var(--mono);line-height:1.5}
+.stage.result-window>.plain-answer .readable-copy{max-width:780px;margin:0;color:#e8f3ff;font:500 clamp(1.12rem,1.75vw,1.55rem)/1.58 var(--body);overflow-wrap:anywhere}
+.stage.result-window>.plain-answer .readable-list{max-width:780px;margin:0;padding:0;list-style:none;gap:10px}
+.stage.result-window>.plain-answer .readable-list li{position:relative;padding:13px 16px 13px 38px;background:#09192d;border:1px solid #1f4267;border-radius:12px;color:#d7e9fb;font-size:clamp(.98rem,1.2vw,1.15rem);line-height:1.45}
+.stage.result-window>.plain-answer .readable-list li:before{content:"";position:absolute;left:16px;top:21px;width:7px;height:7px;border-radius:50%;background:#58c6ff;box-shadow:0 0 12px #58c6ff88}
+.stage.result-window>.plain-answer .readable-list li::marker{content:""}
+@media(max-width:700px){
+  .stage.result-window>.plain-answer{min-height:calc(100% - 20px);padding:22px 18px;gap:14px}
+  .stage.result-window>.plain-answer .readable-copy{font-size:1.08rem}
+}

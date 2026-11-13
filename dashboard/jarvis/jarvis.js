@@ -202,7 +202,8 @@
     setPending(r.awaiting_confirmation ? { tool: r.tool, question: r.text } : null);
     if (!r.view && r.awaiting_confirmation) return;  // a question stays over whatever's on screen
     if (plainAnswer) {
-      const stage = openStage("JARVIS", "answer"), card = el("div", "answer-card");
+      const stage = openStage("JARVIS · ANSWER", "answer"), card = el("div", "answer-card plain-answer");
+      card.append(el("small", "answer-kicker", "RESPONSE"));
       appendReadableText(card, r.text, "readable-copy"); stage.append(card);
     } else renderView(r.view);
     resultAutoDismiss = autoDismiss;
@@ -561,28 +562,32 @@
     return false;
   }
   function appendReadableText(container, text, className) {
-    const lines = String(text || "").replace(/\r/g, "").split(/\n+/).map(line => line.trim()).filter(Boolean);
-    let pending = [];
-    const flush = () => { if (pending.length) { container.append(el("p", className || "readable-copy", pending.join(" "))); pending = []; } };
+    let source = String(text || "").replace(/\r/g, "").trim();
+    const context = source.match(/^(.{8,140}?\b(?:answer is unchanged|result is|here(?:'s| is) what i found)\s*:)\s*([\s\S]+)$/i);
+    if (context) {
+      container.append(el("small", "answer-context", context[1].replace(/:$/, "")));
+      source = context[2].trim();
+    }
+    const lines = source.split(/\n+/).map(line => line.trim()).filter(Boolean);
+    const addParagraph = value => container.append(el("p", className || "readable-copy", value));
+    const addDetails = value => {
+      const clauses = value.split(/(?<!\d),\s+/).map(part => part.trim()).filter(Boolean);
+      if (value.length > 105 && clauses.length >= 4) {
+        addParagraph(clauses.shift());
+        const list = el("ul", "readable-list result-details");
+        clauses.forEach(part => list.append(el("li", "", part)));
+        container.append(list);
+      } else addParagraph(value);
+    };
     for (const line of lines) {
       if (/^(?:[-*•]|\d+[.)])\s+/.test(line)) {
-        flush();
         let list = container.lastElementChild;
         if (!list || !list.classList.contains("readable-list")) { list = el("ul", "readable-list"); container.append(list); }
         list.append(el("li", "", line.replace(/^(?:[-*•]|\d+[.)])\s+/, "")));
-      } else pending.push(line);
-    }
-    flush();
-    if (lines.length === 1 && lines[0].length > 260 && !/[\n]/.test(String(text || ""))) {
-      const p = container.querySelector("." + (className || "readable-copy"));
-      if (p) {
-        const sentences = p.textContent.split(/(?<=[.!?])\s+/).filter(Boolean);
-        if (sentences.length > 3) {
-          const paragraphs = [];
-          for (let i = 0; i < sentences.length; i += 2) paragraphs.push(sentences.slice(i, i + 2).join(" ").trim());
-          p.replaceWith(...paragraphs.map(part => el("p", className || "readable-copy", part)));
-        }
+        continue;
       }
+      const sentences = line.length > 145 ? line.split(/(?<=[.!?])\s+/).filter(Boolean) : [line];
+      sentences.forEach(addDetails);
     }
   }
   function stageHead(title) {
