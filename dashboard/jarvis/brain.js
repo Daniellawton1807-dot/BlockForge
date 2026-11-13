@@ -16,8 +16,8 @@
   const PULSE_MS = 3200;
   let api = null, nodes = [], links = [], by = {}, adj = {}, hidden = {}, sel = null, hover = null, query = "", labels = true;
   let alpha = 0, raf = 0, view = { k: 0.6, px: 0, py: 0 }, drag = null, press = null, pulses = {}, fitted = false, repel = 90, linkLen = 46;
-  let box = null, canvas = null, ctx = null, inspect = null, note = null, w = 0, h = 0, dpr = 1;
-  const camera = { pitch: 0.34, focal: 760 }; // perspective depth, kept intentionally subtle
+  let box = null, canvas = null, ctx = null, inspect = null, note = null, w = 0, h = 0, dpr = 1, lastFrame = 0;
+  const camera = { pitch: 0.48, yaw: 0, focal: 760, spin: 0.00022 }; // slow, continuous 3D orbit while the brain is visible
 
   window.addEventListener("jarvis:ready", e => { api = e.detail.api; if (!nodes.length) load(); });
   window.addEventListener("jarvis:tool", e => pulse("t:" + e.detail));
@@ -146,9 +146,10 @@
   }
   function origin() { const s = space(); return { x: (s.l + s.r) / 2 + view.px, y: (s.t + s.b) / 2 + view.py }; }
   function project(n) {
-    const c = Math.cos(camera.pitch), sn = Math.sin(camera.pitch), depth = n.y * sn + n.z * c;
-    const scale = camera.focal / Math.max(260, camera.focal + depth);
-    return { x: n.x * scale, y: (n.y * c - n.z * sn) * scale, scale, depth };
+    const cy = Math.cos(camera.yaw), sy = Math.sin(camera.yaw), cp = Math.cos(camera.pitch), sp = Math.sin(camera.pitch);
+    const rx = n.x * cy + n.z * sy, rz = -n.x * sy + n.z * cy;
+    const depth = n.y * sp + rz * cp, scale = camera.focal / Math.max(260, camera.focal + depth);
+    return { x: rx * scale, y: (n.y * cp - rz * sp) * scale, scale, depth };
   }
 
   function wake() { if (!raf && active()) raf = requestAnimationFrame(frame); }
@@ -156,10 +157,12 @@
   function frame() {
     raf = 0;
     if (!active()) return;
-    const now = performance.now(), busy = alpha > 0.004 || drag || Object.values(pulses).some(t => t > now) || document.body.dataset.mode === "thinking";
+    const now = performance.now(), busy = true; // keep the slow camera orbit alive while this view is on screen
+    if (lastFrame) camera.yaw = (camera.yaw + Math.min(48, now - lastFrame) * camera.spin) % (Math.PI * 2);
+    lastFrame = now;
     if (alpha > 0.004 || drag) tick();
     draw();
-    if (busy) raf = requestAnimationFrame(frame);
+    if (busy) raf = setTimeout(() => requestAnimationFrame(frame), 40);
   }
 
   function tick() {
@@ -178,7 +181,7 @@
     }
     for (const n of nodes) {
       if (n.id === "core") { n.x = 0; n.y = 0; n.z = 0; n.vx = n.vy = n.vz = 0; continue; }
-      n.vx -= n.x * 0.004 * alpha; n.vy -= n.y * 0.004 * alpha; n.vz -= n.z * 0.004 * alpha;
+      n.vx -= n.x * 0.004 * alpha; n.vy -= n.y * 0.004 * alpha; // z is free to settle into a 3D volume; do not pull it back to the flat plane
       if (n === drag) { n.vx = n.vy = n.vz = 0; continue; }
       n.vx *= 0.6; n.vy *= 0.6; n.vz *= 0.6; n.x += n.vx; n.y += n.vy; n.z += n.vz;
     }
@@ -317,7 +320,8 @@
     select(n);
     view.k = Math.max(view.k, 0.9);
     const s = space(), o = origin();
-    view.px += (s.l + s.r) / 2 - (o.x + n.x * view.k); view.py += (s.t + s.b) / 2 - (o.y + n.y * view.k);
+    const p = project(n);
+    view.px += (s.l + s.r) / 2 - (o.x + p.x * view.k); view.py += (s.t + s.b) / 2 - (o.y + p.y * view.k);
     draw();
   }
 
