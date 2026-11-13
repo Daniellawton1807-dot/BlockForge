@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="jarvis.css?v=22">
+<link rel="stylesheet" href="jarvis.css?v=24">
 <link rel="stylesheet" href="theme.css?v=28">
 </head>
 <body data-mode="idle">
@@ -129,11 +129,13 @@
   </nav>
 
   <form class="command" id="commandForm">
+    <button type="button" id="screenShare" class="screen-share" aria-pressed="false" aria-label="Share screen with Jarvis" title="Share screen with Jarvis"><span aria-hidden="true">🖥️</span><span class="screen-share-label">SHARE</span></button>
     <button type="button" id="mic" class="mic emoji-action" aria-label="Speak a command" aria-pressed="false" title="Speak a command"><span class="emoji-icon" aria-hidden="true">🎙️</span></button>
     <input id="command" autocomplete="off" maxlength="500" placeholder="Ask Jarvis anything" aria-label="Command">
     <button type="button" id="stopAll" class="stopall emoji-action" aria-label="Stop everything" title="Stop everything"><span class="emoji-icon" aria-hidden="true">🛑</span></button>
     <button type="submit" class="emoji-action send-action" aria-label="Send command" title="Send command"><span class="emoji-icon" aria-hidden="true">🚀</span></button>
   </form>
+  <p id="screenShareNote" class="screen-share-note" role="status" aria-live="polite" hidden></p>
 </div>
 
 <aside id="sheet" class="sheet" hidden>
@@ -141,7 +143,7 @@
   <div id="sheetBody"></div>
 </aside>
 <script src="speech-end.js?v=3"></script>
-<script src="jarvis.js?v=48"></script>
+<script src="jarvis.js?v=50"></script>
 <script src="brain.js?v=5"></script>
 </body>
 </html>

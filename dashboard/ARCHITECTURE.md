@@ -36,7 +36,7 @@ All of these except `/api/metrics` need the Homebase session cookie (`functions/
 | `report` | GET: last 7 days of imports (Sonarr/Radarr history), who watched what (tvbot watchdata), Autopilot log, media-drive forecast and cleanup size. Read-only |
 | `storage` | GET drives, fill-up forecast and suggestions (`?summary=1`: drives + forecast only, for the Overview tile); POST `{action:"delete", confirm:true, items}` removes picked titles with their files |
 | `mum/setup`, `home`, `search`, `request` | Mum's page. Own cookie (`homebase_mum`, path `/api/mum`, ~13 months, renews itself), set once by Daniel's sign-in on her phone; it can't open the rest of Homebase |
-| `jarvis/[[path]]` | Jarvis's API, via the bridge (`x-homebase-service: jarvis`). Streams `events`. Jarvis also needs its own PIN |
+| `jarvis/[[path]]` | Jarvis's API, via the bridge (`x-homebase-service: jarvis`). Streams `events`; `POST vision` forwards one JPEG (max 768 KiB) and its question for transient screen analysis. Jarvis also needs its own PIN |
 | `pitwall/[[path]]` | Pitwall Web, via the bridge (`x-homebase-service: pitwall`): app files, F1 TV catalogue, OpenF1 (server-side login), live-timing and device-bus streams. GET/POST only; signed-out page loads redirect to `/pitwall/` |
 | `metrics` | Glances, public by design (Glances only sees the system disk) |
 
@@ -70,6 +70,8 @@ so sign-in doesn't work there).
 Daniel's private Alexa skill calls its own Worker, `workers/jarvis-alexa` (public on workers.dev, because Amazon has to reach it). It only forwards requests Amazon signed for his skill, to Jarvis's `/api/alexa`, using its own token (secret `ALEXA_TOKEN`) and the same `homebase-jarvis` VPC service. The skill's model is in `workers/jarvis-alexa/skill/`: edit `src/phrases.js`, then run `build-model.mjs`.
 
 Jarvis's code is on the server in `~/vault-claude/jarvis` (see `PROGRESS.md` there), not in this repo. Its token is the Worker secret `JARVIS_TOKEN`, so it isn't a Pages secret.
+
+**Jarvis screen share and laptop companion:** `/jarvis/` asks the browser to share a chosen screen/window only after a direct click. It does not record video; one resized frame is sent only when Daniel asks a question. Pages and the private bridge forward it to Jarvis `/api/vision`; Jarvis calls the configured Anthropic vision model and does not save the image or add it to chat history. The model provider receives the frame. The macOS source helper is `tools/jarvis-companion-macos/`; it binds only to loopback, pairs with a five-minute one-time code, keeps the resulting bearer token in memory on the helper and tab-scoped `sessionStorage` in the browser, and accepts only configured app/site aliases. It has no shell, file, mouse, or keyboard actions. Start it manually on the Mac to enable those actions; stopping it or hiding the Jarvis tab ends access/sharing.
 
 ## Cloudflare secrets (Pages, production)
 

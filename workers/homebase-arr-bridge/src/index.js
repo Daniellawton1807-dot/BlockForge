@@ -51,20 +51,27 @@ async function autopilot(request, env, path) {
 }
 
 // Jarvis: the Pages Function has already checked the Homebase sign-in. Only this Worker holds JARVIS_TOKEN.
-const JARVIS_PATHS = new RegExp("^(state|events|today|brain|settings|control|pin|chat|confirm|stt|tts|tts/[a-f0-9]{40}|img/[A-Za-z0-9]{1,64})$");
+const JARVIS_PATHS = new RegExp("^(state|events|today|brain|settings|control|pin|chat|confirm|stt|vision|tts|tts/[a-f0-9]{40}|img/[A-Za-z0-9]{1,64})$");
 async function jarvis(request, env, path) {
   const method = request.method.toUpperCase();
   if (!["GET", "POST"].includes(method)) return json({ error: "Method not allowed." }, 405);
   if (!JARVIS_PATHS.test(path)) return json({ error: "Not available." }, 404);
   if (!env.JARVIS_TOKEN || !env.VPC_JARVIS) return json({ error: "Jarvis is not set up on the bridge." }, 503);
   const body = method === "POST" ? await request.arrayBuffer() : undefined;
-  if (body && body.byteLength > (path === "stt" ? 1048576 : 16384)) return json({ error: "Request body is too large." }, 413);
+  const bodyLimit = path === "stt" ? 1048576 : path === "vision" ? 786432 : 16384;
+  if (body && body.byteLength > bodyLimit) return json({ error: "Request body is too large." }, 413);
   const headers = new Headers({
     "x-jarvis-token": env.JARVIS_TOKEN,
     "x-jarvis-session": request.headers.get("x-jarvis-session") || "",
     "accept": request.headers.get("accept") || "application/json"
   });
-  if (body) headers.set("content-type", request.headers.get("content-type") || "application/json");
+  if (body) headers.set("content-type", path === "vision" ? "image/jpeg" : request.headers.get("content-type") || "application/json");
+  if (path === "vision") {
+    const question = request.headers.get("x-jarvis-question");
+    const model = request.headers.get("x-jarvis-model");
+    if (question) headers.set("x-jarvis-question", question.slice(0, 1000));
+    if (model && /^(haiku|sonnet|opus)$/.test(model)) headers.set("x-jarvis-model", model);
+  }
   if (request.headers.get("range")) headers.set("range", request.headers.get("range"));  // Safari's audio player
   let upstream;
   try {

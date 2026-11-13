@@ -8,6 +8,9 @@
     del(k) { try { localStorage.removeItem(k); } catch { /* nothing kept */ } }
   };
   let session = store.get("jarvis.session") || "";
+  let screenStream = null, screenVideo = null, visionAbort = null;
+  let companionToken = "", companionCatalog = { apps: [], websites: [] }, companionCatalogLoaded = false;
+  try { companionToken = sessionStorage.getItem("jarvis.companion") || ""; } catch { /* this tab can pair again */ }
   let status = {}, log = [], live = false, pendingTool = null, pendingQuestion = "", sheetKind = null, panelTimer = null, pollTimer = null, abort = null;
   const cpuHistory = [], netHistory = [];
   const TOOL_NAMES = { jellyfin_play: "Play", jellyfin_pause: "Pause", jellyfin_resume: "Resume", jellyfin_stop: "Stop playback", tv_volume: "Volume", tv_power: "TV power", tv_mute: "Mute", minecraft_start: "Start Minecraft", minecraft_stop: "Stop Minecraft", minecraft_restart: "Restart Minecraft" };
@@ -63,6 +66,7 @@
     if (r.data.renewed && r.data.renewed.session) { session = r.data.renewed.session; store.set("jarvis.session", session); }  // stays signed in: a year from each visit
     window.dispatchEvent(new CustomEvent("jarvis:ready", { detail: { api } }));  // the brain (brain.js) asks for its map with the same session
     $("gate").hidden = true; $("app").hidden = false;
+    loadCompanionCatalog();
     applyView(r.data);
     connect();
     setWake(wakeOn);
@@ -1562,6 +1566,126 @@
     $("said").textContent = MODEL_HINT[next];
   });
   showModel(pickedModel());
+
+  function screenNote(text, error = false) {
+    const note = $("screenShareNote");
+    note.textContent = text || ""; note.hidden = !text; note.classList.toggle("error", error);
+  }
+  function stopScreenShare() {
+    if (visionAbort) { visionAbort.abort(); visionAbort = null; }
+    if (screenStream) screenStream.getTracks().forEach(track => track.stop());
+    screenStream = null; screenVideo = null;
+    const button = $("screenShare");
+    if (button) { button.setAttribute("aria-pressed", "false"); button.title = "Share screen with Jarvis"; button.setAttribute("aria-label", "Share screen with Jarvis"); button.querySelector(".screen-share-label").textContent = "SHARE"; }
+    screenNote("");
+  }
+  async function startScreenShare() {
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      screenNote("This browser cannot share a screen here. Open Jarvis in a supported browser on a secure Homebase URL.", true); return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 1, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      const video = document.createElement("video"); video.muted = true; video.playsInline = true; video.srcObject = stream;
+      screenStream = stream;
+      await video.play();
+      screenVideo = video;
+      stream.getVideoTracks()[0]?.addEventListener("ended", stopScreenShare, { once: true });
+      const button = $("screenShare"); button.setAttribute("aria-pressed", "true"); button.title = "Stop sharing your screen"; button.setAttribute("aria-label", "Stop sharing your screen"); button.querySelector(".screen-share-label").textContent = "STOP";
+      screenNote("SCREEN SHARED · Jarvis sends one current frame only when you ask a question. Nothing is recorded.");
+    } catch (error) {
+      stopScreenShare();
+      const message = error?.name === "NotAllowedError" ? "Screen sharing was cancelled or blocked. Choose a screen/window in the browser picker to enable it." :
+        error?.name === "NotFoundError" ? "No screen or window is available to share." : "Screen sharing could not start in this browser. Check its screen-capture permission and try again.";
+      screenNote(message, true);
+    }
+  }
+  $("screenShare").addEventListener("click", () => screenStream ? stopScreenShare() : startScreenShare());
+  window.addEventListener("pagehide", stopScreenShare, { once: true });
+
+  function captureScreenFrame() {
+    return new Promise((resolve, reject) => {
+      if (!screenStream || !screenVideo?.videoWidth || !screenVideo?.videoHeight) return reject(new Error("The shared screen is not ready yet."));
+      const scale = Math.min(1, 1280 / screenVideo.videoWidth, 720 / screenVideo.videoHeight);
+      const canvas = document.createElement("canvas"); canvas.width = Math.max(1, Math.round(screenVideo.videoWidth * scale)); canvas.height = Math.max(1, Math.round(screenVideo.videoHeight * scale));
+      const context = canvas.getContext("2d", { alpha: false });
+      if (!context) return reject(new Error("Could not capture the current screen frame."));
+      context.drawImage(screenVideo, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("Could not encode the current screen frame.")), "image/jpeg", 0.68);
+    });
+  }
+
+  async function askAboutScreen(text, model) {
+    setMode("thinking"); screenNote("ANALYSING CURRENT SCREEN · The frame is sent only for this question.");
+    let blob;
+    try { blob = await captureScreenFrame(); }
+    catch (error) { setMode("idle"); screenNote(error.message, true); return { ok: false, data: { error: error.message } }; }
+    const controller = visionAbort = new AbortController();
+    let response;
+    try {
+      response = await fetch("/api/jarvis/vision", { method: "POST", headers: {
+        "x-jarvis-session": session, "content-type": "image/jpeg", "x-jarvis-question": text.slice(0, 1000), "x-jarvis-model": model
+      }, body: blob, signal: controller.signal });
+    } catch (error) {
+      setMode("idle");
+      if (error.name === "AbortError") return { ok: false, aborted: true, data: { error: "Screen analysis stopped." } };
+      screenNote("Connection to Jarvis was lost. The screen remains shared until you stop it.", true);
+      return { ok: false, status: 0, data: { error: "Connection to Jarvis was lost." } };
+    } finally { if (visionAbort === controller) visionAbort = null; }
+    const data = await response.json().catch(() => ({}));
+    setMode("idle");
+    if (response.status === 401) signedOut(data.code);
+    if (!response.ok) screenNote(data.error || "Jarvis could not analyse that screen.", true);
+    else screenNote("SCREEN SHARED · Jarvis analysed one frame for that question. Ask again for a fresh frame.");
+    return { ok: response.ok, status: response.status, data };
+  }
+
+  async function companionRequest(path, body, token = companionToken) {
+    const headers = { "content-type": "application/json" };
+    if (token) headers.authorization = "Bearer " + token;
+    const response = await fetch("http://127.0.0.1:17877/" + path, { method: "POST", headers, body: JSON.stringify(body) });
+    const data = await response.json().catch(() => ({}));
+    return { ok: response.ok, status: response.status, data };
+  }
+  async function loadCompanionCatalog(token = companionToken) {
+    if (!token) return false;
+    try {
+      const response = await fetch("http://127.0.0.1:17877/catalog", { headers: { authorization: "Bearer " + token } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Companion authorization expired.");
+      companionCatalog = { apps: Array.isArray(data.apps) ? data.apps : [], websites: Array.isArray(data.websites) ? data.websites : [] };
+      companionCatalogLoaded = true;
+      return true;
+    } catch (error) {
+      if (error.name !== "TypeError") { companionToken = ""; companionCatalogLoaded = false; try { sessionStorage.removeItem("jarvis.companion"); } catch {} }
+      return false;
+    }
+  }
+  function deviceIntent(text) {
+    const match = text.trim().match(/^(?:jarvis[, ]+)?(?:please\s+)?(?:open|launch|start)\s+(?:(app|website)\s+)?(.+)$/i);
+    if (!match) return null;
+    const requested = match[2].trim().replace(/[.!?]+$/, "").toLowerCase();
+    if (!requested || requested.length > 100) return null;
+    const type = match[1]?.toLowerCase();
+    const inList = (list, name) => list.some(item => String(item).toLowerCase() === name);
+    if ((!type || type === "app") && inList(companionCatalog.apps, requested)) return { kind: "app", name: requested };
+    if ((!type || type === "website") && inList(companionCatalog.websites, requested)) return { kind: "website", name: requested };
+    return null;
+  }
+  async function runDeviceIntent(intent) {
+    if (!companionToken) return { ok: false, data: { error: "The laptop companion is not paired in Settings." } };
+    try {
+      // Recheck both Homebase and Jarvis authorization for every device action.
+      const auth = await api("state");
+      if (!auth.ok) return { ok: false, data: { error: auth.data.error || "Sign in to Jarvis again before controlling this laptop." } };
+      const result = await companionRequest("open", intent);
+      if (result.status === 401) { companionToken = ""; try { sessionStorage.removeItem("jarvis.companion"); } catch {} }
+      return result;
+    } catch {
+      companionToken = ""; try { sessionStorage.removeItem("jarvis.companion"); } catch {}
+      return { ok: false, data: { error: "Jarvis Companion is not running on this laptop. Start it and pair this tab again in Settings." } };
+    }
+  }
+
   async function sendCommand(text, extra) {
     const { keep, ...more } = extra || {};
     if (!more.silent) lastSaid = text;
@@ -1572,6 +1696,25 @@
     if (!keep) $("stage").classList.add("stale");
     const model = pickedModel();
     if (model !== "haiku") store.set("jarvis.modelAt", String(Date.now()));  // in use: the 10 minutes start again
+    if (companionToken && !companionCatalogLoaded) await loadCompanionCatalog();
+    const localAction = deviceIntent(text);
+    if (localAction) {
+      if (!companionToken) { closeTurn(); const r = { text: "Laptop control is off. Start Jarvis Companion on this Mac and pair it in Settings first.", view: null }; if (!live) showReply(r); speakReply(r); return; }
+      const result = await runDeviceIntent(localAction); closeTurn();
+      const r = { text: result.ok ? (localAction.kind === "app" ? `Opening ${localAction.name} on this Mac.` : `Opening ${localAction.name} on this Mac.`) : result.data.error || "That laptop action failed.", view: null };
+      if (!live) showReply(r); speakReply(r); return;
+    }
+    if (screenStream && !/^stop (?:screen|sharing)/i.test(text.trim())) {
+      const r = await askAboutScreen(text, model); closeTurn();
+      if (!r.aborted && r.ok) { if (!live) showReply(r.data); speakReply(r.data); }
+      else if (!r.aborted) { if (!live) $("said").textContent = r.data.error || "Screen analysis failed."; }
+      return;
+    }
+    if (screenStream && /^stop (?:screen|sharing)/i.test(text.trim())) {
+      stopScreenShare(); closeTurn();
+      const r = { text: "Screen sharing stopped.", view: null };
+      if (!live) showReply(r); speakReply(r); return;
+    }
     const r = await api("chat", { text, scene: document.body.dataset.scene || "", narrow: window.innerWidth < 700, ...(model !== "haiku" ? { model } : {}), ...more });
     closeTurn();
     if (r.ok && r.data.stopped) return;  // the stop's own reply says so
@@ -1581,7 +1724,7 @@
     if (!r.ok) $("stage").classList.remove("stale");
     if (!r.ok && r.status !== 401) $("said").textContent = r.data.error || "That didn't go through.";
   }
-  $("signOut").addEventListener("click", () => { stopListening(); stopSpeech(); stopCapture(); wakeStatus(""); session = ""; store.del("jarvis.session"); stopLive(); closeSheet(); goHome(); showGate("pin", "Locked. Enter your PIN."); });
+  $("signOut").addEventListener("click", () => { stopListening(); stopSpeech(); stopCapture(); stopScreenShare(); wakeStatus(""); session = ""; store.del("jarvis.session"); stopLive(); closeSheet(); goHome(); showGate("pin", "Locked. Enter your PIN."); });
 
   /* clock and static reactor ticks */
   function tick() {
@@ -1610,6 +1753,7 @@
     hiddenAt = document.hidden ? Date.now() : 0;
     if (document.hidden) {
       if (abort) { abort.abort(); abort = null; }
+      stopScreenShare();
       if (IOS) { recording = null; if (hearing) setHearing(false); releaseScreen(); }  // iOS pauses the mic by itself in the background
       else stopCapture();
     } else if (session && !$("app").hidden) {
@@ -1752,6 +1896,37 @@
     appearance.content.append(choice("Text size", "text", [["normal", "Normal"], ["large", "Large"]], store.get("jarvis.text") || "normal", setTextSize));
     appearance.content.append(toggle("Reduce animations", store.get("jarvis.reduceMotion") === "on", setReducedMotion));
     body.append(appearance.details);
+
+    const laptop = section("LAPTOP COMPANION");
+    const companionStatus = el("p", "companion-status", companionToken ? "Checking this tab's paired companion…" : "Off · pair this tab to allow Jarvis to open allowlisted apps and websites on this Mac.");
+    laptop.content.append(companionStatus);
+    const pairRow = el("div", "set-row");
+    const pairCode = el("input"); pairCode.type = "text"; pairCode.autocomplete = "one-time-code"; pairCode.inputMode = "text"; pairCode.maxLength = 12; pairCode.placeholder = "One-time code from companion terminal"; pairCode.setAttribute("aria-label", "One-time Jarvis Companion pairing code");
+    const pairButton = el("button", "act", "PAIR THIS TAB"); pairButton.type = "button"; pairRow.append(pairCode, pairButton); laptop.content.append(pairRow);
+    const unpairButton = el("button", "act", "DISCONNECT THIS TAB"); unpairButton.type = "button"; laptop.content.append(unpairButton);
+    laptop.content.append(el("p", "hint", "Start tools/jarvis-companion-macos/jarvis_companion.py on this Mac. The companion binds only to localhost, accepts allowlisted app/site launches, and cannot run shell commands or control the mouse/keyboard. Pairing lasts for this browser tab and companion session."));
+    pairButton.addEventListener("click", async () => {
+      const code = pairCode.value.trim();
+      if (!code) { companionStatus.textContent = "Enter the one-time code shown by Jarvis Companion."; return; }
+      pairButton.disabled = true; companionStatus.textContent = "Pairing with this Mac…";
+      try {
+        const result = await companionRequest("pair", { code }, "");
+        if (!result.ok || !result.data.token) throw new Error(result.data.error || "Pairing was rejected.");
+        companionToken = result.data.token; companionCatalog = { apps: result.data.apps || [], websites: result.data.websites || [] }; companionCatalogLoaded = true;
+        try { sessionStorage.setItem("jarvis.companion", companionToken); } catch { /* current page still retains it */ }
+        pairCode.value = ""; companionStatus.textContent = `Connected · ${companionCatalog.apps.length} apps and ${companionCatalog.websites.length} websites allowlisted for this tab.`;
+      } catch (error) { companionStatus.textContent = error.message || "Could not reach the local companion. Start it on this Mac and try again."; }
+      finally { pairButton.disabled = false; }
+    });
+    unpairButton.addEventListener("click", async () => {
+      const token = companionToken;
+      companionToken = ""; companionCatalog = { apps: [], websites: [] }; companionCatalogLoaded = false;
+      try { sessionStorage.removeItem("jarvis.companion"); } catch { /* still disconnected in memory */ }
+      companionStatus.textContent = "Disconnected · laptop control is off.";
+      if (token) { try { await companionRequest("disconnect", {}, token); } catch { /* forgetting the tab token still disables this UI */ } }
+    });
+    if (companionToken) loadCompanionCatalog().then(ok => { if (sheetKind === "settings") companionStatus.textContent = ok ? `Connected · ${companionCatalog.apps.length} apps and ${companionCatalog.websites.length} websites allowlisted for this tab.` : "Companion is offline or this tab's pairing expired. Pair again to enable laptop actions."; });
+    body.append(laptop.details);
 
     const home = section("HOME & ALERTS");
     const wait = el("p", "hint", "Loading shared settings…"); home.content.append(wait); body.append(home.details);

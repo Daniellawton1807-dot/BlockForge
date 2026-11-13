@@ -72,6 +72,13 @@ small{font-size:.72rem;letter-spacing:.14em;color:var(--dim)}
 .dock b{font:500 .62rem var(--head);letter-spacing:.16em}.dock small{font-family:var(--body);font-size:.82rem;letter-spacing:0}
 .command{display:flex;max-width:680px;width:100%;margin:6px auto 0;border:1px solid #1d5566;background:#031a25cc;border-radius:4px}
 .command:focus-within{border-color:var(--cy);box-shadow:0 0 12px #22d3ee44}
+.screen-share{flex:none;min-width:74px;padding:0 9px;border-right:1px solid var(--line);display:flex;align-items:center;justify-content:center;gap:5px;font-size:1.05rem;filter:saturate(.8);transition:background .2s,color .2s,box-shadow .2s}
+.screen-share-label{font:500 .48rem var(--head);letter-spacing:.1em}
+.screen-share:hover,.screen-share:focus-visible{outline:0;background:color-mix(in srgb,var(--cy) 10%,transparent)}
+.screen-share[aria-pressed=true]{color:var(--green);background:color-mix(in srgb,var(--green) 12%,transparent);box-shadow:inset 0 -2px var(--green)}
+.screen-share-note{position:fixed;z-index:8;left:50%;bottom:68px;transform:translateX(-50%);max-width:min(680px,calc(100vw - 28px));margin:0;padding:7px 12px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--dim);font:.58rem var(--head);letter-spacing:.08em;text-align:center;box-shadow:0 6px 24px #0007}
+.screen-share-note.error{border-color:var(--amber);color:var(--amber)}
+.companion-status{min-height:1.4em;margin:0 0 10px;color:var(--dim);font-size:.88rem}
 .mic{flex:none;width:48px;display:grid;place-items:center;border-right:1px solid var(--line)}
 .mic svg{width:22px;height:22px;fill:none;stroke:var(--cy);stroke-width:1.6;stroke-linecap:round}
 .mic[aria-pressed=true]{background:#0b3a33}.mic[aria-pressed=true] svg{stroke:var(--green)}
@@ -596,6 +603,7 @@ body.bigtext{font-size:17px}body.bigtext .list b{font-size:1.18rem}body.bigtext 
   .panel h2{margin-bottom:8px}
   .serverstrip{max-width:100%;font-size:.5rem;letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .command{left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom))}
+  .screen-share{min-width:66px;padding:0 6px}
   .mic{width:60px}.mic svg{width:26px;height:26px}
   .command input{padding:15px 12px}
 }

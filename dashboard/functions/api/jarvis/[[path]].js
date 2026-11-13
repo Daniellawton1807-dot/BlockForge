@@ -2,7 +2,7 @@ import { json, loginConfigured, readJsonBody, validRequestOrigin, validSession }
 
 // Jarvis (~/vault-claude/jarvis on the server), through the private bridge. Needs the Homebase sign-in;
 // Jarvis then asks for its own PIN. The bridge Worker holds the token, so it never reaches this code or the browser.
-const ROUTES = { GET: /^(state|events|today|brain|settings|tts\/[a-f0-9]{40}|img\/[A-Za-z0-9]{1,64})$/, POST: /^(pin|chat|confirm|stt|tts|control|settings)$/ };
+const ROUTES = { GET: /^(state|events|today|brain|settings|tts\/[a-f0-9]{40}|img\/[A-Za-z0-9]{1,64})$/, POST: /^(pin|chat|confirm|stt|vision|tts|control|settings)$/ };
 
 export async function onRequest({ request, env, params }) {
   const method = request.method.toUpperCase();
@@ -16,9 +16,10 @@ export async function onRequest({ request, env, params }) {
   if (!env.ARR_BRIDGE) return json({ code: "binding_missing", error: "Private bridge is not bound." }, 503);
 
   let body;
-  if (method === "POST" && path === "stt") {
+  if (method === "POST" && ["stt", "vision"].includes(path)) {
     body = await request.arrayBuffer();
-    if (body.byteLength > 1048576) return json({ code: "too_large", error: "That recording is too long." }, 413);
+    const maximum = path === "vision" ? 786432 : 1048576;
+    if (body.byteLength > maximum) return json({ code: "too_large", error: path === "vision" ? "That screen image is too large." : "That recording is too long." }, 413);
   } else if (method === "POST") {
     try { body = JSON.stringify(await readJsonBody(request, 4096)); }
     catch { return json({ code: "invalid_request", error: "Could not read that." }, 400); }
@@ -32,7 +33,9 @@ export async function onRequest({ request, env, params }) {
         "x-jarvis-session": request.headers.get("x-jarvis-session") || "",
         "accept": request.headers.get("accept") || "application/json",
         ...(request.headers.get("range") ? { range: request.headers.get("range") } : {}),
-        ...(body ? { "content-type": path === "stt" ? "audio/wav" : "application/json" } : {})
+        ...(path === "vision" && request.headers.get("x-jarvis-question") ? { "x-jarvis-question": request.headers.get("x-jarvis-question").slice(0, 1000) } : {}),
+        ...(path === "vision" && request.headers.get("x-jarvis-model") ? { "x-jarvis-model": request.headers.get("x-jarvis-model").slice(0, 16) } : {}),
+        ...(body ? { "content-type": path === "stt" ? "audio/wav" : path === "vision" ? "image/jpeg" : "application/json" } : {})
       },
       body
     }));
