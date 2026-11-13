@@ -158,8 +158,6 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, {"apps": sorted(config.get("apps", {}).keys()), "websites": sorted(config.get("websites", {}).keys())})
 
     def do_POST(self):
-        if not self._cors():
-            return
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
