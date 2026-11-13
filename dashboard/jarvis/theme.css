@@ -207,3 +207,51 @@ small{font-size:.72rem;letter-spacing:.06em;color:var(--dim)}
 .settings-content .color-input{width:64px!important;height:42px;padding:4px!important;cursor:pointer;background:var(--surface2)!important;border:1px solid var(--edge2)!important;border-radius:9px!important}
 .settings-content .act{border-radius:9px;letter-spacing:.06em}
 .reduce-motion *, .reduce-motion *:before, .reduce-motion *:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+
+/* Jarvis reactor: a distinct status instrument, with motion tied to what he is doing. */
+body:not([data-scene]) .core{position:absolute;right:20px;top:320px;width:280px;min-width:0;padding:18px 18px 16px;gap:10px;overflow:hidden;
+  background:linear-gradient(155deg,rgba(21,26,31,.96),rgba(10,12,15,.96));border:1px solid var(--edge2);border-radius:24px;
+  box-shadow:0 22px 70px #0008,inset 0 1px #ffffff0b;isolation:isolate}
+body:not([data-scene]) .core:before{content:;position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at 50% 25%,color-mix(in srgb,var(--cy) 18%,transparent),transparent 57%)}
+body:not([data-scene]) .core:after{content:JARVIS / CORE STATUS;position:absolute;top:13px;left:16px;right:16px;text-align:center;pointer-events:none;font:500 .55rem var(--mono);letter-spacing:.18em;color:var(--dim);opacity:.72}
+body:not([data-scene]) .core .reactor{width:218px;min-width:0;margin:10px 0 0;pointer-events:none}
+body:not([data-scene]) .reactor:before,body:not([data-scene]) .reactor:after{content:;position:absolute;z-index:0;inset:3%;border:1px solid color-mix(in srgb,var(--cy) 21%,transparent);border-radius:50%;pointer-events:none;opacity:.7}
+body:not([data-scene]) .reactor:after{inset:13%;border-style:dashed;opacity:.32}
+body:not([data-scene]) .reactor-read{z-index:2;padding-top:8px}
+body:not([data-scene]) .reactor-read .state{font-size:clamp(1.35rem,2vw,1.65rem);letter-spacing:.18em;text-shadow:0 0 24px color-mix(in srgb,var(--cy) 38%,transparent)}
+body:not([data-scene]) .reactor-read small:first-child{font-size:.65rem;letter-spacing:.26em;color:var(--dim)}
+body:not([data-scene]) .reactor-read .hintline{max-width:78%;font-size:.57rem;line-height:1.5;letter-spacing:.11em}
+body:not([data-scene]) .core .serverstrip{max-width:100%;min-height:34px;padding:8px 12px;background:rgba(7,9,12,.72);border:1px solid var(--edge2);border-radius:11px;text-align:center;line-height:1.35;font-size:.64rem}
+body:not([data-scene]) .core .wakestate,body:not([data-scene]) .core .voicewarn{margin:0;line-height:1.4}
+body:not([data-scene]) .reactor .spin{animation:none}
+body:not([data-scene]) .reactor:before{animation:reactor-breathe 4s ease-in-out infinite}
+body:not([data-scene]) .reactor:after{animation:reactor-orbit 36s linear infinite}
+body:not([data-scene]) .reactor .arc{transition:stroke .25s,opacity .25s}
+body:not([data-scene]) .reactor .level{fill:none;stroke:var(--cy);stroke-width:1;stroke-dasharray:0 1000;opacity:.62}
+body:not([data-scene])[data-mode=thinking] .reactor .spin{animation:spin 16s linear infinite}
+body:not([data-scene])[data-mode=thinking] .reactor .s2{animation-duration:23s}
+body:not([data-scene])[data-mode=thinking] .reactor .s3{animation-duration:11s}
+body:not([data-scene])[data-mode=thinking] .reactor .arc{stroke:var(--amber);stroke-dasharray:22 18;animation:signal-flow 1.5s linear infinite}
+body:not([data-scene])[data-mode=thinking] .reactor:before{border-color:color-mix(in srgb,var(--amber) 42%,transparent);box-shadow:0 0 36px color-mix(in srgb,var(--amber) 15%,transparent);animation:reactor-breathe 1.1s ease-in-out infinite}
+body:not([data-scene])[data-mode=listening] .reactor .spin{animation:spin 28s linear infinite}
+body:not([data-scene])[data-mode=listening] .reactor .arc{stroke:var(--green)}
+body:not([data-scene])[data-mode=listening] .reactor .a1{stroke-dasharray:70 35;animation:signal-flow 2.4s linear infinite}
+body:not([data-scene])[data-mode=listening] .reactor:before{border-color:color-mix(in srgb,var(--green) 43%,transparent);box-shadow:0 0 34px color-mix(in srgb,var(--green) 16%,transparent)}
+body:not([data-scene])[data-mode=speaking] .reactor .spin{animation:spin 24s linear infinite}
+body:not([data-scene])[data-mode=speaking] .reactor .s2{animation-duration:32s}
+body:not([data-scene])[data-mode=speaking] .reactor .arc{stroke:var(--cy)}
+body:not([data-scene])[data-mode=speaking] .reactor .a1{animation:pulse 1.05s ease-in-out infinite,signal-flow 3s linear infinite}
+body:not([data-scene])[data-mode=speaking] .reactor:before{box-shadow:0 0 42px color-mix(in srgb,var(--cy) 18%,transparent)}
+body:not([data-scene])[data-mode=idle] .vu i{animation:breathe 3.6s ease-in-out infinite}
+body:not([data-scene])[data-mode=idle] .vu i:nth-child(2n){animation-delay:.4s}
+body:not([data-scene])[data-mode=idle] .vu i:nth-child(3n){animation-delay:.8s}
+@keyframes signal-flow{to{stroke-dashoffset:-80}}
+@keyframes reactor-breathe{50%{opacity:.34;transform:scale(.97)}}
+@keyframes reactor-orbit{to{transform:rotate(360deg)}}
+@media (min-width:1001px){body:not([data-scene]) .dock{top:690px;width:280px;right:20px}}
+@media (min-width:1001px) and (max-height:820px){body:not([data-scene]) .core{top:285px;width:242px;padding:14px;border-radius:20px}
+  body:not([data-scene]) .core .reactor{width:178px}
+  body:not([data-scene]) .dock{top:auto;bottom:20px;width:242px}}
+@media (max-width:1000px){body:not([data-scene]) .core{position:relative;inset:auto;width:min(calc(100% - 28px),500px);margin:18px auto 28px;padding:18px 16px;border-radius:22px}
+  body:not([data-scene]) .core .reactor{width:min(68vw,250px);margin-top:8px}
+  body:not([data-scene]) .dock{position:relative;top:auto;right:auto;width:auto;margin:0 14px 18px}}
