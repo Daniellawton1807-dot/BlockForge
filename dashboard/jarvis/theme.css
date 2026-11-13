@@ -180,7 +180,6 @@ small{font-size:.72rem;letter-spacing:.06em;color:var(--dim)}
   body:not([data-scene]) .core{top:300px}body:not([data-scene]) .reactor{width:120px}
   body:not([data-scene]) .dock{top:auto;bottom:20px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
   body:not([data-scene]) .dock button{height:36px}
-  body:not([data-scene]) .dock button small{display:none}
 }
 @media (max-width:1000px){
   body:not([data-scene]) .brain{position:relative;height:52vh;border-bottom:1px solid var(--edge)}
@@ -788,7 +787,5 @@ body:not([data-scene])[data-mode=speaking] .reactor .arc{stroke:var(--jarvis-cya
 @media(min-width:1001px) and (max-height:1300px){
   body:not([data-scene]) .core{top:clamp(220px,26vh,290px)!important}
   body:not([data-scene]) .core .reactor{width:clamp(148px,18vh,180px)!important}
-  body:not([data-scene]) .dock{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;bottom:18px}
-  body:not([data-scene]) .dock button{height:38px}
-  body:not([data-scene]) .dock button small{display:none}
+  body:not([data-scene]) .dock{display:flex!important;flex-direction:column;gap:6px;bottom:18px}
 }
