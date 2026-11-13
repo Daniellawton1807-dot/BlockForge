@@ -329,3 +329,15 @@ body[data-scene][data-mode=listening] .reactor .spin{animation:spin 30s linear i
 body[data-scene][data-mode=speaking] .reactor .spin{animation:spin 26s linear infinite}
 @media (max-width:700px){body[data-scene] .core-controls{top:calc(14px + var(--rs));right:12px}
   body[data-scene] #modelPick{min-height:32px;min-width:88px;font-size:.52rem}}
+
+/* Flush reactor stack: match the status card to the dock controls and balance both gaps. */
+@media (min-width:1001px){body:not([data-scene]) .core{top:310px;width:280px;padding:14px;gap:8px}
+  body:not([data-scene]) .core .reactor{width:220px}
+  body:not([data-scene]) .core-status,body:not([data-scene]) #modelPick{min-height:38px;padding:6px 10px}
+  body:not([data-scene]) #modelPick{min-width:96px}
+  body:not([data-scene]) .core .serverstrip{min-height:30px;padding:6px 10px}
+  body:not([data-scene]) .dock{top:710px;width:280px;right:20px}}
+@media (min-width:1001px) and (max-height:820px){body:not([data-scene]) .core{top:300px;width:248px;padding:12px}
+  body:not([data-scene]) .core .reactor{width:198px}
+  body:not([data-scene]) .core-status,body:not([data-scene]) #modelPick{min-height:36px;padding:5px 8px}
+  body:not([data-scene]) #modelPick{min-width:86px}}
