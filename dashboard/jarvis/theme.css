@@ -639,3 +639,56 @@ body:not([data-scene])[data-mode=speaking] .reactor .arc{stroke:var(--jarvis-cya
  .stage.result-window .wall{grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:9px}
 }
 @media(prefers-reduced-motion:reduce){.stage.result-window .tile,.stage.result-window .sug{animation:none!important}.stage.result-window .act,.stage.result-window .route-steps li,.stage.result-window .fl,.stage.result-window .mediarow{transition:none!important}}
+
+/* Result windows inherit the selected Settings theme and custom accent. */
+.stage.result-window{
+  color:var(--text);
+  background:linear-gradient(155deg,var(--surface2),var(--bg2));
+  border-color:var(--edge2);
+  box-shadow:0 30px 90px #0008,0 0 0 1px color-mix(in srgb,var(--cy) 10%,transparent),0 0 34px color-mix(in srgb,var(--cy) 9%,transparent)
+}
+.stage.result-window:before{background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--cy) 55%,transparent) 18%,var(--cy2) 50%,color-mix(in srgb,var(--cy) 55%,transparent) 82%,transparent)}
+.stage.result-window .stage-head{background:color-mix(in srgb,var(--surface2) 92%,var(--cy) 8%);border-color:var(--edge)}
+.stage.result-window .stage-head h3{color:var(--cy2)}
+.stage.result-window .stage-close{
+  display:grid;place-items:center;width:36px;height:36px;margin:-2px -3px -2px 0;
+  border:1px solid color-mix(in srgb,var(--cy) 38%,var(--edge2));border-radius:50%;
+  background:color-mix(in srgb,var(--surface2) 82%,var(--cy) 18%);color:var(--text);
+  font:500 1.05rem/1 var(--body);box-shadow:inset 0 1px #ffffff12,0 3px 10px #0003;
+  transition:transform .18s ease,background .18s ease,border-color .18s ease,box-shadow .18s ease,color .18s ease
+}
+.stage.result-window .stage-close:hover,.stage.result-window .stage-close:focus-visible{
+  transform:rotate(90deg);background:var(--cy);border-color:var(--cy2);color:var(--bg);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--cy) 16%,transparent),0 5px 16px #0004;outline:0
+}
+.stage.result-window .answer-card,.stage.result-window .tile,.stage.result-window .fact,.stage.result-window .wx-tile,.stage.result-window .wx-hour,.stage.result-window .route-facts>div,.stage.result-window .route-alt,.stage.result-window .fl,.stage.result-window .gp-count .unit,.stage.result-window .gp-part,.stage.result-window .sug,.stage.result-window details.part,.stage.result-window .verdict{
+  background:linear-gradient(145deg,var(--surface2),var(--bg2))!important;border-color:var(--edge)!important;color:var(--text)
+}
+.stage.result-window .answer-card{border-left:3px solid var(--cy)!important}
+.stage.result-window .answer-card .answer,.stage.result-window .answer-card .readable-copy,.stage.result-window .readable-list,.stage.result-window>.plain-answer .readable-copy{color:var(--text)}
+.stage.result-window .answer-kicker,.stage.result-window>.plain-answer .answer-kicker{color:var(--cy)}
+.stage.result-window .readable-list li,.stage.result-window>.plain-answer .readable-list li,.stage.result-window>.plain-answer .answer-context{
+  color:var(--text);background:var(--surface);border-color:var(--edge2)
+}
+.stage.result-window .readable-list li:before{background:var(--cy);box-shadow:0 0 12px color-mix(in srgb,var(--cy) 55%,transparent)}
+.stage.result-window>.plain-answer{background:radial-gradient(ellipse at 50% 0%,color-mix(in srgb,var(--cy) 12%,transparent),transparent 65%),linear-gradient(145deg,var(--surface2),var(--bg2));border-color:var(--edge2);border-left-color:var(--cy);box-shadow:inset 0 1px #ffffff0a}
+.stage.result-window>.plain-answer .answer-context{color:var(--dim)}
+.stage.result-window .act{background:color-mix(in srgb,var(--surface2) 78%,var(--cy) 22%);border-color:var(--cy);color:var(--text)}
+.stage.result-window .act:hover,.stage.result-window .act:focus-visible{background:var(--cy);border-color:var(--cy2);color:var(--bg);box-shadow:0 8px 24px color-mix(in srgb,var(--cy) 24%,transparent)}
+.stage.result-window .chart,.stage.result-window .wx-days,.stage.result-window .fl-head,.stage.result-window .route-side>div:first-child,.stage.result-window .cine-text,.stage.result-window .mediarow,.stage.result-window .gp,.stage.result-window .web .browser{
+  background:linear-gradient(145deg,var(--surface2),var(--bg2));border-color:var(--edge)
+}
+.stage.result-window .route-map{border-color:var(--edge2);background:var(--bg)}
+.stage.result-window .route-time,.stage.result-window .fl-price,.stage.result-window .wx-now,.stage.result-window .wx-hour .skyicon,.stage.result-window .route-alt.on b,.stage.result-window .gp-row.main,.stage.result-window .gp-row.main b{color:var(--cy2)}
+.stage.result-window .route-alt.on{border-color:var(--cy)!important;box-shadow:inset 3px 0 var(--cy),0 0 18px color-mix(in srgb,var(--cy) 12%,transparent)!important}
+.stage.result-window .route-steps li:hover,.stage.result-window .part[open]{background:color-mix(in srgb,var(--surface2) 82%,var(--cy) 18%)!important;border-color:var(--edge2)!important}
+.stage.result-window .compare th{background:var(--surface2);color:var(--cy2)}
+.stage.result-window .compare th,.stage.result-window .compare td,.stage.result-window .route-steps li,.stage.result-window .gp-row{border-color:var(--edge)}
+.stage.result-window .cine-text>small,.stage.result-window .gp-name small{color:var(--cy)}
+.stage.result-window .cine-sub{color:var(--cy2)}
+.stage.result-window .cine>img{box-shadow:0 18px 44px #0007,0 0 0 1px color-mix(in srgb,var(--cy) 20%,transparent)}
+.stage.result-window .web .fact{border-left-color:var(--cy)!important}
+.stage.result-window .web .view,.stage.result-window .web .addr{background:var(--bg)}
+.stage.result-window .sug{border-left-color:var(--cy)!important}
+.stage.result-window .sug b{color:var(--text)}
+@media(prefers-reduced-motion:reduce){.stage.result-window .stage-close{transition:none}}
