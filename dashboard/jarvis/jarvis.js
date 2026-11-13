@@ -984,9 +984,10 @@
     root.querySelector(".addr").textContent = w.live && w.status ? w.status : w.url ? w.url.replace(/^https?:\/\/(www\.)?/, "") : "";
     const out = root.querySelector(".out");
     if (/^https?:\/\//.test(w.url || "")) { out.href = w.url; out.hidden = false; } else out.hidden = true;
-    const noPage = w.hide_page || (!w.frame && !w.live);
-    root.querySelector(".browser").hidden = noPage;
-    root.classList.toggle("solo", noPage);
+    const previewAvailable = Boolean(w.frame);
+    const previewVisible = w.live ? !w.hide_page : Boolean(w.previewOpen && previewAvailable);
+    root.querySelector(".browser").hidden = !previewVisible;
+    root.classList.toggle("solo", !previewVisible);
     setFrame(w.mode === "walk" && w.points[w.index] && !w.live ? w.points[w.index].frame || w.frame : w.frame);
     drawWebSide(root.querySelector(".side"));
     setCaption();
@@ -1054,6 +1055,7 @@
     if (w.live) {
       const panel = el("div", "research"), track = el("div", "track");
       track.append(el("i"));
+      panel.append(el("small", "research-kicker", "JARVIS · LIVE SEARCH"));
       panel.append(el("p", "status", w.status || "Searching the web"));
       if (w.query) panel.append(el("p", "asking", w.query));
       panel.append(track);
@@ -1061,8 +1063,10 @@
     }
     if (!w.live && w.answer) {
       if (w.hero && w.mode !== "walk") side.append(poster(w.hero, ""));
-      side.append(citedText(w.answer, w.results, "answer"));
-      if (w.standing_text) side.append(el("span", "standing " + (w.standing || ""), ({ confirmed: "✓ ", disputed: "! ", unclear: "? " }[w.standing] || "") + w.standing_text));
+      const answerCard = el("section", "answer-card");
+      answerCard.append(el("small", "answer-kicker", "JARVIS · ANSWER"));
+      answerCard.append(el("p", "answer", String(w.answer || "").replace(/\s*\[\d+\]/g, "").replace(/[ \t]{2,}/g, " ").trim()));
+      side.append(answerCard);
     }
     if (!w.live && w.facts.length) {
       const g = el("div", "facts");
@@ -1079,16 +1083,17 @@
       });
       side.append(list);
     }
-    if (!w.live && w.mode === "answer" && w.results.length && !w.frameless) {
-      const go = el("button", "act", w.hide_page ? "SHOW THE PAGE" : "GO THROUGH THE PAGE"); go.type = "button"; go.addEventListener("click", () => webCommand("go through it")); side.append(go);
+    if (!w.live && w.frame) {
+      const preview = el("button", "preview-toggle", w.previewOpen ? "HIDE PAGE PREVIEW" : "VIEW PAGE PREVIEW");
+      preview.type = "button";
+      preview.setAttribute("aria-expanded", String(Boolean(w.previewOpen)));
+      preview.addEventListener("click", () => { w.previewOpen = !w.previewOpen; drawWeb(); });
+      side.append(preview);
+    } else if (!w.live && w.url && /^https?:\/\//.test(w.url)) {
+      const open = el("a", "preview-toggle", "OPEN PAGE ↗");
+      open.href = w.url; open.target = "_blank"; open.rel = "noopener noreferrer";
+      side.append(open);
     }
-    if (w.results.length) {
-      side.append(el("h4", "", "SOURCES"));
-      const list = el("div", "sources");
-      w.results.forEach((r, i) => list.append(sourceCard(r, i, w)));
-      side.append(list);
-    }
-    drawTrail(w, side);
   }
   function showPoint(i) {
     if (!webState || !webState.points[i]) return;
