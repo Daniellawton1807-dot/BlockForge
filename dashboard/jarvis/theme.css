@@ -437,3 +437,20 @@ body:not([data-scene])[data-mode=speaking] .reactor .arc{stroke:var(--jarvis-cya
   .answer-card{padding:18px}
   .research{padding:17px 18px}
 }
+
+/* Inline web search keeps the Jarvis home screen visible until its answer is ready. */
+.web-search-peek{position:fixed;z-index:8;left:50%;bottom:calc(72px + env(safe-area-inset-bottom));width:min(560px,calc(100vw - 32px));transform:translateX(-50%);overflow:hidden;background:linear-gradient(145deg,rgba(8,26,48,.97),rgba(4,15,30,.97));border:1px solid #285783;border-radius:14px;box-shadow:0 12px 32px #0008,0 0 18px #1671b322;backdrop-filter:blur(16px);animation:peek-in .2s ease-out}
+.web-search-peek[hidden]{display:none}
+.web-search-summary{width:100%;min-height:48px;display:flex;align-items:center;gap:11px;padding:10px 14px;text-align:left;background:transparent;border:0;color:#dceeff;cursor:pointer}
+.web-search-summary b{flex:none;font:600 .6rem var(--mono);letter-spacing:.14em;color:#6bcaff}
+.web-search-query{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e4f2ff;font:500 .82rem var(--body)}
+.web-search-chevron{flex:none;color:#8cb9dc;font-size:1rem;transition:transform .18s}
+.web-search-summary[aria-expanded=true] .web-search-chevron{transform:rotate(180deg)}
+.web-search-summary:hover,.web-search-summary:focus-visible{background:#102d4c88;outline:0}
+.web-search-pulse{position:relative;flex:none;width:9px;height:9px;border-radius:50%;background:#60d3ff;box-shadow:0 0 12px #4bbaff;animation:search-pulse 1.3s ease-in-out infinite}
+.web-search-detail{padding:0 14px 12px 34px;color:#9fb9d3;font:500 .68rem var(--mono);letter-spacing:.04em;animation:peek-in .18s ease-out}
+.web-search-detail[hidden]{display:none}
+@keyframes search-pulse{50%{opacity:.5;box-shadow:0 0 4px #4bbaff;transform:scale(.82)}}
+@keyframes peek-in{from{opacity:0;transform:translate(-50%,5px)}to{opacity:1;transform:translate(-50%,0)}}
+@media(max-width:1000px){.web-search-peek{bottom:calc(74px + env(safe-area-inset-bottom));width:min(560px,calc(100vw - 24px))}.web-search-summary{min-height:46px;padding:9px 12px}}
+@media(prefers-reduced-motion:reduce){.web-search-peek,.web-search-detail{animation:none}.web-search-pulse{animation:none}}

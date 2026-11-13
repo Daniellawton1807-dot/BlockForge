@@ -951,13 +951,27 @@
   const WEB_FIELDS = ["trail", "summary", "standing", "standing_text", "hide_page", "query", "status", "url", "site", "frame", "hero", "results", "answer", "facts", "points", "read", "mode", "stage"];
   function webLive(e) {
     const starting = e.stage === "searching" || !webState;
-    if (starting) { emptyStage(); $("said").textContent = ""; hideToast(); setAmbient(); webState = { results: [], points: [], facts: [], answer: "", index: 0 }; }
+    if (starting) { goHome(); $("said").textContent = ""; hideToast(); webState = { results: [], points: [], facts: [], answer: "", index: 0, previewOpen: false }; }
     WEB_FIELDS.forEach(k => { if (e[k] !== undefined) webState[k] = e[k]; });
     webState.live = e.stage !== "done";
     if (e.stage === "searching" && turnOpen) acknowledge();
+    if (webState.live) { updateWebSearchPeek(); return; }
+    $("webSearchPeek").hidden = true;
     drawWeb();
     if (e.stage === "done" && webState.mode === "walk" && webState.points.length) startWalk();
   }
+  function updateWebSearchPeek() {
+    const w = webState, peek = $("webSearchPeek");
+    if (!peek) return;
+    peek.hidden = false;
+    $("webSearchQuery").textContent = w.query || "Finding the information you asked for";
+    $("webSearchStatus").textContent = w.status || "Searching the web";
+  }
+  $("webSearchToggle").addEventListener("click", () => {
+    const button = $("webSearchToggle"), detail = $("webSearchDetail"), expanded = button.getAttribute("aria-expanded") !== "true";
+    button.setAttribute("aria-expanded", String(expanded));
+    detail.hidden = !expanded;
+  });
   function webCommand(text) { spokeLast = false; sendCommand(text, { keep: true }); }
   function drawWeb() {
     const w = webState, stage = $("stage");

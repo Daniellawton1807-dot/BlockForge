@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="jarvis.css?v=19">
-<link rel="stylesheet" href="theme.css?v=10">
+<link rel="stylesheet" href="theme.css?v=11">
 </head>
 <body data-mode="idle">
 
@@ -50,6 +50,16 @@
     <div class="mini" id="mini" aria-hidden="true"></div>
     <div class="clock"><b id="clock">--:--</b><small id="date"></small></div>
   </header>
+
+  <aside id="webSearchPeek" class="web-search-peek" hidden aria-live="polite">
+    <button id="webSearchToggle" class="web-search-summary" type="button" aria-expanded="false" aria-controls="webSearchDetail">
+      <i class="web-search-pulse" aria-hidden="true"></i>
+      <b>SEARCHING</b>
+      <span id="webSearchQuery" class="web-search-query">Preparing search…</span>
+      <span class="web-search-chevron" aria-hidden="true">⌄</span>
+    </button>
+    <div id="webSearchDetail" class="web-search-detail" hidden><span id="webSearchStatus">Searching the web</span></div>
+  </aside>
 
   <main class="hud">
     <div class="col left">
@@ -131,7 +141,7 @@
   <div id="sheetBody"></div>
 </aside>
 <script src="speech-end.js?v=3"></script>
-<script src="jarvis.js?v=40"></script>
+<script src="jarvis.js?v=41"></script>
 <script src="brain.js?v=5"></script>
 </body>
 </html>
