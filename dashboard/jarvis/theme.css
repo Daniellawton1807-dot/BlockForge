@@ -811,6 +811,9 @@ body.has-now:not([data-scene]) .reactor{width:min(100%,430px,48vh)}
 
 @media(max-width:700px){body.has-now:not([data-scene]) .core .reactor{width:120px}}
 
+/* The now-playing state previously enlarged the reactor to 48vh, pushing the server strip into the dock. Keep the desktop reactor within its normal footprint. */
+@media(min-width:1001px){body.has-now:not([data-scene]) .core .reactor{width:min(220px,26vh)!important}}
+
 
 /* Keep the right-side control stack out of the reactor/status area at every viewport height. */
 @media(min-width:1001px){
