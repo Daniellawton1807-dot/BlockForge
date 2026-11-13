@@ -456,11 +456,11 @@ body:not([data-scene])[data-mode=speaking] .reactor .arc{stroke:var(--jarvis-cya
 @media(prefers-reduced-motion:reduce){.web-search-peek,.web-search-detail{animation:none}.web-search-pulse{animation:none}}
 
 /* Compact result window over the live Jarvis map. */
-.result-scrim{position:fixed;inset:0;z-index:8;background:rgba(2,8,18,.48);backdrop-filter:blur(4px);opacity:1;transition:opacity .24s ease}
+.result-scrim{position:fixed;inset:0;z-index:8;background:rgba(2,8,18,.10);backdrop-filter:none;opacity:1;transition:opacity .28s ease}
 .result-scrim[hidden]{display:none}
 .result-scrim.is-closing{opacity:0}
 .stage.result-window{position:fixed;z-index:9;left:50%;top:50%;transform:translate(-50%,-50%);width:min(760px,calc(100vw - 36px));max-height:min(78dvh,760px);margin:0;padding:20px 22px 24px;overflow:auto;overscroll-behavior:contain;background:linear-gradient(150deg,rgba(10,27,49,.98),rgba(5,15,30,.985));border:1px solid #2b5885;border-radius:22px;box-shadow:0 28px 90px #000a,0 0 36px #1a76b522;scrollbar-width:thin;scrollbar-color:#315678 transparent;animation:result-pop .28s cubic-bezier(.2,.9,.25,1) both}
-.stage.result-window.is-closing{opacity:0;transform:translate(-50%,-48%) scale(.98);transition:opacity .24s ease,transform .24s ease}
+.stage.result-window.is-closing{animation:result-exit .28s cubic-bezier(.4,0,1,1) both;pointer-events:none}
 .stage.result-window .stage-head{position:sticky;top:-20px;margin:-20px -22px 18px;padding:15px 16px 13px 20px;background:rgba(8,22,40,.96);border-bottom:1px solid #1c3c5e;backdrop-filter:blur(12px)}
 .stage.result-window .stage-head h3{color:#9fdcff;font:600 .7rem var(--mono);letter-spacing:.14em;text-transform:uppercase}
 .stage.result-window .stage-close{width:32px;height:32px;background:#0c2039;border-color:#2b527a;color:#c4e2fa}
@@ -482,9 +482,10 @@ body:not([data-scene])[data-mode=speaking] .reactor .arc{stroke:var(--jarvis-cya
 .stage.result-window .route-map{min-height:240px}
 .stage.result-window .cine{grid-template-columns:minmax(110px,170px) minmax(0,1fr)}
 .stage.result-window .cine img{max-height:270px}
-@keyframes result-pop{from{opacity:0;transform:translate(-50%,-47%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@keyframes result-pop{from{opacity:0;transform:translate(-50%,calc(-50% - 42vh)) scale(.985)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@keyframes result-exit{from{opacity:1;transform:translate(-50%,-50%) scale(1)}to{opacity:0;transform:translate(-50%,calc(-50% - 36vh)) scale(.985)}}
 @media(max-width:700px){
-  .result-scrim{backdrop-filter:blur(3px)}
+  .result-scrim{backdrop-filter:none}
   .stage.result-window{width:calc(100vw - 22px);max-height:min(82dvh,900px);padding:15px 15px 20px;border-radius:18px}
   .stage.result-window .stage-head{top:-15px;margin:-15px -15px 14px;padding:11px 11px 10px 15px}
   .stage.result-window .web,.stage.result-window .web[data-mode=answer]{display:block}
@@ -492,7 +493,7 @@ body:not([data-scene])[data-mode=speaking] .reactor .arc{stroke:var(--jarvis-cya
   .stage.result-window .web .answer-card{padding:16px}
   .stage.result-window .cine{grid-template-columns:minmax(80px,110px) minmax(0,1fr);gap:12px}
 }
-@media(prefers-reduced-motion:reduce){.result-scrim,.stage.result-window{animation:none;transition:none}}
+@media(prefers-reduced-motion:reduce){.result-scrim,.stage.result-window,.stage.result-window.is-closing{animation:none;transition:none}}
 
 /* The app shell ignores pointer input on the home map; explicitly enable the modal stack. */
 .result-scrim{pointer-events:auto!important}
