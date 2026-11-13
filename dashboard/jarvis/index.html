@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="jarvis.css?v=19">
-<link rel="stylesheet" href="theme.css?v=3">
+<link rel="stylesheet" href="theme.css?v=5">
 </head>
 <body data-mode="idle">
 
@@ -85,11 +85,16 @@
           <circle class="level" cx="200" cy="200" r="104"/>
         </svg>
         <div class="reactor-read">
-          <small>JARVIS</small>
-          <b class="state" id="modeLabel">READY</b>
+          <b class="reactor-name">J.A.R.V.I.S.</b>
           <div class="vu"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-          <small class="hintline" id="hintLine">SAY "HEY JARVIS" OR TAP THE MIC</small>
         </div>
+      </div>
+      <div class="core-controls">
+        <div class="core-status" role="status" aria-live="polite">
+          <i class="core-status-dot"></i>
+          <span><b class="state" id="modeLabel">READY</b><small class="hintline" id="hintLine">TAP TO SPEAK</small></span>
+        </div>
+        <button type="button" id="modelPick" class="modelpick" data-model="haiku" aria-label="Claude model for your requests: Haiku. Tap to change">HAIKU</button>
       </div>
       <button class="serverstrip" id="serverStrip" type="button" title="Server details"><i id="linkDot"></i><span id="stripText">SERVER / CONNECTING</span></button>
       <div class="nowbar" id="nowbar" hidden></div>
@@ -115,7 +120,6 @@
 
   <form class="command" id="commandForm">
     <button type="button" id="mic" class="mic" aria-label="Speak a command" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></button>
-    <button type="button" id="modelPick" class="modelpick" data-model="haiku" aria-label="Claude model for your requests: Haiku. Tap to change">HAIKU</button>
     <input id="command" autocomplete="off" maxlength="500" placeholder="Ask Jarvis anything" aria-label="Command">
     <button type="button" id="stopAll" class="stopall" aria-label="Stop everything" title="Stop everything"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></button>
     <button type="submit">SEND</button>
