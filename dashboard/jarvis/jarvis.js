@@ -574,10 +574,10 @@
     if (lines.length === 1 && lines[0].length > 260 && !/[\n]/.test(String(text || ""))) {
       const p = container.querySelector("." + (className || "readable-copy"));
       if (p) {
-        const sentences = p.textContent.match(/[^.!?]+[.!?]+(?:[”’'"])?|[^.!?]+$/g) || [p.textContent];
+        const sentences = p.textContent.split(/(?<=[.!?])\s+/).filter(Boolean);
         if (sentences.length > 3) {
           const paragraphs = [];
-          for (let i = 0; i < sentences.length; i += 2) paragraphs.push(sentences.slice(i, i + 2).join("").trim());
+          for (let i = 0; i < sentences.length; i += 2) paragraphs.push(sentences.slice(i, i + 2).join(" ").trim());
           p.replaceWith(...paragraphs.map(part => el("p", className || "readable-copy", part)));
         }
       }
@@ -854,21 +854,11 @@
       const again = el("button", "act", "TRY AGAIN"); again.type = "button";
       again.addEventListener("click", () => { spokeLast = false; sendCommand("try again"); });
       box.append(again); stage.append(box);
-    } else if (v.type === "answer") {  // thinking harder or the web: the answer, what backs it, and where it came from
+    } else if (v.type === "answer") {  // A clear answer, with optional structured points.
       const stage = openStage(v.title || "JARVIS ANSWER", scene), card = el("div", "answer-card");
       appendReadableText(card, v.say, "readable-copy");
       stage.append(card);
       if (v.points && v.points.length) { const u = el("ul", "points"); v.points.forEach((t, i) => { const li = el("li", "", t); li.style.animationDelay = i * 60 + "ms"; u.append(li); }); stage.append(u); }
-      if (v.sources && v.sources.length) {
-        const box = el("div", "sources"); box.append(el("small", "", "SOURCES"));
-        v.sources.forEach(s => {
-          let site = s.url; try { site = new URL(s.url).hostname.replace(/^www\./, ""); } catch { /* shown as it is */ }
-          const a = el("a", "", s.title || site); a.href = s.url; a.target = "_blank"; a.rel = "noopener noreferrer";
-          a.append(el("span", "", site)); box.append(a);
-        });
-        stage.append(box);
-      }
-      if (v.meta) stage.append(el("p", "hint", v.meta));
     } else if (v.type === "table") {
       const stage = openStage(v.title, scene), scroll = el("div", "scrollx"), table = el("table", "compare");
       if (v.columns && v.columns.length) { const tr = el("tr"); v.columns.forEach(c => tr.append(el("th", "", c))); table.append(tr); }
