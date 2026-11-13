@@ -371,7 +371,6 @@
     drawStrip();
     drawMinecraft();
     if (status.memory && status.storage) $("mini").textContent = "CPU " + num(status.cpu) + "%   MEM " + num(status.memory.percent) + "%   DISK " + num(status.storage.percent) + "%";
-    drawNowBar();
     if (sheetKind === "server") renderSheet();
   }
   $("serverStrip").addEventListener("click", () => openSheet("server", "SERVER"));
@@ -381,64 +380,6 @@
     if (!m) return;
     $("cardMinecraft").classList.toggle("on", !!m.running);
     fill("mcList", [li(m.starting ? "Starting up" : m.running ? "Running" : "Off", m.running ? ((m.online || 0) + " of " + (m.max || "?") + " playing" + (m.players && m.players.length ? ": " + m.players.join(", ") : "")) : "Ask Jarvis to start it", m.running ? "live-mc" : "")]);
-  }
-
-  /* Now playing: every TV that has something on, with the buttons you'd reach for. They go straight to the TV: no model, nothing spoken. */
-  const ICONS = {
-    back: "M11 17l-5-5 5-5M18 17l-5-5 5-5", forward: "M13 7l5 5-5 5M6 7l5 5-5 5", pause: "M8 5v14M16 5v14", resume: "M7 4l12 8-12 8z",
-    next: "M6 5l9 7-9 7zM18 5v14", quieter: "M4 9v6h4l5 4V5L8 9zM16 12h5", louder: "M4 9v6h4l5 4V5L8 9zM16 12h5M18.5 9.5v5"
-  };
-  const icon = d => { const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("viewBox", "0 0 24 24"); const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", d); svg.append(p); return svg; };
-  const npClock = {};  // tv -> {position, at, paused, runtime}, so the bar's progress moves between status updates
-  function drawNowBar() {
-    const bar = $("nowbar"), playing = (status.tvs || []).filter(t => t.playing);
-    document.body.classList.toggle("has-now", playing.length > 0);
-    bar.hidden = !playing.length;
-    if (!playing.length) return bar.replaceChildren();
-    const keep = new Set(playing.map(t => t.key));
-    bar.querySelectorAll(".np").forEach(n => { if (!keep.has(n.dataset.tv)) n.remove(); });
-    playing.slice(0, 2).forEach(t => {
-      const p = t.playing;
-      npClock[t.key] = { position: p.position || 0, runtime: p.runtime || 0, paused: !!p.paused, at: Date.now() };
-      let row = bar.querySelector(`.np[data-tv="${CSS.escape(t.key)}"]`);
-      if (!row || row.dataset.thumb !== String(p.thumb)) {
-        const fresh = el("div", "np"); fresh.dataset.tv = t.key; fresh.dataset.thumb = String(p.thumb);
-        const art = el("img"); art.alt = ""; if (p.thumb) loadImage(art, p.thumb);
-        const txt = el("div", "np-txt");
-        txt.append(el("small", "", t.label.toUpperCase()), el("b", ""), el("span", ""));
-        const prog = el("div", "np-prog"); prog.append(el("i")); txt.append(prog);
-        const btns = el("div", "np-btns");
-        [["back", "Back 30 seconds"], ["toggle", "Pause or play"], ["forward", "Forward 30 seconds"], ["next", "Next episode"], ["quieter", "Volume down"], ["louder", "Volume up"]].forEach(([a, name]) => {
-          const b = el("button", "np-" + a); b.type = "button"; b.dataset.action = a; b.setAttribute("aria-label", name); b.title = name;
-          b.append(icon(ICONS[a === "toggle" ? "pause" : a])); b.addEventListener("click", () => npPress(t.key, a, b)); btns.append(b);
-        });
-        fresh.append(art, txt, btns);
-        if (row) row.replaceWith(fresh); else bar.append(fresh);
-        row = fresh;
-      }
-      row.querySelector("b").textContent = p.title || "";
-      row.querySelector(".np-txt span").textContent = [p.subtitle, p.paused ? "Paused" : ""].filter(Boolean).join(" · ");
-      row.classList.toggle("paused", !!p.paused);
-      const t2 = row.querySelector(".np-toggle"); t2.replaceChildren(icon(ICONS[p.paused ? "resume" : "pause"])); t2.dataset.paused = p.paused ? "1" : "";
-      row.querySelector(".np-next").hidden = !/\bE\d/.test(p.subtitle || "");
-    });
-    tickNowBar();
-  }
-  function tickNowBar() {
-    document.querySelectorAll("#nowbar .np").forEach(row => {
-      const c = npClock[row.dataset.tv]; if (!c || !c.runtime) return;
-      const at = c.position + (c.paused ? 0 : (Date.now() - c.at) / 1000);
-      row.querySelector(".np-prog i").style.width = Math.min(100, at / c.runtime * 100).toFixed(2) + "%";
-    });
-  }
-  setInterval(() => { if (!document.hidden) tickNowBar(); }, 1000);
-  async function npPress(tv, action, button) {
-    if (action === "toggle") action = button.dataset.paused ? "resume" : "pause";
-    button.disabled = true;
-    const r = await api("control", { action, tv });
-    button.disabled = false;
-    if (!r.ok || !r.data.ok) showNotice({ title: (r.data && (r.data.text || r.data.error)) || "That didn't work." });
-    else if (action === "pause" || action === "resume") { const c = npClock[tv]; if (c) { c.position += c.paused ? 0 : (Date.now() - c.at) / 1000; c.at = Date.now(); c.paused = action === "pause"; } button.dataset.paused = action === "pause" ? "1" : ""; button.replaceChildren(icon(ICONS[action === "pause" ? "resume" : "pause"])); }
   }
 
   /* side sheet: status views and the live action panel */

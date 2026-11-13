@@ -568,24 +568,6 @@ small{color:#86adba}
 #sportList li:first-child span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .col{gap:18px}
 
-/* Now playing: one row per TV that's playing */
-.nowbar{display:grid;gap:8px;max-width:620px;width:100%;margin:8px auto 0}
-body.has-now:not([data-scene]) .reactor{width:min(100%,380px,38vh)}
-.np{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:8px 10px;background:#031a25e6;border:1px solid #1d5566;border-radius:5px;animation:rise .3s ease-out}
-.np img{width:44px;height:64px;object-fit:cover;border-radius:3px;background:var(--line)}
-.np-txt{min-width:0}.np-txt small{display:block;font-family:var(--head);font-size:.52rem}
-.np-txt b{display:block;font-weight:600;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.np-txt span{display:block;font-size:.9rem;color:#8fb6c3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.np-prog{height:3px;margin-top:6px;background:var(--line);border-radius:2px;overflow:hidden}.np-prog i{display:block;height:100%;width:0;background:var(--cy);transition:width 1s linear}
-.np.paused .np-prog i{background:var(--dim)}
-.np-btns{display:flex;gap:4px}
-.np-btns button{width:40px;height:40px;display:grid;place-items:center;border:1px solid #1d5566;border-radius:50%;background:#052230}
-.np-btns button:hover,.np-btns button:focus-visible{border-color:var(--cy);box-shadow:0 0 10px #22d3ee44;outline:0}
-.np-btns button:disabled{opacity:.5}
-.np-btns svg{width:18px;height:18px;fill:none;stroke:var(--cy);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.np-btns .np-toggle{border-color:var(--cy)}
-[data-scene] .nowbar{display:none}
-
 /* History and settings, in the side sheet */
 .item.hist b{margin-top:2px}.hist-acts{display:flex;gap:8px;margin-top:6px}.hist-acts .act{margin-top:4px;padding:6px 10px}
 .set-head{margin:6px 0 10px;font:500 .62rem var(--head);letter-spacing:.2em;color:var(--dim)}
@@ -604,22 +586,15 @@ body.bigtext{font-size:17px}body.bigtext .list b{font-size:1.18rem}body.bigtext 
 /* Phone: Jarvis small at the top, your day stacked under him, the bar and the command always clear of the content */
 @media (max-width:700px){
   .app{padding:14px 14px calc(92px + env(safe-area-inset-bottom))}
-  body.has-now .app{padding-bottom:calc(160px + env(safe-area-inset-bottom))}
   .head{padding-bottom:10px}.brand small:first-child{display:none}.brand h1{margin:0;font-size:1.3rem}.clock small{margin-top:4px}
   .hud{gap:14px;padding-top:12px}
   .core{order:-1}
-  .reactor,body.has-now:not([data-scene]) .reactor{width:min(50vw,200px)}
+  .reactor{width:min(50vw,200px)}
   .reactor-read .state{font-size:1.05rem}.reactor-read .hintline{font-size:.48rem}.vu{height:24px}
   .col{display:flex;flex-direction:column;gap:12px}
   .card{padding:10px 12px;background:#031a2599;border:1px solid var(--line)}
   .panel h2{margin-bottom:8px}
   .serverstrip{max-width:100%;font-size:.5rem;letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .nowbar{position:fixed;z-index:4;left:12px;right:12px;bottom:calc(74px + env(safe-area-inset-bottom));width:auto;margin:0}
-  .nowbar .np:nth-child(2){display:none}
-  .np{grid-template-columns:36px 1fr auto;gap:10px;padding:7px 8px}
-  .np img{width:36px;height:52px}
-  .np-btns .np-forward,.np-btns .np-quieter,.np-btns .np-louder{display:none}
-  .np-btns button{width:44px;height:44px}
   .command{left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom))}
   .mic{width:60px}.mic svg{width:26px;height:26px}
   .command input{padding:15px 12px}
