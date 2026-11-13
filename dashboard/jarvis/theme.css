@@ -193,3 +193,17 @@ small{font-size:.72rem;letter-spacing:.06em;color:var(--dim)}
   body:not([data-scene]) .core .reactor{width:120px}
 }
 @media (prefers-reduced-motion:reduce){.brain canvas{transition:none}}
+
+/* Settings: expandable groups with device-local theme controls. */
+.settings-section{margin:0 0 10px;border:1px solid var(--edge);border-radius:12px;background:var(--surface);overflow:hidden}
+.settings-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;cursor:pointer;list-style:none;font:600 .72rem var(--body);letter-spacing:.1em;color:var(--text)}
+.settings-section>summary::-webkit-details-marker{display:none}
+.settings-section>summary:after{content:'+';font:500 1.2rem var(--body);color:var(--cy)}
+.settings-section[open]>summary:after{content:'−'}
+.settings-section[open]>summary{border-bottom:1px solid var(--edge)}
+.settings-content{padding:14px}
+.settings-content .set-head{margin-top:0}
+.settings-content .hint{font-size:.84rem;line-height:1.45}
+.settings-content .color-input{width:64px!important;height:42px;padding:4px!important;cursor:pointer;background:var(--surface2)!important;border:1px solid var(--edge2)!important;border-radius:9px!important}
+.settings-content .act{border-radius:9px;letter-spacing:.06em}
+.reduce-motion *, .reduce-motion *:before, .reduce-motion *:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}

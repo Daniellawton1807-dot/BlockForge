@@ -74,7 +74,7 @@
   function applyView(v) {
     if (v.status) setStatus(v.status);
     if (v.log) { log = v.log; if (sheetKind === "log") renderSheet(); }
-    if (v.address) address = v.address;
+    if (v.address) { serverAddress = v.address; address = store.get("jarvis.name") || serverAddress; }
     loadAcks();
     setMode(v.mode || "idle");
     setPending(v.pending);
@@ -228,7 +228,7 @@
   let paused = null;  // his reply, paused while someone talks over him
   let voiceRefused = false, speaking = false, voiceOn = store.get("jarvis.voice") !== "off", unlocked = false, speechQueue = [], speechToken = 0;
   let followUps = 0;  // times it's opened the mic by itself since he last started a command
-  let askedBack = false, address = "sir", turnOpen = false, acked = false, ackClips = [], ackNext = 0, ackLoading = false;
+  let askedBack = false, serverAddress = "sir", address = store.get("jarvis.name") || serverAddress, turnOpen = false, acked = false, ackClips = [], ackNext = 0, ackLoading = false;
   const ACK_LINES = ["Right away", "Certainly", "At once"];
   /* Clips fetched ahead, so the acknowledgement plays with no trip to the server. They're cached there, so this costs nothing after the first time. */
   async function loadAcks() {
@@ -1495,10 +1495,11 @@
      10 minutes after his last request, then goes back to Haiku, so the dear one is never left on by accident. */
   const MODELS = ["haiku", "sonnet", "opus"], MODEL_KEEP_MS = 600000;
   const MODEL_HINT = { haiku: "Haiku: quick, under 1p a request", sonnet: "Sonnet: cleverer, about 5p a request", opus: "Opus: cleverest, about 10p a request" };
+  function defaultModel() { const m = store.get("jarvis.defaultModel") || "haiku"; return MODELS.includes(m) ? m : "haiku"; }
   function pickedModel() {
-    const m = store.get("jarvis.model") || "haiku", at = Number(store.get("jarvis.modelAt") || 0);
-    if (m !== "haiku" && Date.now() - at > MODEL_KEEP_MS) { store.set("jarvis.model", "haiku"); showModel("haiku"); return "haiku"; }
-    return MODELS.includes(m) ? m : "haiku";
+    const fallback = defaultModel(), m = store.get("jarvis.model") || fallback, at = Number(store.get("jarvis.modelAt") || 0);
+    if (m !== fallback && Date.now() - at > MODEL_KEEP_MS) { store.set("jarvis.model", fallback); showModel(fallback); return fallback; }
+    return MODELS.includes(m) ? m : fallback;
   }
   function showModel(m) {
     const b = $("modelPick");
@@ -1624,7 +1625,7 @@
   }
   document.querySelectorAll(".card[data-ask]").forEach(c => c.addEventListener("click", () => { spokeLast = false; sendCommand(c.dataset.ask); }));
 
-  /* Settings (Daniel, 2026-11-06). Voice, listening and text size belong to this device; the rest is kept by Jarvis for every device. */
+  /* Settings are grouped by scope: personal and visual preferences stay on this device; home and alert settings sync through Jarvis. */
   function choice(labelText, key, options, current, onChange) {
     const wrap = el("label", "set"); wrap.append(el("span", "", labelText));
     const sel = el("select"); options.forEach(([v, t]) => { const o = el("option", "", t); o.value = v; sel.append(o); });
@@ -1635,27 +1636,79 @@
     const box = el("input"); box.type = "checkbox"; box.checked = on; box.className = "switch"; box.addEventListener("change", () => onChange(box.checked));
     wrap.append(box); return wrap;
   }
+  function textInput(labelText, value, placeholder, onChange) {
+    const wrap = el("label", "set"); wrap.append(el("span", "", labelText));
+    const input = el("input"); input.type = "text"; input.value = value || ""; input.placeholder = placeholder || "";
+    input.addEventListener("change", () => onChange(input.value.trim())); wrap.append(input); return wrap;
+  }
+  function section(title, open = false) {
+    const details = el("details", "settings-section"); details.open = open;
+    const summary = el("summary", "", title); details.append(summary);
+    const content = el("div", "settings-content"); details.append(content); return { details, content };
+  }
+  const THEMES = {
+    graphite: { label: "Graphite", vars: { "--bg":"#07080A", "--bg2":"#111317", "--cy":"#8FB8A8", "--cy2":"#B9D3C8", "--dim":"#8C929A", "--line":"#23262C", "--amber":"#D6A35C", "--green":"#7CC4A0", "--red":"#E07A6A", "--text":"#E8E9EB", "--surface":"rgba(17,19,23,.9)", "--surface2":"#15181D", "--edge":"#1E2126", "--edge2":"#2A2E35" } },
+    ocean: { label: "Deep ocean", vars: { "--bg":"#061018", "--bg2":"#0B1D28", "--cy":"#43C8E2", "--cy2":"#89E4F3", "--dim":"#86A3AE", "--line":"#173744", "--amber":"#E7AD62", "--green":"#63D5A5", "--red":"#F07979", "--text":"#E5F2F5", "--surface":"rgba(11,29,40,.92)", "--surface2":"#10232D", "--edge":"#193542", "--edge2":"#28505E" } },
+    violet: { label: "Violet night", vars: { "--bg":"#0B0913", "--bg2":"#171222", "--cy":"#B69AFF", "--cy2":"#D0BEFF", "--dim":"#9A91AB", "--line":"#302742", "--amber":"#E6AE72", "--green":"#71D2A5", "--red":"#F07A8A", "--text":"#F0EBF8", "--surface":"rgba(23,18,34,.92)", "--surface2":"#1B1727", "--edge":"#2A2438", "--edge2":"#403653" } },
+    ember: { label: "Ember", vars: { "--bg":"#100B08", "--bg2":"#1D1410", "--cy":"#E8A66B", "--cy2":"#F3C69C", "--dim":"#A5978D", "--line":"#3B2A20", "--amber":"#F0B65E", "--green":"#82C69D", "--red":"#EB7770", "--text":"#F4ECE6", "--surface":"rgba(29,20,16,.93)", "--surface2":"#241913", "--edge":"#3A291F", "--edge2":"#523A2B" } }
+  };
+  function applyTheme(id) {
+    const theme = THEMES[id] || THEMES.graphite;
+    document.documentElement.dataset.theme = id in THEMES ? id : "graphite";
+    Object.entries(theme.vars).forEach(([key, value]) => document.documentElement.style.setProperty(key, value));
+    const accent = store.get("jarvis.accent");
+    if (accent && /^#[0-9a-f]{6}$/i.test(accent)) { document.documentElement.style.setProperty("--cy", accent); document.documentElement.style.setProperty("--cy2", accent); }
+  }
   function setTextSize(v) { store.set("jarvis.text", v); document.body.classList.toggle("bigtext", v === "large"); }
+  function setReducedMotion(on) { store.set("jarvis.reduceMotion", on ? "on" : "off"); document.body.classList.toggle("reduce-motion", on); }
+  applyTheme(store.get("jarvis.theme") || "graphite");
   setTextSize(store.get("jarvis.text") || "normal");
+  setReducedMotion(store.get("jarvis.reduceMotion") === "on");
   async function renderSettings(body) {
-    body.append(el("h3", "set-head", "ON THIS DEVICE"));
-    body.append(toggle("Jarvis's voice", voiceOn, v => setVoice(v)));
-    body.append(toggle('Listen for "Hey Jarvis"', wakeOn, v => setWake(v)));
-    body.append(choice("Wake word sensitivity", "wakesens", [["low", "Less sensitive (fewer false starts)"], ["normal", "Normal"], ["high", "More sensitive (hears you from further)"]], store.get("jarvis.wakesens") || "normal",
+    const personal = section("PERSONAL PREFERENCES", true);
+    const preferredName = textInput("How Jarvis addresses you", store.get("jarvis.name") || "", "Use your account default", value => {
+      if (value) { store.set("jarvis.name", value); address = value; }
+      else { store.del("jarvis.name"); address = serverAddress; }
+      ackClips.forEach(url => URL.revokeObjectURL(url)); ackClips = []; ackNext = 0; ackLoading = false; loadAcks();
+    });
+    personal.content.append(preferredName);
+    personal.content.append(choice("Default response model", "defaultModel", MODELS.map(m => [m, cap(m)]), defaultModel(), value => {
+      store.set("jarvis.defaultModel", value); store.set("jarvis.model", value); store.set("jarvis.modelAt", String(Date.now())); showModel(value);
+    }));
+    personal.content.append(el("p", "hint", "The model button beside the message box can temporarily switch models; it returns to your default after 10 minutes."));
+    body.append(personal.details);
+
+    const voice = section("VOICE & LISTENING");
+    voice.content.append(toggle("Jarvis's voice", voiceOn, v => setVoice(v)));
+    voice.content.append(toggle('Listen for "Hey Jarvis"', wakeOn, v => setWake(v)));
+    voice.content.append(choice("Wake word sensitivity", "wakesens", [["low", "Less sensitive (fewer false starts)"], ["normal", "Normal"], ["high", "High (hears you further away)"]], store.get("jarvis.wakesens") || "normal",
       v => { store.set("jarvis.wakesens", v); if (worker) worker.postMessage({ type: "threshold", value: WAKE_LEVELS[v] }); }));
-    body.append(choice("Talking over him", "talkover", [["off", "Off"], ["low", "Only when you're loud"], ["normal", "Normal"], ["high", "Stops easily"]], store.get("jarvis.talkover") || "normal",
+    voice.content.append(choice("Talking over Jarvis", "talkover", [["off", "Off"], ["low", "Only when you're loud"], ["normal", "Normal"], ["high", "Stops easily"]], store.get("jarvis.talkover") || "normal",
       v => { store.set("jarvis.talkover", v); bargeRatio = BARGE_RATIOS[v] ?? 8; }));
-    if (DeviceSR) body.append(choice("Speech recognition", "recogniser", [["jarvis", "Jarvis's server (recommended)"], ["device", IOS ? "This iPhone's own (Apple)" : "This browser's own"]],
+    if (DeviceSR) voice.content.append(choice("Speech recognition", "recogniser", [["jarvis", "Jarvis's server (recommended)"], ["device", IOS ? "This iPhone's own (Apple)" : "This browser's own"]],
       store.get("jarvis.recogniser") || "jarvis", v => store.set("jarvis.recogniser", v)));
-    body.append(choice("Quieten a TV while listening", "hush", [["off", "Off"], ["living room", "Living Room TV (mutes it, then back)"]],
-      store.get("jarvis.hush") || "off", v => { store.set("jarvis.hush", v); }));
-    body.append(choice("Text size", "text", [["normal", "Normal"], ["large", "Large"]], store.get("jarvis.text") || "normal", setTextSize));
-    body.append(el("h3", "set-head", "FOR EVERY DEVICE"));
-    const wait = el("p", "hint", "Loading…"); body.append(wait);
+    voice.content.append(choice("Quieten a TV while listening", "hush", [["off", "Off"], ["living room", "Living Room TV (mutes it, then back)"]],
+      store.get("jarvis.hush") || "off", v => store.set("jarvis.hush", v)));
+    body.append(voice.details);
+
+    const appearance = section("APPEARANCE");
+    appearance.content.append(choice("Colour scheme", "theme", Object.entries(THEMES).map(([key, value]) => [key, value.label]), store.get("jarvis.theme") || "graphite", value => {
+      store.set("jarvis.theme", value); applyTheme(value); accent.value = store.get("jarvis.accent") || THEMES[value].vars["--cy"];
+    }));
+    const accentLabel = el("label", "set"); accentLabel.append(el("span", "", "Custom accent colour"));
+    const accent = el("input"); accent.type = "color"; accent.className = "color-input"; accent.value = store.get("jarvis.accent") || (THEMES[store.get("jarvis.theme") || "graphite"] || THEMES.graphite).vars["--cy"];
+    accent.addEventListener("input", () => { store.set("jarvis.accent", accent.value); document.documentElement.style.setProperty("--cy", accent.value); document.documentElement.style.setProperty("--cy2", accent.value); }); accentLabel.append(accent); appearance.content.append(accentLabel);
+    const resetAccent = el("button", "act", "USE SCHEME ACCENT"); resetAccent.type = "button"; resetAccent.addEventListener("click", () => { store.del("jarvis.accent"); applyTheme(store.get("jarvis.theme") || "graphite"); accent.value = THEMES[store.get("jarvis.theme") || "graphite"].vars["--cy"]; }); appearance.content.append(resetAccent);
+    appearance.content.append(choice("Text size", "text", [["normal", "Normal"], ["large", "Large"]], store.get("jarvis.text") || "normal", setTextSize));
+    appearance.content.append(toggle("Reduce animations", store.get("jarvis.reduceMotion") === "on", setReducedMotion));
+    body.append(appearance.details);
+
+    const home = section("HOME & ALERTS");
+    const wait = el("p", "hint", "Loading shared settings…"); home.content.append(wait); body.append(home.details);
     const r = await api("settings");
     wait.remove();
     if (sheetKind !== "settings") return;
-    if (!r.ok) return body.append(el("p", "hint", r.data.error || "Jarvis isn't reachable."));
+    if (!r.ok) return home.content.append(el("p", "hint", r.data.error || "Jarvis isn't reachable."));
     const s = r.data, [qFrom, qTo] = (s.quiet || "23:00-08:00").split("-");
     const tv = choice("Default TV", "tv", Object.entries(s.tvs || {}), s.default_tv, () => {});
     const from = el("input"); from.type = "time"; from.value = qFrom;
@@ -1665,8 +1718,8 @@
     const drivers = el("input"); drivers.value = (s.follow_drivers || []).join(", "); drivers.placeholder = "e.g. Lando Norris";
     const tLabel = el("label", "set"); tLabel.append(el("span", "", "Football teams you follow"), teams);
     const dLabel = el("label", "set"); dLabel.append(el("span", "", "F1 drivers you follow"), drivers);
-    const save = el("button", "act", "SAVE"); save.type = "button";
-    const note = el("p", "hint", "");
+    const save = el("button", "act", "SAVE SHARED SETTINGS"); save.type = "button";
+    const note = el("p", "hint", "These settings are shared with your other devices.");
     save.addEventListener("click", async () => {
       save.disabled = true;
       const list = v => v.split(",").map(x => x.trim()).filter(Boolean);
@@ -1675,7 +1728,7 @@
       note.textContent = out.ok ? "Saved." : out.data.error || "That didn't save.";
       if (out.ok) fetchToday(true);
     });
-    body.append(tv, quiet, tLabel, dLabel, save, note);
+    home.content.append(tv, quiet, tLabel, dLabel, save, note);
   }
 
   /* start: does Homebase know us, then does Jarvis */
