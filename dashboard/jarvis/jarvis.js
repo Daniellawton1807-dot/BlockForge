@@ -541,11 +541,14 @@
     stage.append(stageHead(title || String(scene || "JARVIS").toUpperCase()));
     return stage;
   }
-  function dismissResultWindow() {
+  function dismissResultWindow(restoreFocus = true) {
     const stage = $("stage");
-    if (!stage || !stage.classList.contains("result-window")) return;
+    if (!stage || !stage.classList.contains("result-window") || stage.classList.contains("is-closing")) return;
     stage.classList.add("is-closing"); $("resultScrim").classList.add("is-closing");
-    setTimeout(() => { $("resultScrim").classList.remove("is-closing"); goHome(); }, 260);
+    setTimeout(() => {
+      $("resultScrim").classList.remove("is-closing"); goHome();
+      if (restoreFocus) requestAnimationFrame(() => $("command")?.focus({ preventScroll: true }));
+    }, 260);
   }
   function scheduleResultDismiss() {
     if (!resultAutoDismiss || speaking || hearing || recording || askedBack || pendingTool) return;
@@ -598,7 +601,12 @@
     head.append(close);
     return head;
   }
-  document.addEventListener("keydown", e => { if (e.key === "Escape" && $("sheet").hidden) goHome(); });
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape" || !$("sheet").hidden) return;
+    const stage = $("stage");
+    if (stage?.classList.contains("result-window")) { e.preventDefault(); dismissResultWindow(true); }
+    else goHome();
+  });
 
   /* What's behind the page: a title's backdrop, or the sky */
   function setAmbient(kind, key) {
@@ -891,11 +899,20 @@
   }
 
   /* A journey: every way of going beside Google's map, with live traffic on the roads. The map's key comes from the server and only works on this site. */
-  const MAP_STYLE = [
-    { elementType: "geometry", stylers: [{ color: "#06202c" }] }, { elementType: "labels.text.fill", stylers: [{ color: "#7fb0be" }] }, { elementType: "labels.text.stroke", stylers: [{ color: "#04141c" }] },
-    { featureType: "poi", stylers: [{ visibility: "off" }] }, { featureType: "transit", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-    { featureType: "road", elementType: "geometry", stylers: [{ color: "#123a4a" }] }, { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#1c5468" }] },
-    { featureType: "water", elementType: "geometry", stylers: [{ color: "#020c13" }] }, { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#1d5566" }] }];
+  function routePalette() {
+    const css = getComputedStyle(document.documentElement);
+    const get = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+    return { bg: get("--bg", "#07080a"), surface: get("--surface", "#111317"), edge: get("--edge", "#23262c"), text: get("--dim", "#8c929a"), accent: get("--cy", "#8fb8a8"), accent2: get("--cy2", "#b9d3c8") };
+  }
+  function mapStyleForTheme() {
+    const c = routePalette();
+    return [
+      { elementType: "geometry", stylers: [{ color: c.bg }] }, { elementType: "labels.text.fill", stylers: [{ color: c.text }] }, { elementType: "labels.text.stroke", stylers: [{ color: c.bg }] },
+      { featureType: "poi", stylers: [{ visibility: "off" }] }, { featureType: "transit", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+      { featureType: "road", elementType: "geometry", stylers: [{ color: c.edge }] }, { featureType: "road.highway", elementType: "geometry", stylers: [{ color: c.surface }] },
+      { featureType: "water", elementType: "geometry", stylers: [{ color: c.surface }] }, { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: c.edge }] }
+    ];
+  }
   let mapsReady = null;
   function loadMaps(key) {
     if (!mapsReady) mapsReady = new Promise((done, failed) => {
@@ -911,12 +928,20 @@
   function noMap(box) { box.replaceChildren(el("p", "route-nomap", "The map isn't available, but the route is all here.")); }
   function renderRoute(v, stage) {
     const wrap = el("div", "route"), side = el("div", "route-side"), box = el("div", "route-map"), summary = el("div"), lines = [];
+    const overview = el("section", "route-summarybar"), pathline = el("div", "route-pathline"), stats = el("div", "route-summary-stats");
+    const point = (label, value) => { const node = el("div", "route-point"); node.append(el("small", "", label), el("b", "", value || "—")); return node; };
+    const origin = point("FROM", v.from || "Your location"), destination = point("TO", v.to || v.address || "Destination");
+    pathline.append(origin, el("span", "route-path-arrow", "→"), destination);
+    const stat = label => { const node = el("div", "route-summary-stat"); const value = el("b", "", "—"); node.append(el("small", "", label), value); stats.append(node); return value; };
+    const etaValue = stat("TRAVEL TIME"), distanceValue = stat("DISTANCE"), modeValue = stat("MODE");
+    overview.append(pathline, stats);
     const go = el("a", "act route-open", "OPEN IN GOOGLE MAPS");
     if (/^https:\/\/www\.google\.com\/maps\//.test(v.link || "")) { go.href = v.link; go.target = "_blank"; go.rel = "noopener"; } else go.hidden = true;
     let chosen = 0;
     const pick = i => {
       chosen = i;
       const r = v.routes[i], facts = el("div", "route-facts"), list = el("ol", "route-steps");
+      etaValue.textContent = r.duration || "—"; distanceValue.textContent = r.miles ? r.miles + " mi" : "—"; modeValue.textContent = [v.how, r.via].filter(Boolean).join(" · ") || "Route";
       [["Leave", r.leave], ["Arrive", r.arrive], ["Distance", r.miles + " mi"], r.traffic_text && ["Traffic", "+" + r.traffic_text]].filter(Boolean).forEach(([a, b]) => { const f = el("div"); f.append(el("small", "", a), el("b", "", b)); facts.append(f); });
       const parts = [el("div", "route-time", r.duration), el("p", "route-to", [v.how, r.via].filter(Boolean).join(" · ")), el("p", "route-address", v.address || v.to), facts];
       (r.warnings || []).forEach(w => parts.push(el("p", "route-warn", w)));
@@ -938,15 +963,17 @@
       r.steps.forEach(s => { const li = el("li", "is-" + s.kind); li.append(el("span", "", s.text)); if (s.detail) li.append(el("small", "", s.detail)); list.append(li); });
       parts.push(go, list);
       summary.replaceChildren(...parts);
-      lines.forEach((l, n) => l.setOptions(n === i ? { strokeColor: "#22d3ee", strokeOpacity: 1, strokeWeight: 6, zIndex: 2 } : { strokeColor: "#8fb4c0", strokeOpacity: 0.65, strokeWeight: 4, zIndex: 1 }));
+      const colors = routePalette();
+      lines.forEach((l, n) => l.setOptions(n === i ? { strokeColor: colors.accent, strokeOpacity: 1, strokeWeight: 6, zIndex: 2 } : { strokeColor: colors.text, strokeOpacity: 0.65, strokeWeight: 4, zIndex: 1 }));
     };
-    side.append(summary); wrap.append(box, side); stage.append(wrap);
+    side.append(summary); wrap.append(overview, box, side); stage.append(wrap);
     pick(0);
     if (!v.map_key) return noMap(box);
     loadMaps(v.map_key).then(() => {
       if (!box.isConnected) return;  // he's moved on: a map is only paid for once it's drawn
       const g = window.google.maps, bounds = new g.LatLngBounds();
-      const map = new g.Map(box, { styles: MAP_STYLE, backgroundColor: "#020c13", disableDefaultUI: true, zoomControl: true, zoomControlOptions: { position: g.ControlPosition.RIGHT_BOTTOM } });
+      const colors = routePalette();
+      const map = new g.Map(box, { styles: mapStyleForTheme(), backgroundColor: colors.bg, disableDefaultUI: true, zoomControl: true, zoomControlOptions: { position: g.ControlPosition.RIGHT_BOTTOM } });
       v.routes.forEach((r, n) => {
         const path = g.geometry.encoding.decodePath(r.polyline);
         path.forEach(p => bounds.extend(p));
@@ -955,8 +982,8 @@
         lines.push(line);
       });
       const path = g.geometry.encoding.decodePath(v.routes[0].polyline);
-      [[path[0], "#ffffff"], [path[path.length - 1], "#e8a24c"]].forEach(([position, fillColor]) => new g.Marker({ position, map, zIndex: 3, icon: { path: g.SymbolPath.CIRCLE, scale: 7, fillColor, fillOpacity: 1, strokeColor: "#020c13", strokeWeight: 2 } }));
-      (v.stops || []).filter(s => s.lat != null).forEach(s => new g.Marker({ position: { lat: s.lat, lng: s.lng }, map, zIndex: 3, title: s.name, icon: { path: g.SymbolPath.CIRCLE, scale: 6, fillColor: "#67e8f9", fillOpacity: 1, strokeColor: "#020c13", strokeWeight: 2 } }));
+      [[path[0], colors.accent2], [path[path.length - 1], colors.accent]].forEach(([position, fillColor]) => new g.Marker({ position, map, zIndex: 3, icon: { path: g.SymbolPath.CIRCLE, scale: 7, fillColor, fillOpacity: 1, strokeColor: colors.bg, strokeWeight: 2 } }));
+      (v.stops || []).filter(s => s.lat != null).forEach(s => new g.Marker({ position: { lat: s.lat, lng: s.lng }, map, zIndex: 3, title: s.name, icon: { path: g.SymbolPath.CIRCLE, scale: 6, fillColor: colors.accent2, fillOpacity: 1, strokeColor: colors.bg, strokeWeight: 2 } }));
       if (v.mode === "drive") new g.TrafficLayer().setMap(map);
       map.fitBounds(bounds, 48);
       pick(chosen);
@@ -999,12 +1026,11 @@
   let trailOpen = false;
   const WEB_FIELDS = ["trail", "summary", "standing", "standing_text", "hide_page", "query", "status", "url", "site", "frame", "hero", "results", "answer", "facts", "points", "read", "mode", "stage"];
   function webLive(e) {
-    const starting = e.stage === "searching" || !webState;
+    const starting = !webState || (e.stage === "searching" && !webState.live);
     if (starting) { goHome(); $("said").textContent = ""; hideToast(); webState = { results: [], points: [], facts: [], answer: "", index: 0, previewOpen: false }; }
     WEB_FIELDS.forEach(k => { if (e[k] !== undefined) webState[k] = e[k]; });
     webState.live = e.stage !== "done";
     if (e.stage === "searching" && turnOpen) acknowledge();
-    if (webState.live) { updateWebSearchPeek(); return; }
     $("webSearchPeek").hidden = true;
     drawWeb();
     if (e.stage === "done" && webState.mode === "walk" && webState.points.length) startWalk();
@@ -1046,6 +1072,16 @@
       stage.append(root);
     }
     stage.querySelector(".stage-head h3").textContent = w.query ? "WEB  /  " + w.query : "WEB";
+    let progress = stage.querySelector(".web-stage-progress");
+    if (!progress) {
+      progress = el("div", "web-stage-progress");
+      const label = el("span", "web-stage-status"), track = el("span", "web-stage-track"); track.append(el("i"));
+      progress.append(el("i", "web-stage-pulse"), label, track);
+      stage.querySelector(".stage-head").after(progress);
+    }
+    progress.classList.toggle("is-complete", !w.live);
+    progress.querySelector(".web-stage-status").textContent = w.live ? (w.status || "Searching the web") : "Results ready";
+    progress.setAttribute("aria-live", "polite");
     root.dataset.mode = w.live ? "live" : w.mode || "answer";
     root.classList.toggle("busy", w.live);
     root.querySelector(".addr").textContent = w.live && w.status ? w.status : w.url ? w.url.replace(/^https?:\/\/(www\.)?/, "") : "";
