@@ -710,3 +710,7 @@ body:not([data-scene])[data-mode=speaking] .reactor .arc{stroke:var(--jarvis-cya
     width:calc(100vw - 24px);height:auto;max-height:none;min-height:0
   }
 }
+
+/* The dashboard clock sits near the top edge, so anchor results just below it. */
+.stage.result-window{--result-top:clamp(56px,7vh,88px)}
+@media(max-width:700px){.stage.result-window{--result-top:clamp(70px,10vh,98px)}}
