@@ -54,7 +54,7 @@
     if (!health.ok) svc.append(el("p", "rp-empty", "Couldn't check the apps."));
     else for (const [name, s] of Object.entries(health.data.services)) {
       const state = s.state || (s.up ? "online" : "unreachable");
-      const label = ({ online: "Online", login_required: "Sign-in required", redirected: "Redirected", degraded: "Degraded", unreachable: "Unreachable" })[state] || "Unknown";
+      const label = ({ online: "Online", login_required: "Sign-in required", redirected: "Redirected", auth_failed: "API key rejected", not_configured: "Not configured", degraded: "Degraded", unreachable: "Unreachable" })[state] || "Unknown";
       svc.append(row(name, label + (s.status ? " · HTTP " + s.status : "") + (s.ms ? " · " + s.ms + " ms" : ""), ["online", "login_required", "redirected"].includes(state) ? "up" : state === "degraded" ? "warn" : "down"));
     }
   }

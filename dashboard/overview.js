@@ -66,19 +66,19 @@
     for (const s of cfg.services || []) {
       const h = health[s.name], local = !h && /^http:\/\/(192\.168|10\.|localhost)/.test(s.url || "");
       const state = h?.state || (h ? h.up ? "online" : "unreachable" : "checking");
-      if (h) { checked++; if (h.reachable ?? h.up) up++; }
+      if (h) { checked++; if (h.up) up++; }
       if (q && !(s.name + " " + (s.desc || "")).toLowerCase().includes(q)) continue;
       const a = el("a", "ov-app"); a.href = s.url || "#"; a.target = "_blank"; a.rel = "noopener";
       const ic = el("span", "ov-app-ic", s.icon || s.name[0]); ic.style.background = TONES[s.tone] || "var(--accent)";
       const txt = el("span", "ov-app-txt"); txt.append(el("b", null, s.name), el("small", null, (s.desc || "").replace(/ — URL to be added/, "")));
-      const tone = state === "unreachable" ? "down" : state === "degraded" ? "paused" : ["login_required", "redirected"].includes(state) ? "idle" : state === "online" ? "up" : local ? "local" : "";
+      const tone = ["unreachable", "auth_failed", "not_configured"].includes(state) ? "down" : state === "degraded" ? "paused" : ["login_required", "redirected"].includes(state) ? "idle" : state === "online" ? "up" : local ? "local" : "";
       const dot = el("i", "ov-dot " + tone);
-      const label = ({ online: "Online", login_required: "Reachable · sign-in required", redirected: "Reachable · redirected", degraded: "Server error", unreachable: "Unreachable", checking: "Checking…" })[state] || "Unknown";
+      const label = ({ online: "Online", login_required: "Reachable · sign-in required", redirected: "Reachable · redirected", auth_failed: "API key rejected", not_configured: "Not configured", degraded: "Server error", unreachable: "Unreachable", checking: "Checking…" })[state] || "Unknown";
       dot.title = h ? label + (h.status ? ` (HTTP ${h.status})` : "") + (h.ms ? ` · ${h.ms} ms` : "") : local ? "Home network only" : "Checking…";
       a.append(ic, txt, dot); box.append(a);
     }
     if (!box.childNodes.length) box.append(el("div", "hub-note", "No app matches."));
-    $("ovAppsUp").textContent = checked ? `${up} of ${checked} reachable` : "";
+    $("ovAppsUp").textContent = checked ? `${up} of ${checked} available` : "";
     if (checked) { summary.down = checked - up; paintSummary(); }
   }
   $("ovAppSearch").addEventListener("input", paintApps);
@@ -255,7 +255,7 @@
   $("ovNotifyToggle").onclick = () => { store.set("hb_notify_hidden", store.get("hb_notify_hidden", "") === "1" ? "" : "1"); paintNotifyFold(); };
   paintNotifyFold();
 
-  function loadPrivate() { loadTvs(); loadDownloads(); loadTonight(); loadMinecraft(); loadWatching(); loadDrives(); loadNotify(); }
+  function loadPrivate() { loadHealth(); loadTvs(); loadDownloads(); loadTonight(); loadMinecraft(); loadWatching(); loadDrives(); loadNotify(); }
   gate({ message: "Sign in to see your TVs, downloads, tonight's episodes and the Minecraft server.", onReady() {
     loadPrivate();
     setInterval(() => { if (!document.hidden) { loadTvs(); loadDownloads(); loadMinecraft(); loadWatching(); } }, 20000);

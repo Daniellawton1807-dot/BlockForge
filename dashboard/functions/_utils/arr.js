@@ -8,11 +8,12 @@ const ARR_SERVICES = [
 ];
 
 export class ArrError extends Error {
-  constructor(code, message, status = 502) {
+  constructor(code, message, status = 502, upstreamStatus = 0) {
     super(message);
     this.name = "ArrError";
     this.code = code;
     this.status = status;
+    this.upstreamStatus = upstreamStatus;
   }
 }
 
@@ -73,7 +74,7 @@ export async function arrCall(env, service, path, options = {}) {
     const message = authFailed
       ? service.name + " rejected Homebase's API key (HTTP " + response.status + "). Check the protected Pages secret for this instance, save it, and retry."
       : service.name + " returned HTTP " + response.status + " for this action. Check its activity and service logs, then retry.";
-    throw new ArrError(code, message, 502);
+    throw new ArrError(code, message, 502, response.status);
   }
   if (response.status === 204) return null;
   const contentType = response.headers.get("content-type") || "";

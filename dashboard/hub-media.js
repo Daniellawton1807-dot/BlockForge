@@ -107,7 +107,7 @@
     if (view === "attention" && !searching) drawAttention();
   }
   const operationalHealth = s => s?.state || (!s ? "checking" : s.up ? "online" : "unreachable");
-  const healthLabel = s => ({ online: "Online", login_required: "Reachable · sign-in required", redirected: "Reachable · redirected", degraded: "Degraded", unreachable: "Unreachable", checking: "Checking" })[operationalHealth(s)] || "Unknown";
+  const healthLabel = s => ({ online: "Online", login_required: "Reachable · sign-in required", redirected: "Reachable · redirected", auth_failed: "API key rejected", not_configured: "Not configured", degraded: "Degraded", unreachable: "Unreachable", checking: "Checking" })[operationalHealth(s)] || "Unknown";
   function attentionItems() {
     return {
       blockedDownloads: visibleDownloadItems().filter(i => i.lifecycle === "failed" || i.lifecycle === "blocked"),
