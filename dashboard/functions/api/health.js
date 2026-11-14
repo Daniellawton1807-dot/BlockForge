@@ -21,10 +21,13 @@ async function check(url) {
   const started = Date.now();
   try {
     const response = await fetch(url, { method: "GET", redirect: "manual", signal: AbortSignal.timeout(6000), headers: { "user-agent": "Homebase health check" } });
-    // a login page, a redirect or "forbidden" all mean the app answered; 5xx (530 = tunnel down) means it didn't
-    return { up: response.status < 500, status: response.status, ms: Date.now() - started };
+    const status = response.status;
+    const state = status === 401 || status === 403 ? "login_required" : status >= 300 && status < 400 ? "redirected" : status >= 400 ? "degraded" : "online";
+    // `up` remains for older dashboard clients. A redirect or login gate means the host answered;
+    // `state` lets newer clients distinguish that from a fully healthy 2xx response.
+    return { up: status < 500, reachable: true, state, status, ms: Date.now() - started };
   } catch {
-    return { up: false, status: 0, ms: Date.now() - started };
+    return { up: false, reachable: false, state: "unreachable", status: 0, ms: Date.now() - started };
   }
 }
 

@@ -4,13 +4,13 @@
    through /api/tv/*. Everything is rendered with textContent, never innerHTML. */
 (() => {
   const { $, el, icon, store, toast, openSheet, closeSheet, sheetOpen, skeleton, rail, api, errorText, gate, TVS, TV_SUFFIX } = Hub;
-  const VIEWS = ["foryou", "upcoming", "library", "downloads", "autopilot"];
+  const VIEWS = ["foryou", "upcoming", "library", "attention", "downloads", "autopilot"];
   let view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : store.get("hb_media_view", "foryou");
   if (!VIEWS.includes(view)) view = "foryou";
-  let services = [], library = [], forYou = null, forYouBusy = false, forYouError = "", recent = null, calendar = null, calendarAt = 0, downloads = null;
+  let services = [], library = [], forYou = null, forYouBusy = false, forYouError = "", recent = null, calendar = null, calendarAt = 0, downloads = null, health = {}, healthLoaded = false, healthError = "", mediaConfigError = "";
   let libFilter = store.get("hb_lib_filter", "all"), libSort = store.get("hb_lib_sort", "added"), upFilter = "all";
   let searching = false, searchTimer, searchSeq = 0, remoteResults = null, remoteError = "";
-  let dlTimer = null, spotTimer = null, flashDownload = "", dlShape = "", showDismissedDownloads = false;
+  let dlTimer = null, spotTimer = null, healthTimer = null, flashDownload = "", dlShape = "", showDismissedDownloads = false;
   const dismissedDownloadHistory = new Set();
   try { for (const id of JSON.parse(localStorage.getItem("hb_dismissed_download_history") || "[]")) dismissedDownloadHistory.add(String(id)); } catch {}
 
@@ -90,12 +90,36 @@
   // ---------- loading ----------
   async function loadBasics() {
     const [cfg, lib] = await Promise.all([api("/api/media/config"), api("/api/media/library")]);
+    mediaConfigError = cfg.ok ? "" : errorText(cfg, "Couldn't reach Sonarr and Radarr.");
     services = cfg.ok ? cfg.data.services || [] : services;
     library = lib.ok ? lib.data.items || [] : library;
     const ready = services.filter(s => s.connected).length, status = $("arrStatus");
     status.className = "hub-status " + (cfg.ok && ready === services.length ? "ok" : "warn");
     status.lastChild.textContent = cfg.ok ? (ready === services.length ? "Sonarr & Radarr online" : `${ready} of ${services.length} connected`) : "Media services offline";
     $("arrConnectionLabel").textContent = cfg.ok ? `${ready} of ${services.length} Sonarr/Radarr connected` : errorText(cfg, "Couldn't reach Sonarr and Radarr.");
+    updateAttentionCount();
+  }
+  async function loadHealth() {
+    const r = await api("/api/health");
+    if (r.ok) { health = r.data.services || {}; healthError = ""; }
+    else healthError = errorText(r, "Couldn't check app health.");
+    healthLoaded = true; updateAttentionCount();
+    if (view === "attention" && !searching) drawAttention();
+  }
+  const operationalHealth = s => s?.state || (!s ? "checking" : s.up ? "online" : "unreachable");
+  const healthLabel = s => ({ online: "Online", login_required: "Reachable · sign-in required", redirected: "Reachable · redirected", degraded: "Degraded", unreachable: "Unreachable", checking: "Checking" })[operationalHealth(s)] || "Unknown";
+  function attentionItems() {
+    return {
+      blockedDownloads: visibleDownloadItems().filter(i => i.lifecycle === "failed" || i.lifecycle === "blocked"),
+      needsYou: autopilot?.lastRun?.needsYou || [],
+      serviceIssues: mediaConfigError ? [{ name: "Sonarr/Radarr connection", error: mediaConfigError }] : services.filter(s => !s.connected),
+      externalIssues: Object.entries(health).filter(([, s]) => ["degraded", "unreachable"].includes(operationalHealth(s)))
+    };
+  }
+  function updateAttentionCount() {
+    const { blockedDownloads = [], needsYou = [], serviceIssues = [], externalIssues = [] } = attentionItems();
+    const badge = $("attentionCount");
+    if (badge) { const count = blockedDownloads.length + needsYou.length + serviceIssues.length + externalIssues.length; badge.textContent = count || ""; badge.classList.toggle("warn", count > 0); }
   }
   function visibleDownloadItems() {
     return (downloads?.items || []).filter(item => item.lifecycle !== "failed" || showDismissedDownloads || !dismissedDownloadHistory.has(String(item.id)));
@@ -146,12 +170,14 @@
     const items = downloads.items || [];
     const active = items.filter(i => i.lifecycle === "downloading" || i.lifecycle === "importing").length;
     $("dlCount").textContent = active || "";
+    updateAttentionCount();
     if (view === "downloads" && !searching) {
       const nextShape = downloadShape(items);
       // background refreshes never replay the fade-in; only switching tabs animates
       if (nextShape !== dlShape || !$("view").querySelector(".hub-stats")) { $("view").classList.add("quiet"); drawDownloads(); }
       else patchDownloadsInPlace();
     }
+    if (view === "attention" && !searching) drawAttention();
   }
 
   // ---------- views and tabs ----------
@@ -171,7 +197,9 @@
     moveIndicator();
     document.querySelector("#tabs button.on")?.scrollIntoView({ block: "nearest", inline: "center" });
     clearInterval(dlTimer); dlTimer = setInterval(() => { if (!document.hidden) refreshDownloads(); }, v === "downloads" ? 5000 : 20000);
-    if (v === "autopilot" || v === "downloads") loadAutopilot().then(() => { if (view === "autopilot") apRedraw(); else if (view === "downloads" && !searching) drawDownloads(); });
+    clearInterval(healthTimer); if (v === "attention") healthTimer = setInterval(() => { if (!document.hidden) loadHealth(); }, 60000);
+    if (v === "autopilot" || v === "downloads" || v === "attention") loadAutopilot().then(() => { if (view === "autopilot") apRedraw(); else if (view === "downloads" && !searching) drawDownloads(); else if (view === "attention" && !searching) drawAttention(); });
+    if (v === "attention") { loadHealth(); if (!downloads) refreshDownloads(); }
     draw();
   }
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => setView(b.dataset.view));
@@ -181,6 +209,7 @@
     if (view === "foryou") return drawForYou();
     if (view === "upcoming") return drawUpcoming();
     if (view === "library") return drawLibrary();
+    if (view === "attention") return drawAttention();
     if (view === "autopilot") return drawAutopilot();
     return drawDownloads();
   }
@@ -422,6 +451,64 @@
       if (row) { flashDownload = ""; row.classList.add("hub-flash"); row.scrollIntoView({ behavior: "smooth", block: "center" }); }
     }
   }
+  function drawAttention() {
+    const v = fresh(), data = attentionItems();
+    const { blockedDownloads, needsYou, serviceIssues, externalIssues } = data;
+    const total = blockedDownloads.length + needsYou.length + serviceIssues.length + externalIssues.length;
+    v.append(sectionHead("OPERATIONS", "Needs attention", total ? plural(total, "item") + " needs a next step" : "Everything looks clear"));
+    if (!downloads || (!autopilot && !autopilotError) || !healthLoaded) {
+      v.append(note("Checking your services", "Homebase is checking download activity, Sonarr/Radarr and published app endpoints."));
+      return;
+    }
+    if (autopilotError) v.append(note("Autopilot could not be checked", autopilotError + " Check the private service connection, then retry."));
+    if (healthError) v.append(note("App health could not be checked", healthError + " Use Refresh all checks to try again."));
+    if (downloads?.error) v.append(note("Download queue could not be checked", downloads.error + " Check the downloader connection, then retry."));
+    if (blockedDownloads.length) {
+      const s = section("DOWNLOADS", "Failed or blocked", plural(blockedDownloads.length, "item")), list = el("div", "hub-list");
+      blockedDownloads.forEach(item => list.append(downloadRow(item))); s.append(list); v.append(s);
+    }
+    if (needsYou.length) {
+      const s = section("AUTOPILOT", "Needs your help", plural(needsYou.length, "item")), list = el("div", "hub-list");
+      for (const item of needsYou) {
+        const row = el("div", "ap-row warn"), info = el("div", "info"), ic = el("span", "ap-ic warn");
+        info.append(el("div", "nm", item.title || "Download needs attention"), el("div", "why", item.reason || "Autopilot could not safely resolve this."));
+        if (item.detail) info.append(el("div", "sub", (item.service ? item.service + " says: " : "") + item.detail));
+        ic.append(icon("info")); row.append(ic, info, button("Open Autopilot", "small", () => setView("autopilot"), "chevR")); list.append(row);
+      }
+      s.append(list); v.append(s);
+    }
+    if (serviceIssues.length) {
+      const s = section("MEDIA SERVICES", "Sonarr and Radarr", plural(serviceIssues.length, "service")), list = el("div", "hub-list");
+      for (const service of serviceIssues) {
+        const row = el("div", "hub-dl"), info = el("div", "info");
+        info.append(el("div", "nm", service.name), el("div", "sub", service.error || service.message || "Homebase couldn't connect. Check the service URL and protected API key, then retry."));
+        row.append(icon("info"), info, button("Retry", "small", () => loadBasics().then(() => { if (view === "attention") drawAttention(); }), "refresh")); list.append(row);
+      }
+      s.append(list); v.append(s);
+    }
+    if (externalIssues.length) {
+      const s = section("APP HEALTH", "Unreachable or degraded", plural(externalIssues.length, "app")), list = el("div", "hub-list");
+      for (const [name, status] of externalIssues) {
+        const row = el("div", "hub-dl"), info = el("div", "info"), state = operationalHealth(status);
+        const reason = state === "degraded" ? "The host answered with a server error. Check the app and tunnel logs." : "Homebase could not connect. Check the app, DNS and Cloudflare Tunnel.";
+        info.append(el("div", "nm", name), el("div", "sub", healthLabel(status) + (status.status ? " · HTTP " + status.status : "") + (status.ms ? " · " + status.ms + " ms" : "") + " · " + reason));
+        row.append(icon(state === "degraded" ? "info" : "refresh"), info, button("Check again", "small", () => loadHealth(), "refresh")); list.append(row);
+      }
+      s.append(list); v.append(s);
+    }
+    const informational = Object.entries(health).filter(([, s]) => ["login_required", "redirected"].includes(operationalHealth(s)));
+    if (informational.length) {
+      const s = section("REACHABLE", "Apps showing a sign-in page", plural(informational.length, "app")), list = el("div", "hub-list");
+      for (const [name, status] of informational) list.append(note(name, healthLabel(status) + (status.status ? " · HTTP " + status.status : "") + ". The app host is reachable."));
+      s.append(list); v.append(s);
+    }
+    if (!total && !healthError && !downloads?.error) v.append(note("No action needed", "No failed downloads, blocked imports, disconnected media services or unreachable apps were found."));
+    v.append(button("Refresh all checks", "small", async () => {
+      healthLoaded = false; healthError = "";
+      await Promise.all([refreshDownloads(), loadAutopilot(), loadHealth(), loadBasics()]);
+      if (view === "attention") drawAttention();
+    }, "refresh"));
+  }
   function downloadRow(i) {
     const row = el("div", "hub-dl" + (i.lifecycle === "failed" || i.lifecycle === "blocked" ? " failed" : ""));
     row.dataset.id = String(i.id || i.name);
@@ -558,6 +645,7 @@
     if (r.ok) { autopilot = r.data; autopilotError = ""; } else autopilotError = errorText(r, "Couldn't reach Autopilot.");
     const needs = autopilot?.lastRun?.needsYou?.length || 0;
     $("apCount").textContent = needs || ""; $("apCount").classList.toggle("warn", needs > 0);
+    updateAttentionCount();
   }
   async function loadStorage(force) {
     if (!force && storage && Date.now() - storageAt < 300000) return;
@@ -941,7 +1029,7 @@
     const removeZone = el("div", "sh-section sh-danger"), txt = el("div");
     txt.append(el("b", null, tv ? "Remove this show" : "Remove this film"), el("span", null, "Deletes it from " + d.serviceName + " along with its files on disk."));
     removeZone.append(txt, armed(button("Remove", "danger small", null, "trash"), "Tap again to delete", async () => {
-      if (await act({ serviceKey: d.serviceKey, id: d.id, action: tv ? "removeSeries" : "removeMovie" }, "Removed " + d.title + " and its files.")) { closeSheet(); await loadBasics(); draw(); }
+      if (await act({ serviceKey: d.serviceKey, id: d.id, action: tv ? "removeSeries" : "removeMovie", confirmed: true }, "Removed " + d.title + " and its files.")) { closeSheet(); await loadBasics(); draw(); }
     }));
     const finish = () => block.append(removeZone);
 
@@ -1101,7 +1189,7 @@
     }
     if (!future) acts.append(iconButton("list", "Choose a release", "", () => openReleases(d, e)));
     if (e.hasFile) acts.append(armed(iconButton("trash", "Delete this file", "danger"), "Tap again to delete the file", () => busy(async () => {
-      if (await act({ serviceKey: d.serviceKey, id: d.id, action: "removeEpisode", episodeId: e.id, episodeFileEpisodeIds: e.file?.episodeIds?.length ? e.file.episodeIds : [e.id] }, "Deleted the file.")) {
+      if (await act({ serviceKey: d.serviceKey, id: d.id, action: "removeEpisode", confirmed: true, episodeId: e.id, episodeFileEpisodeIds: e.file?.episodeIds?.length ? e.file.episodeIds : [e.id] }, "Deleted the file.")) {
         e.hasFile = false; row.replaceWith(episodeRow(d, e, getTv));
       }
     })));

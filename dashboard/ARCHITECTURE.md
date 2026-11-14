@@ -8,7 +8,7 @@ No secret values live here or anywhere in this public repo, only the names of Cl
 | URL | Files | What it is |
 | --- | --- | --- |
 | `/` | `index.html`, `app.js`, `polish.js`, `style.css` | Overview: Glances metrics, activity feed, app grid |
-| `/media/` | `media/index.html`, `hub-media.js` | Media hub: For You, Coming up, Library, Downloads, Autopilot, search, title sheets |
+| `/media/` | `media/index.html`, `hub-media.js` | Media hub: For You, Coming up, Library, Needs attention, Downloads, Autopilot, search, title sheets |
 | `/media/classic/` | `media/classic/index.html`, `media.js` | The previous media page, kept as a fallback |
 | `/report/` | `report/index.html`, `report.js` | Weekly report: added, Autopilot fixes, disk forecast, app health (`/api/report`, `/api/health`) |
 | `/remote/` | `remote/index.html`, `remote.js` | TV remote: now playing, transport, commands, D-pad/touchpad |
@@ -39,6 +39,8 @@ All of these except `/api/metrics` need the Homebase session cookie (`functions/
 | `jarvis/[[path]]` | Jarvis's API, via the bridge (`x-homebase-service: jarvis`). Streams `events`; `POST vision` forwards one JPEG (max 768 KiB) and its question for transient screen analysis. Jarvis also needs its own PIN |
 | `pitwall/[[path]]` | Pitwall Web, via the bridge (`x-homebase-service: pitwall`): app files, F1 TV catalogue, OpenF1 (server-side login), live-timing and device-bus streams. GET/POST only; signed-out page loads redirect to `/pitwall/` |
 | `metrics` | Glances, public by design (Glances only sees the system disk) |
+
+`/api/health` returns a backwards-compatible `up` field plus `reachable` and a `state` (`online`, `login_required`, `redirected`, `degraded`, or `unreachable`). Redirects and sign-in gates mean the host answered; server errors and network failures need attention. Mocked safety tests live in `dashboard/tests/media-safety.test.mjs` and can be run with `node --test dashboard/tests/media-safety.test.mjs`.
 
 ## The private bridge
 

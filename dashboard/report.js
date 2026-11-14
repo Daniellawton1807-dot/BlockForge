@@ -52,7 +52,11 @@
 
     const svc = $("rpServices"); svc.replaceChildren();
     if (!health.ok) svc.append(el("p", "rp-empty", "Couldn't check the apps."));
-    else for (const [name, s] of Object.entries(health.data.services)) svc.append(row(name, s.up ? s.ms + " ms" : "not answering", s.up ? "up" : "down"));
+    else for (const [name, s] of Object.entries(health.data.services)) {
+      const state = s.state || (s.up ? "online" : "unreachable");
+      const label = ({ online: "Online", login_required: "Sign-in required", redirected: "Redirected", degraded: "Degraded", unreachable: "Unreachable" })[state] || "Unknown";
+      svc.append(row(name, label + (s.status ? " · HTTP " + s.status : "") + (s.ms ? " · " + s.ms + " ms" : ""), ["online", "login_required", "redirected"].includes(state) ? "up" : state === "degraded" ? "warn" : "down"));
+    }
   }
 
   gate({ message: "Sign in to see the weekly report.", onReady: load });

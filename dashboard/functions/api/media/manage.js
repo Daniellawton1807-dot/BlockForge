@@ -20,6 +20,9 @@ export async function onRequest({ request, env }) {
   if (action === "removeEpisode" && service.type !== "tv") return json({ code: "invalid_request", error: "Episode files can only be removed from a Sonarr series." }, 400);
   if (action === "removeMovie" && service.type !== "movie") return json({ code: "invalid_request", error: "Movie files can only be removed from Radarr." }, 400);
   if (action === "removeSeries" && service.type !== "tv") return json({ code: "invalid_request", error: "Whole shows can only be removed from Sonarr." }, 400);
+  if (["removeEpisode", "removeMovie", "removeSeries"].includes(action) && body?.confirmed !== true) {
+    return json({ code: "confirmation_required", error: "Confirm the removal in Homebase before deleting media files." }, 409);
+  }
   const status = arrServiceStatus(env, service);
   if (!status.configured) return json({ code: status.code, error: status.message }, 503);
 

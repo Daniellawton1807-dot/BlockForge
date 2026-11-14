@@ -65,21 +65,25 @@ export async function arrCall(env, service, path, options = {}) {
   try {
     response = await env[ARR_BRIDGE_BINDING].fetch(request);
   } catch {
-    throw new ArrError("service_unavailable", service.name + " is not reachable from Homebase right now.");
+    throw new ArrError("service_unavailable", "Homebase couldn't reach " + service.name + " through the private bridge. Check that the service and ARR bridge are online, then retry.");
   }
   if (!response.ok) {
-    const code = response.status === 401 || response.status === 403 ? "arr_auth_failed" : "arr_request_failed";
-    throw new ArrError(code, service.name + " returned HTTP " + response.status + ". Check its API key and configuration.", 502);
+    const authFailed = response.status === 401 || response.status === 403;
+    const code = authFailed ? "arr_auth_failed" : "arr_request_failed";
+    const message = authFailed
+      ? service.name + " rejected Homebase's API key (HTTP " + response.status + "). Check the protected Pages secret for this instance, save it, and retry."
+      : service.name + " returned HTTP " + response.status + " for this action. Check its activity and service logs, then retry.";
+    throw new ArrError(code, message, 502);
   }
   if (response.status === 204) return null;
   const contentType = response.headers.get("content-type") || "";
   if (!/application\/json/i.test(contentType)) {
-    throw new ArrError("invalid_upstream_response", service.name + " returned an unexpected response.");
+    throw new ArrError("invalid_upstream_response", service.name + " answered with a non-JSON page. Check its URL or reverse-proxy configuration, then retry.");
   }
   try {
     return await response.json();
   } catch {
-    throw new ArrError("invalid_upstream_response", service.name + " returned invalid JSON.");
+    throw new ArrError("invalid_upstream_response", service.name + " answered with invalid JSON. Check its service logs, then retry.");
   }
 }
 

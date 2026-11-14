@@ -65,17 +65,20 @@
     let up = 0, checked = 0;
     for (const s of cfg.services || []) {
       const h = health[s.name], local = !h && /^http:\/\/(192\.168|10\.|localhost)/.test(s.url || "");
-      if (h) { checked++; if (h.up) up++; }
+      const state = h?.state || (h ? h.up ? "online" : "unreachable" : "checking");
+      if (h) { checked++; if (h.reachable ?? h.up) up++; }
       if (q && !(s.name + " " + (s.desc || "")).toLowerCase().includes(q)) continue;
       const a = el("a", "ov-app"); a.href = s.url || "#"; a.target = "_blank"; a.rel = "noopener";
       const ic = el("span", "ov-app-ic", s.icon || s.name[0]); ic.style.background = TONES[s.tone] || "var(--accent)";
       const txt = el("span", "ov-app-txt"); txt.append(el("b", null, s.name), el("small", null, (s.desc || "").replace(/ — URL to be added/, "")));
-      const dot = el("i", "ov-dot " + (h ? (h.up ? "up" : "down") : local ? "local" : ""));
-      dot.title = h ? (h.up ? "Answering" + (h.ms ? ` (${h.ms} ms)` : "") : "Not answering" + (h.status ? ` (HTTP ${h.status})` : "")) : local ? "Home network only" : "Checking…";
+      const tone = state === "unreachable" ? "down" : state === "degraded" ? "paused" : ["login_required", "redirected"].includes(state) ? "idle" : state === "online" ? "up" : local ? "local" : "";
+      const dot = el("i", "ov-dot " + tone);
+      const label = ({ online: "Online", login_required: "Reachable · sign-in required", redirected: "Reachable · redirected", degraded: "Server error", unreachable: "Unreachable", checking: "Checking…" })[state] || "Unknown";
+      dot.title = h ? label + (h.status ? ` (HTTP ${h.status})` : "") + (h.ms ? ` · ${h.ms} ms` : "") : local ? "Home network only" : "Checking…";
       a.append(ic, txt, dot); box.append(a);
     }
     if (!box.childNodes.length) box.append(el("div", "hub-note", "No app matches."));
-    $("ovAppsUp").textContent = checked ? `${up} of ${checked} answering` : "";
+    $("ovAppsUp").textContent = checked ? `${up} of ${checked} reachable` : "";
     if (checked) { summary.down = checked - up; paintSummary(); }
   }
   $("ovAppSearch").addEventListener("input", paintApps);
