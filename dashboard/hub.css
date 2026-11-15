@@ -678,3 +678,13 @@ a.hub-btn { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) { .hub-btn.busy .hub-ico { animation: none; } }
 
 .ov-notify-head { display: flex; align-items: center; gap: 8px; }
+
+/* Needs attention: app connections */
+.hub-conns { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.hub-conn { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 9px; padding: 11px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--hub-soft); min-width: 0; }
+.hub-conn i { grid-row: span 2; width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+.hub-conn b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-conn small { color: var(--muted); font-size: 12px; }
+.hub-conn.bad { border-color: color-mix(in srgb, var(--hub-red) 45%, var(--line)); }
+.hub-conn.bad i { background: var(--hub-red); box-shadow: 0 0 8px var(--hub-red); }
+.hub-conn.bad small { color: var(--hub-red); }

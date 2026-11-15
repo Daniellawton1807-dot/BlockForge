@@ -108,12 +108,13 @@
   }
   const operationalHealth = s => s?.state || (!s ? "checking" : s.up ? "online" : "unreachable");
   const healthLabel = s => ({ online: "Online", login_required: "Reachable · sign-in required", redirected: "Reachable · redirected", auth_failed: "API key rejected", not_configured: "Not configured", degraded: "Degraded", unreachable: "Unreachable", checking: "Checking" })[operationalHealth(s)] || "Unknown";
+  const appBroken = s => ["degraded", "unreachable", "auth_failed", "not_configured"].includes(operationalHealth(s));
   function attentionItems() {
     return {
       blockedDownloads: visibleDownloadItems().filter(i => i.lifecycle === "failed" || i.lifecycle === "blocked"),
       needsYou: autopilot?.lastRun?.needsYou || [],
       serviceIssues: mediaConfigError ? [{ name: "Sonarr/Radarr connection", error: mediaConfigError }] : services.filter(s => !s.connected),
-      externalIssues: Object.entries(health).filter(([, s]) => ["degraded", "unreachable"].includes(operationalHealth(s)))
+      externalIssues: Object.entries(health).filter(([, s]) => appBroken(s))
     };
   }
   function updateAttentionCount() {
@@ -455,7 +456,7 @@
     const v = fresh(), data = attentionItems();
     const { blockedDownloads, needsYou, serviceIssues, externalIssues } = data;
     const total = blockedDownloads.length + needsYou.length + serviceIssues.length + externalIssues.length;
-    v.append(sectionHead("OPERATIONS", "Needs attention", total ? plural(total, "item") + " needs a next step" : "Everything looks clear"));
+    v.append(sectionHead("OPERATIONS", "Needs attention", total ? plural(total, "item") + (total === 1 ? " needs" : " need") + " a next step" : "Everything looks clear"));
     if (!downloads || (!autopilot && !autopilotError) || !healthLoaded) {
       v.append(note("Checking your services", "Homebase is checking download activity, Sonarr/Radarr and published app endpoints."));
       return;
@@ -486,21 +487,18 @@
       }
       s.append(list); v.append(s);
     }
-    if (externalIssues.length) {
-      const s = section("APP HEALTH", "Unreachable or degraded", plural(externalIssues.length, "app")), list = el("div", "hub-list");
-      for (const [name, status] of externalIssues) {
-        const row = el("div", "hub-dl"), info = el("div", "info"), state = operationalHealth(status);
-        const reason = state === "degraded" ? "The host answered with a server error. Check the app and tunnel logs." : "Homebase could not connect. Check the app, DNS and Cloudflare Tunnel.";
-        info.append(el("div", "nm", name), el("div", "sub", healthLabel(status) + (status.status ? " · HTTP " + status.status : "") + (status.ms ? " · " + status.ms + " ms" : "") + " · " + reason));
-        row.append(icon(state === "degraded" ? "info" : "refresh"), info, button("Check again", "small", () => loadHealth(), "refresh")); list.append(row);
+    // every app in one simple grid: connected (it answered, even with a sign-in page) or a problem, problems first
+    const apps = Object.entries(health).sort(([a, x], [b, y]) => appBroken(y) - appBroken(x) || a.localeCompare(b));
+    if (apps.length) {
+      const ok = apps.filter(([, h]) => !appBroken(h)).length;
+      const s = section("APPS", "Connections", ok === apps.length ? "All " + apps.length + " connected" : ok + " of " + apps.length + " connected"), grid = el("div", "hub-conns");
+      for (const [name, h] of apps) {
+        const bad = appBroken(h), tile = el("div", "hub-conn" + (bad ? " bad" : ""));
+        tile.title = healthLabel(h) + (h.status ? " · HTTP " + h.status : "") + (h.ms ? " · " + h.ms + " ms" : "");
+        tile.append(el("i"), el("b", null, name), el("small", null, bad ? healthLabel(h) : "Connected"));
+        grid.append(tile);
       }
-      s.append(list); v.append(s);
-    }
-    const informational = Object.entries(health).filter(([, s]) => ["login_required", "redirected"].includes(operationalHealth(s)));
-    if (informational.length) {
-      const s = section("REACHABLE", "Apps showing a sign-in page", plural(informational.length, "app")), list = el("div", "hub-list");
-      for (const [name, status] of informational) list.append(note(name, healthLabel(status) + (status.status ? " · HTTP " + status.status : "") + ". The app host is reachable."));
-      s.append(list); v.append(s);
+      s.append(grid); v.append(s);
     }
     if (!total && !healthError && !downloads?.error) v.append(note("No action needed", "No failed downloads, blocked imports, disconnected media services or unreachable apps were found."));
     v.append(button("Refresh all checks", "small", async () => {
