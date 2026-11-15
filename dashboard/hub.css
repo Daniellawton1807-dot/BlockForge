@@ -690,3 +690,7 @@ a.hub-btn { text-decoration: none; }
 .hub-conn.bad small { color: var(--hub-red); }
 .ap-row .acts, .hub-dl .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 @media (max-width: 680px) { .ap-row.warn { flex-wrap: wrap; } .ap-row .acts { flex-basis: 100%; justify-content: flex-start; } .hub-dl .acts { justify-content: flex-start; } }
+button.lc-row { width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.lc-row { grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; }
+.lc-row > svg { width: 18px; height: 18px; color: var(--muted); }
+@media (max-width: 680px) { .lc-row { grid-template-columns: 22px minmax(0, 1fr) auto; } }

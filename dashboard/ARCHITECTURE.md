@@ -109,6 +109,8 @@ Play by id, not title: Jellyfin names both the UK and US "The Traitors" just "Th
 
 ## Media hub behaviour worth knowing
 
+- *Needs attention → Subtitles and quality:* `GET /api/tv/api/librarycheck` (tvbot reads every episode's and film's streams from Jellyfin as Daniel, cached an hour; `?refresh=1` from "Refresh all checks"). Counts English subtitle tracks (embedded or external) and video height. Not counted in the attention badge.
+
 - **Play:** "This device" on a phone opens the Jellyfin iOS app (`org.jellyfin.expo://`) and tvbot starts playback.
   On a computer it opens the title's Jellyfin page, because browsers won't autoplay in an unclicked tab.
   Picking a TV sends `play …` to tvbot.

@@ -10,6 +10,7 @@
   let services = [], library = [], forYou = null, forYouBusy = false, forYouError = "", recent = null, calendar = null, calendarAt = 0, downloads = null, health = {}, healthLoaded = false, healthError = "", mediaConfigError = "";
   let libFilter = store.get("hb_lib_filter", "all"), libSort = store.get("hb_lib_sort", "added"), upFilter = "all";
   let searching = false, searchTimer, searchSeq = 0, remoteResults = null, remoteError = "";
+  let libCheck = null, libCheckError = "", libCheckAll = false;
   let dlTimer = null, spotTimer = null, healthTimer = null, flashDownload = "", dlShape = "", showDismissedDownloads = false;
   const dismissedDownloadHistory = new Set();
   try { for (const id of JSON.parse(localStorage.getItem("hb_dismissed_download_history") || "[]")) dismissedDownloadHistory.add(String(id)); } catch {}
@@ -201,7 +202,7 @@
     clearInterval(dlTimer); dlTimer = setInterval(() => { if (!document.hidden) refreshDownloads(); }, v === "downloads" ? 5000 : 20000);
     clearInterval(healthTimer); if (v === "attention") healthTimer = setInterval(() => { if (!document.hidden) loadHealth(); }, 60000);
     if (v === "autopilot" || v === "downloads" || v === "attention") loadAutopilot().then(() => { if (view === "autopilot") apRedraw(); else if (view === "downloads" && !searching) drawDownloads(); else if (view === "attention" && !searching) drawAttention(); });
-    if (v === "attention") { loadHealth(); if (!downloads) refreshDownloads(); }
+    if (v === "attention") { loadHealth(); loadLibraryCheck(); if (!downloads) refreshDownloads(); }
     draw();
   }
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => setView(b.dataset.view));
@@ -453,6 +454,41 @@
       if (row) { flashDownload = ""; row.classList.add("hub-flash"); row.scrollIntoView({ behavior: "smooth", block: "center" }); }
     }
   }
+  // ---------- subtitle and quality check (tvbot reads every episode's streams from Jellyfin, cached an hour) ----------
+  async function loadLibraryCheck(refresh) {
+    const r = await api("/api/tv/api/librarycheck" + (refresh ? "?refresh=1" : ""));
+    if (r.ok) { libCheck = r.data; libCheckError = ""; } else libCheckError = errorText(r, "Couldn't check the library.");
+    if (view === "attention" && !searching) drawAttention();
+  }
+  const looseTitle = t => String(t || "").toLowerCase().replace(/^(the|a|an) /, "").replace(/[^a-z0-9]+/g, "");
+  const libraryMatch = (type, name, year) => library.find(l => l.mediaType === type && looseTitle(l.title) === looseTitle(name) && (!year || !l.year || Math.abs(l.year - year) <= 1));
+  function libraryCheckSection() {
+    const s = section("LIBRARY", "Subtitles and quality", libCheck ? "Checked " + ago(new Date(libCheck.at * 1000).toISOString()) : "");
+    if (libCheckError) { s.append(note("Couldn't check the library", libCheckError)); return s; }
+    if (!libCheck) { s.append(skeleton("list", 2)); return s; }
+    const sum = kind => libCheck.libraries.filter(l => l.kind === kind).reduce((a, l) => ({ total: a.total + l.total, noEnglish: a.noEnglish + l.noEnglish, sd: a.sd + l.sd, hd720: a.hd720 + l.hd720 }), { total: 0, noEnglish: 0, sd: 0, hd720: 0 });
+    const tv = sum("tv"), mv = sum("movie"), stats = el("div", "hub-stats");
+    stats.append(stat("Episodes without English subs", [String(tv.noEnglish), " of " + tv.total], tv.noEnglish ? Math.round(tv.noEnglish / tv.total * 100) + "% of episodes" : "All covered", tv.noEnglish ? "warn" : ""),
+      stat("Films without English subs", [String(mv.noEnglish), " of " + mv.total], mv.noEnglish ? Math.round(mv.noEnglish / mv.total * 100) + "% of films" : "All covered", mv.noEnglish ? "warn" : ""),
+      stat("Episodes below HD", String(tv.sd), tv.hd720 ? tv.hd720 + " more at 720p" : "Everything is 720p or better", tv.sd ? "warn" : ""),
+      stat("Films below 1080p", String(mv.sd + mv.hd720), mv.sd ? mv.sd + " below 720p" : "None below 720p"));
+    s.append(stats);
+    const rows = [
+      ...libCheck.shows.map(x => ({ type: "tv", name: x.name, year: null, why: [x.noEnglish && x.noEnglish + " of " + x.episodes + " episodes without English subtitles", x.sd && x.sd + " below 720p", x.hd720 && x.hd720 + " at 720p"].filter(Boolean).join(" · "), bad: x.noEnglish + x.sd * 2 })),
+      ...libCheck.films.map(x => ({ type: "movie", name: x.name, year: x.year, why: [x.noEnglish && "No English subtitles", x.height && x.height < 1000 && x.height + "p"].filter(Boolean).join(" · "), bad: (x.noEnglish ? 1 : 0) + (x.height < 700 ? 2 : 0) }))
+    ].sort((a, b) => b.bad - a.bad || a.name.localeCompare(b.name));
+    const list = el("div", "hub-list");
+    for (const row of libCheckAll ? rows : rows.slice(0, 8)) {
+      const mine = libraryMatch(row.type, row.name, row.year), line = el(mine ? "button" : "div", "hub-dl lc-row"), info = el("div", "info");
+      info.append(el("div", "nm", row.name + (row.year ? " (" + row.year + ")" : "")), el("div", "sub", (row.type === "tv" ? "Show · " : "Film · ") + row.why));
+      line.append(icon(row.type === "tv" ? "tv" : "play"), info);
+      if (mine) { line.type = "button"; line.onclick = () => openLibraryItem(mine); line.append(icon("chevR")); }
+      list.append(line);
+    }
+    s.append(list);
+    if (rows.length > 8) s.append(button(libCheckAll ? "Show fewer" : "Show all " + rows.length, "small", () => { libCheckAll = !libCheckAll; drawAttention(); }, "list"));
+    return s;
+  }
   function drawAttention() {
     const v = fresh(), data = attentionItems();
     const { blockedDownloads, needsYou, serviceIssues, externalIssues } = data;
@@ -494,6 +530,7 @@
       }
       s.append(list); v.append(s);
     }
+    v.append(libraryCheckSection());
     // every app in one simple grid: connected (it answered, even with a sign-in page) or a problem, problems first
     const apps = Object.entries(health).sort(([a, x], [b, y]) => appBroken(y) - appBroken(x) || a.localeCompare(b));
     if (apps.length) {
@@ -510,7 +547,7 @@
     if (!total && !healthError && !downloads?.error) v.append(note("No action needed", "No failed downloads, blocked imports, disconnected media services or unreachable apps were found."));
     v.append(button("Refresh all checks", "small", async () => {
       healthLoaded = false; healthError = "";
-      await Promise.all([refreshDownloads(), loadAutopilot(), loadHealth(), loadBasics()]);
+      await Promise.all([refreshDownloads(), loadAutopilot(), loadHealth(), loadBasics(), loadLibraryCheck(true)]);
       if (view === "attention") drawAttention();
     }, "refresh"));
   }
