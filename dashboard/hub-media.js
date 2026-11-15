@@ -112,7 +112,8 @@
   function attentionItems() {
     return {
       blockedDownloads: visibleDownloadItems().filter(i => i.lifecycle === "failed" || i.lifecycle === "blocked"),
-      needsYou: autopilot?.lastRun?.needsYou || [],
+      // a blocked download already listed with its own buttons isn't repeated under Autopilot
+      needsYou: (autopilot?.lastRun?.needsYou || []).filter(n => !(n.downloadId && visibleDownloadItems().some(i => (i.lifecycle === "failed" || i.lifecycle === "blocked") && i.downloadId === n.downloadId))),
       serviceIssues: mediaConfigError ? [{ name: "Sonarr/Radarr connection", error: mediaConfigError }] : services.filter(s => !s.connected),
       externalIssues: Object.entries(health).filter(([, s]) => appBroken(s))
     };
@@ -471,10 +472,16 @@
     if (needsYou.length) {
       const s = section("AUTOPILOT", "Needs your help", plural(needsYou.length, "item")), list = el("div", "hub-list");
       for (const item of needsYou) {
-        const row = el("div", "ap-row warn"), info = el("div", "info"), ic = el("span", "ap-ic warn");
+        const row = el("div", "ap-row warn"), info = el("div", "info"), ic = el("span", "ap-ic warn"), acts = el("div", "acts");
         info.append(el("div", "nm", item.title || "Download needs attention"), el("div", "why", item.reason || "Autopilot could not safely resolve this."));
         if (item.detail) info.append(el("div", "sub", (item.service ? item.service + " says: " : "") + item.detail));
-        ic.append(icon("info")); row.append(ic, info, button("Open Autopilot", "small", () => setView("autopilot"), "chevR")); list.append(row);
+        if (item.serviceKey && item.queueId) {
+          if (item.downloadId) acts.append(button("Fix import", "small primary", () => openImport({ ...item, label: item.title }), "list"));
+          acts.append(...queueFixButtons(item.serviceKey, item.queueId));
+        } else if (item.service === "qBittorrent") {
+          const open = el("a", "hub-btn small", "Open qBittorrent"); open.href = "https://qb.danielvault.uk"; open.target = "_blank"; open.rel = "noopener"; acts.append(open);
+        } else acts.append(button("Open Autopilot", "small", () => setView("autopilot"), "chevR"));
+        ic.append(icon("info")); row.append(ic, info, acts); list.append(row);
       }
       s.append(list); v.append(s);
     }
@@ -532,6 +539,7 @@
     }
     // a blocked import, or one Sonarr/Radarr is waiting on: open their manual import right here
     if ((i.lifecycle === "blocked" || i.lifecycle === "importing") && i.serviceKey && i.downloadId) acts.append(button("Fix import", "small" + (i.lifecycle === "blocked" ? " primary" : ""), () => openImport(i), "list"));
+    if (i.lifecycle === "blocked" && i.serviceKey && i.queueId) acts.append(...queueFixButtons(i.serviceKey, i.queueId));
     if (i.lifecycle === "failed") {
       acts.append(button("Replace", "small", () => downloadAction(i, "replace"), "refresh"));
       const dismissed = dismissedDownloadHistory.has(String(i.id));
@@ -628,6 +636,18 @@
     toast(r.ok ? { pause: "Paused.", resume: "Resumed.", remove: "Removed from the queue.", replace: "Looking for a different release." }[action] : errorText(r, "That didn't work."), r.ok ? {} : "error");
     refreshDownloads();
   }
+  // one-tap fixes for a download stuck in a Sonarr/Radarr queue (Autopilot's "fix" action)
+  async function queueFix(serviceKey, queueId, fix) {
+    const r = await api("/api/autopilot", { method: "POST", body: { action: "fix", fix, serviceKey, queueId } });
+    toast(r.ok ? r.data.message : errorText(r, "That didn't work."), r.ok ? {} : "error");
+    if (r.ok && autopilot?.lastRun?.needsYou) autopilot.lastRun.needsYou = autopilot.lastRun.needsYou.filter(n => !(n.serviceKey === serviceKey && n.queueId === queueId));
+    await refreshDownloads();
+    if (view === "attention") drawAttention();
+  }
+  const queueFixButtons = (serviceKey, queueId) => [
+    armed(button("Find another", "small", null, "search"), "Tap again: blocklist and search", () => queueFix(serviceKey, queueId, "research")),
+    armed(button("Remove", "small danger", null, "trash"), "Tap again to remove", () => queueFix(serviceKey, queueId, "remove"))
+  ];
   function goToDownloads(name) { flashDownload = name || ""; closeSheet(); setView("downloads"); refreshDownloads(); scrollTo({ top: 0, behavior: "smooth" }); }
   const viewDownloads = { label: "View downloads", onClick: () => goToDownloads() };
 

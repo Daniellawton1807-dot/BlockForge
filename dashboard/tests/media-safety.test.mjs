@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { onRequest as healthRequest } from "../functions/api/health.js";
 import { onRequest as manageRequest } from "../functions/api/media/manage.js";
 import { sessionCookie } from "../functions/_utils/downloads-auth.js";
+import { fixQueueItem } from "../functions/_utils/autopilot.js";
 
 const jsonResponse = (body, status = 200) => new Response(body == null ? null : JSON.stringify(body), {
   status,
@@ -129,12 +130,35 @@ async function confirmedSeriesDeletion() {
   assert.equal((await response.json()).removedFileCount, 1);
 }
 
+async function oneTapQueueFixes() {
+  const calls = [];
+  const bridge = async request => {
+    const url = new URL(request.url), path = url.pathname + url.search;
+    calls.push(request.method + " " + path);
+    if (path.startsWith("/api/v3/queue?")) return jsonResponse({ records: [
+      { id: 5, downloadId: "ABC", title: "Show.S01E01", seriesId: 1, episodeId: 11, episode: { seasonNumber: 1, episodeNumber: 1 }, series: { title: "Show" } },
+      { id: 6, downloadId: "ABC", title: "Show.S01E02", seriesId: 1, episodeId: 12, episode: { seasonNumber: 1, episodeNumber: 2 }, series: { title: "Show" } }
+    ] });
+    if (request.method === "DELETE") return new Response(null, { status: 200 });
+    return jsonResponse({});
+  };
+  const env = { ...sessionEnv, ARR_BRIDGE: { fetch: bridge } };
+  await assert.rejects(fixQueueItem(env, "sonarr-daniel", 99, "remove"), /no longer in the queue/);
+  assert.match(await fixQueueItem(env, "sonarr-daniel", 5, "remove"), /Removed Show S01E01/);
+  assert.ok(calls.includes("DELETE /api/v3/queue/5?removeFromClient=true&blocklist=false&skipRedownload=true"));
+  calls.length = 0;
+  assert.match(await fixQueueItem(env, "sonarr-daniel", 5, "research"), /searched for 2 episodes/);
+  assert.ok(calls.includes("DELETE /api/v3/queue/5?removeFromClient=true&blocklist=true&skipRedownload=true"), "blocklists without Sonarr's own redownload");
+  assert.ok(calls.includes("POST /api/v3/command"), "searches the whole pack again");
+}
+
 export async function runMediaSafetyTests() {
+  await oneTapQueueFixes();
   await healthStates();
   await deletionConfirmation();
   await exactEpisodeDeletion();
   await confirmedSeriesDeletion();
-  return "4 mocked integration tests passed";
+  return "5 mocked integration tests passed";
 }
 
 test("media actions enforce confirmation and verify file identity before deletion", runMediaSafetyTests);

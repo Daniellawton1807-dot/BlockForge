@@ -119,7 +119,9 @@ Play by id, not title: Jellyfin names both the UK and US "The Traitors" just "Th
 ## Autopilot (`functions/_utils/autopilot.js`, `functions/api/storage.js`)
 
 Plan: `AUTOPILOT.md` in Daniel's vault folder. **Self-healing downloads**, every 15 minutes (Worker cron → `POST /api/autopilot/run`)
-or "Check now" on the Autopilot tab:
+or "Check now" on the Autopilot tab. Its "needs you" items carry `serviceKey`/`queueId`/`downloadId`, so Needs attention offers one-tap
+**Fix import**, **Find another** (blocklist + capped search, `POST /api/autopilot {action:"fix",fix:"research"}`) and **Remove** (`fix:"remove"`); blocked
+downloads get the same buttons. Rules:
 - *Stalled:* a qBittorrent torrent in `stalledDL`/`metaDL` with no activity for 60 min, or a failed job → Sonarr/Radarr
   `DELETE queue/{id}?removeFromClient&blocklist&skipRedownload=false` (blocklist, then they search again). Skipped when
   qBittorrent is disconnected or every torrent is stalled at once (VPN down), which is listed under Needs you instead.

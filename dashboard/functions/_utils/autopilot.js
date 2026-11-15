@@ -193,6 +193,22 @@ async function retryAfterFailure(env, service, item) {
     body: JSON.stringify(tv ? { name: "EpisodeSearch", episodeIds: [item] } : { name: "MoviesSearch", movieIds: [item] }) });
   return "Trying a different release (attempt " + (n + 1) + " of " + MAX_TRIES + ").";
 }
+// One-tap fixes from Homebase's Needs attention page, for a download still in a Sonarr/Radarr queue. "research" blocklists
+// the release and searches for another (the same capped retries Autopilot uses); "remove" just takes it out of the queue.
+export async function fixQueueItem(env, serviceKey, queueId, fix) {
+  const service = arrServices().find(s => s.key === serviceKey);
+  if (!service || !arrServiceStatus(env, service).configured) throw new Error("That Sonarr/Radarr isn't set up.");
+  const queue = await queueOf(env, service), record = queue.find(r => r.id === queueId);
+  if (!record) throw new Error("It's no longer in the queue. Refresh to see where it went.");
+  const group = record.downloadId ? queue.filter(r => r.downloadId === record.downloadId) : [record];
+  await removeFromQueue(env, record, { blocklist: fix === "research", redownload: false });
+  if (fix !== "research") return "Removed " + record.title + " from the queue.";
+  const ids = [...new Set(group.map(r => service.type === "tv" ? r.episodeId : r.movieId).filter(Boolean))];
+  if (!ids.length) return "Blocklisted that release.";
+  if (ids.length === 1) return "Blocklisted that release. " + await retryAfterFailure(env, service, ids[0]);
+  await arrCall(env, service, "api/v3/command", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "EpisodeSearch", episodeIds: ids }) });
+  return "Blocklisted that release and searched for " + ids.length + " episodes again.";
+}
 async function ensureRedownloadOff(env, service, state, on, notes) {
   try {
     const cfg = await arrCall(env, service, "api/v3/config/downloadclient");
@@ -212,6 +228,7 @@ export async function runAutopilot(env, trigger) {
   const now = Date.now(), at = new Date(now).toISOString();
   const services = arrServices().filter(service => arrServiceStatus(env, service).configured);
   const fixed = [], needsYou = [], notes = [];
+  const ids = record => ({ serviceKey: record.service.key, queueId: record.id, downloadId: record.downloadId });
   const log = (rule, title, detail, service) => fixed.push({ at, rule, title, detail, service: service?.name || "" });
 
   const [queues, qb] = await Promise.all([
@@ -231,7 +248,7 @@ export async function runAutopilot(env, trigger) {
       if (retry) { try { more = " " + await retryAfterFailure(env, record.service, record.service.type === "tv" ? record.episodeId : record.movieId); } catch (error) { notes.push(record.service.name + ": " + error.message); } }
       log(rule, record.title, retry ? detail.replace(/ and searched for another release\./, ".") + more : detail, record.service);
     }
-    catch (error) { needsYou.push({ title: record.title, reason: "Autopilot couldn't remove it: " + error.message, service: record.service.name }); }
+    catch (error) { needsYou.push({ ...ids(record), title: record.title, reason: "Autopilot couldn't remove it: " + error.message, service: record.service.name }); }
   };
 
   // 1. stalled torrents and failed Usenet jobs
@@ -336,10 +353,10 @@ export async function runAutopilot(env, trigger) {
         }
         const n = await manualImport(env, group);
         if (n) { budget--; log("autoImport", record.title, "Sonarr/Radarr couldn't match it by itself, so Autopilot did the Manual Import (" + n + " file" + (n === 1 ? "" : "s") + ").", record.service); }
-        else needsYou.push({ title: record.title, reason: plainReason(text) || "Import is blocked.", detail: "Autopilot couldn't match the files safely. " + text.slice(0, 260), service: record.service.name });
-      } catch (error) { needsYou.push({ title: record.title, reason: "Autopilot's manual import didn't work: " + error.message, detail: text.slice(0, 300), service: record.service.name }); }
+        else needsYou.push({ ...ids(record), title: record.title, reason: plainReason(text) || "Import is blocked.", detail: "Autopilot couldn't match the files safely. " + text.slice(0, 260), service: record.service.name });
+      } catch (error) { needsYou.push({ ...ids(record), title: record.title, reason: "Autopilot's manual import didn't work: " + error.message, detail: text.slice(0, 300), service: record.service.name }); }
     }
-    else if (!needsYou.some(n => n.title === record.title)) needsYou.push({ title: record.title, reason: plainReason(text) || "Import is blocked.", detail: text.slice(0, 300), service: record.service.name });
+    else if (!needsYou.some(n => n.title === record.title)) needsYou.push({ ...ids(record), title: record.title, reason: plainReason(text) || "Import is blocked.", detail: text.slice(0, 300), service: record.service.name });
   }
   // forget the tries of downloads that have left the queue
   const inQueue = new Set(queue.map(r => r.service.key + ":" + (r.downloadId || r.id)));

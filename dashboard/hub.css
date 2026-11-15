@@ -688,3 +688,5 @@ a.hub-btn { text-decoration: none; }
 .hub-conn.bad { border-color: color-mix(in srgb, var(--hub-red) 45%, var(--line)); }
 .hub-conn.bad i { background: var(--hub-red); box-shadow: 0 0 8px var(--hub-red); }
 .hub-conn.bad small { color: var(--hub-red); }
+.ap-row .acts, .hub-dl .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 680px) { .ap-row.warn { flex-wrap: wrap; } .ap-row .acts { flex-basis: 100%; justify-content: flex-start; } .hub-dl .acts { justify-content: flex-start; } }
