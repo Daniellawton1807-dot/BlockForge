@@ -71,9 +71,9 @@
       const a = el("a", "ov-app"); a.href = s.url || "#"; a.target = "_blank"; a.rel = "noopener";
       const ic = el("span", "ov-app-ic", s.icon || s.name[0]); ic.style.background = TONES[s.tone] || "var(--accent)";
       const txt = el("span", "ov-app-txt"); txt.append(el("b", null, s.name), el("small", null, (s.desc || "").replace(/ — URL to be added/, "")));
-      const tone = ["unreachable", "auth_failed", "not_configured"].includes(state) ? "down" : state === "degraded" ? "paused" : ["login_required", "redirected"].includes(state) ? "idle" : state === "online" ? "up" : local ? "local" : "";
+      const tone = ["unreachable", "auth_failed", "not_configured"].includes(state) ? "down" : state === "degraded" ? "paused" : ["online", "login_required", "redirected"].includes(state) ? "up" : local ? "local" : "";
       const dot = el("i", "ov-dot " + tone);
-      const label = ({ online: "Online", login_required: "Reachable · sign-in required", redirected: "Reachable · redirected", auth_failed: "API key rejected", not_configured: "Not configured", degraded: "Server error", unreachable: "Unreachable", checking: "Checking…" })[state] || "Unknown";
+      const label = ({ online: "Online", login_required: "Online · sign-in page", redirected: "Online · sign-in page", auth_failed: "API key rejected", not_configured: "Not configured", degraded: "Server error", unreachable: "Unreachable", checking: "Checking…" })[state] || "Unknown";
       dot.title = h ? label + (h.status ? ` (HTTP ${h.status})` : "") + (h.ms ? ` · ${h.ms} ms` : "") : local ? "Home network only" : "Checking…";
       a.append(ic, txt, dot); box.append(a);
     }
