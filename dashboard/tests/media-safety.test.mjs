@@ -152,13 +152,39 @@ async function oneTapQueueFixes() {
   assert.ok(calls.includes("POST /api/v3/command"), "searches the whole pack again");
 }
 
+async function takenDownReleasesDontUseUpRetries() {
+  const failures = (missing, real) => [
+    ...Array.from({ length: missing }, () => ({ eventType: "downloadFailed", date: new Date().toISOString(), data: { message: "Aborted, cannot be completed - https://sabnzbd.org/not-complete" } })),
+    ...Array.from({ length: real }, () => ({ eventType: "downloadFailed", date: new Date().toISOString(), data: { message: "Unpacking failed, archive requires a password" } }))];
+  const run = async history => {
+    const searches = [];
+    const bridge = async request => {
+      const url = new URL(request.url), path = url.pathname + url.search;
+      if (path.startsWith("/api/v3/queue?")) return jsonResponse({ records: [{ id: 7, downloadId: "X", title: "Show.S01E01", seriesId: 1, episodeId: 11, episode: { seasonNumber: 1, episodeNumber: 1 }, series: { title: "Show" } }] });
+      if (path.startsWith("/api/v3/history")) return jsonResponse({ records: history });
+      if (request.method === "POST") searches.push(path);
+      return request.method === "DELETE" ? new Response(null, { status: 200 }) : jsonResponse({});
+    };
+    const message = await fixQueueItem({ ...sessionEnv, ARR_BRIDGE: { fetch: bridge } }, "sonarr-daniel", 7, "research");
+    return { message, searched: searches.length > 0 };
+  };
+  let r = await run(failures(5, 1));
+  assert.ok(r.searched, "five taken-down releases and one real failure still retry");
+  assert.match(r.message, /attempt 2 of 3; 5 taken-down releases not counted/);
+  r = await run(failures(0, 3));
+  assert.equal(r.searched, false, "three real failures rest");
+  r = await run(failures(10, 0));
+  assert.equal(r.searched, false, "ten taken-down releases rest too");
+}
+
 export async function runMediaSafetyTests() {
+  await takenDownReleasesDontUseUpRetries();
   await oneTapQueueFixes();
   await healthStates();
   await deletionConfirmation();
   await exactEpisodeDeletion();
   await confirmedSeriesDeletion();
-  return "5 mocked integration tests passed";
+  return "6 mocked integration tests passed";
 }
 
 test("media actions enforce confirmation and verify file identity before deletion", runMediaSafetyTests);

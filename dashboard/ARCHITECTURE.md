@@ -138,7 +138,7 @@ downloads get the same buttons. Rules:
   (`qualityRank`: resolution, WEB/Blu-ray over HDTV, custom-format score, size), removes the rest, and imports it unless the library
   already has the same or better.
 - *Retry failed* (`retryFailed`): a failed download (broken Usenet repair, unpack, dead torrent, stalled) is blocklisted and Autopilot
-  searches for a different release itself, up to 3 failures per episode/film in 72 h (counted from Sonarr/Radarr history); after
+  searches for a different release itself, up to 3 failures per episode/film in 72 h (counted from Sonarr/Radarr history; releases taken down from Usenet, "cannot be completed", don't count and have their own cap of 10); after
   that it rests and the re-search rule tries again later. Sonarr/Radarr's own `autoRedownloadFailed` is switched off by Autopilot
   (`ensureRedownloadOff`, restored if the rule is turned off) so it is the only thing retrying. Failures from before it first looked
   are ignored; a failed upgrade attempt on something already in the library is ignored too (and hidden on the Downloads page).

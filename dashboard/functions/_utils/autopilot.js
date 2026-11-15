@@ -178,20 +178,26 @@ export async function manualImport(env, group) {
 // A failed download (broken Usenet file, bad archive, dead torrent): the release is already blocklisted; look for a different one,
 // up to MAX_TRIES releases in all. Sonarr/Radarr's own automatic redownload is switched off (see ensureRedownloadOff) so this is the
 // only thing retrying, and it can stop. When nothing else exists the item simply stays missing and the re-search rule tries again later.
+// A release taken down from Usenet ("Aborted, cannot be completed": articles missing) fails in seconds and costs nothing, so those
+// don't use up the MAX_TRIES; they have their own, larger cap (MAX_MISSING) so a show whose every upload is gone still comes to rest.
+const MISSING_ARTICLES = /cannot be completed|not-complete|missing articles|articles (were|are) missing|too many missing/i, MAX_MISSING = 10;
 async function failuresOf(env, service, item) {
   const tv = service.type === "tv";
   const events = await arrCall(env, service, tv ? "api/v3/history?page=1&pageSize=60&sortKey=date&sortDirection=descending&episodeId=" + item
     : "api/v3/history/movie?movieId=" + item);
   const since = Date.now() - FAIL_WINDOW;
-  return (Array.isArray(events) ? events : events?.records || []).filter(e => /failed/i.test(String(e.eventType)) && Date.parse(e.date) >= since).length;
+  const failed = (Array.isArray(events) ? events : events?.records || []).filter(e => /failed/i.test(String(e.eventType)) && Date.parse(e.date) >= since);
+  const missing = failed.filter(e => MISSING_ARTICLES.test(String(e.data?.message || ""))).length;
+  return { real: failed.length - missing, missing };
 }
 async function retryAfterFailure(env, service, item) {
   if (!item) return "";
-  const tv = service.type === "tv", n = await failuresOf(env, service, item);
+  const tv = service.type === "tv", { real: n, missing } = await failuresOf(env, service, item);
   if (n >= MAX_TRIES) return "That's " + n + " releases that have failed, so it's resting for now. Autopilot will search again later as more releases appear.";
+  if (missing >= MAX_MISSING) return missing + " releases had been taken down from Usenet, so it's resting for now. Autopilot will search again later as more releases appear.";
   await arrCall(env, service, "api/v3/command", { method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify(tv ? { name: "EpisodeSearch", episodeIds: [item] } : { name: "MoviesSearch", movieIds: [item] }) });
-  return "Trying a different release (attempt " + (n + 1) + " of " + MAX_TRIES + ").";
+  return "Trying a different release (attempt " + (n + 1) + " of " + MAX_TRIES + (missing ? "; " + missing + " taken-down " + (missing === 1 ? "release" : "releases") + " not counted" : "") + ").";
 }
 // One-tap fixes from Homebase's Needs attention page, for a download still in a Sonarr/Radarr queue. "research" blocklists
 // the release and searches for another (the same capped retries Autopilot uses); "remove" just takes it out of the queue.
