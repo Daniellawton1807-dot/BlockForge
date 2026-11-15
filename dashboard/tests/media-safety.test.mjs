@@ -9,6 +9,14 @@ const jsonResponse = (body, status = 200) => new Response(body == null ? null : 
   headers: body == null ? {} : { "content-type": "application/json" }
 });
 
+const sessionEnv = {
+  HOMEBASE_DOWNLOADS_USERNAME: "test-user",
+  HOMEBASE_DOWNLOADS_PASSWORD: "test-password",
+  HOMEBASE_DOWNLOADS_SESSION_SECRET: "test-session-secret-with-at-least-32-bytes",
+  SONARR_DANIEL_API_KEY: "test-sonarr-key",
+  RADARR_API_KEY: "test-radarr-key"
+};
+
 async function healthStates() {
   const originalFetch = globalThis.fetch;
   const responses = [200, 302, 401, 403, 503];
@@ -18,30 +26,38 @@ async function healthStates() {
     if (status == null) throw new Error("network down");
     return new Response(null, { status });
   };
+  // the private bridge: Jarvis answers "enter your PIN", tvbot can't be reached, Pitwall serves its page, ARR is fine
+  const bridge = async request => {
+    const service = request.headers.get("x-homebase-service");
+    if (service === "jarvis") return jsonResponse({ code: "pin_required" }, 401);
+    if (service === "tvbot") return jsonResponse({ error: "unavailable" }, 503);
+    if (service === "pitwall") return new Response("<html></html>", { status: 200 });
+    return jsonResponse({ version: "4" });
+  };
   try {
-    const response = await healthRequest({ request: new Request("https://homebase.test/api/health") });
-    const body = await response.json();
-    const services = Object.values(body.services);
-    assert.equal(services[0].state, "online");
-    assert.equal(services[1].state, "redirected");
-    assert.equal(services[2].state, "login_required");
-    assert.equal(services[3].state, "login_required");
-    assert.equal(services[4].state, "degraded");
-    assert.equal(services[5].state, "unreachable");
-    assert.equal(services[1].reachable, true, "redirects remain reachable");
-    assert.equal(services[2].up, true, "legacy up field remains compatible");
-    assert.equal(services[4].up, false);
-    assert.equal(services[5].status, 0);
+    const cookie = await sessionCookie(sessionEnv, false);
+    const response = await healthRequest({
+      request: new Request("https://homebase.test/api/health", { headers: { cookie } }),
+      env: { ...sessionEnv, TVBOT_TOKEN: "test-tv-token", ARR_BRIDGE: { fetch: bridge } }
+    });
+    const { services } = await response.json();
+    assert.equal(services.Seerr.state, "online");
+    assert.equal(services.SABnzbd.state, "redirected");
+    assert.equal(services.qBittorrent.state, "login_required");
+    assert.equal(services.Jellyfin.state, "login_required");
+    assert.equal(services.CasaOS.state, "degraded");
+    assert.equal(services.Crafty.state, "unreachable");
+    assert.equal(services.SABnzbd.reachable, true, "redirects remain reachable");
+    assert.equal(services.qBittorrent.up, true, "legacy up field remains compatible");
+    assert.equal(services.CasaOS.up, false);
+    assert.equal(services.Crafty.status, 0);
+    assert.equal(services.Jarvis.state, "online", "a PIN prompt from Jarvis means it's running");
+    assert.equal(services.tvbot.state, "unreachable");
+    assert.equal(services.Pitwall.state, "online");
+    assert.equal(services.Sonarr.state, "online");
+    assert.equal(services["Sonarr Mum"].state, "not_configured");
   } finally { globalThis.fetch = originalFetch; }
 }
-
-const sessionEnv = {
-  HOMEBASE_DOWNLOADS_USERNAME: "test-user",
-  HOMEBASE_DOWNLOADS_PASSWORD: "test-password",
-  HOMEBASE_DOWNLOADS_SESSION_SECRET: "test-session-secret-with-at-least-32-bytes",
-  SONARR_DANIEL_API_KEY: "test-sonarr-key",
-  RADARR_API_KEY: "test-radarr-key"
-};
 
 async function mediaRequest(body, bridge) {
   const cookie = await sessionCookie(sessionEnv, false);

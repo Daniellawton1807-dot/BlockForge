@@ -17,6 +17,9 @@ window.HOMEBASE_CONFIG = {
     {name:"Jellyfin",desc:"Your media library",url:"https://jellyfin.danielvault.uk",icon:"J",tone:"blue",group:"media"},
     {name:"CasaOS",desc:"Server app management",url:"https://casa.danielvault.uk",icon:"C",tone:"green",group:"system"},
     {name:"Crafty",desc:"Minecraft server management",url:"https://minecraft.danielvault.uk/panel",icon:"MC",tone:"green",group:"system"},
+    {name:"Jarvis",desc:"Your voice assistant",url:"/jarvis/",icon:"J",tone:"blue",group:"system"},
+    {name:"tvbot",desc:"TV remote for the Fire TVs and Apple TV",url:"/remote/",icon:"TV",tone:"purple",group:"system"},
+    {name:"Pitwall",desc:"F1 multi-viewer",url:"/api/pitwall/",icon:"F1",tone:"orange",group:"system"},
     {name:"FreeLLMAPI",desc:"Free AI models for claude-free",url:"http://192.168.8.150:3001",icon:"AI",tone:"blue",group:"system"}
   ]
 };

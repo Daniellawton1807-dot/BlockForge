@@ -25,6 +25,30 @@ async function checkPublic(url) {
   }
 }
 
+// Jarvis, tvbot and Pitwall only live on the server, so check them through the private bridge. Any answer from the
+// app itself counts (Jarvis answers "enter your PIN" without a session); the bridge says 502/503 when it can't reach it.
+const PRIVATE_SERVICES = {
+  Jarvis: { service: "jarvis", path: "state" },
+  tvbot: { service: "tvbot", path: "api/status", token: "TVBOT_TOKEN" },
+  Pitwall: { service: "pitwall", path: "" }
+};
+
+async function checkPrivate(env, { service, path, token }) {
+  const started = Date.now();
+  if (!env.ARR_BRIDGE || (token && !env[token])) return { up: false, reachable: false, state: "not_configured", status: 0, ms: 0 };
+  try {
+    const headers = { "x-homebase-service": service, accept: "application/json" };
+    if (token) headers["x-tv-token"] = String(env[token]).trim();
+    const response = await env.ARR_BRIDGE.fetch(new Request("https://homebase-arr-bridge/" + path, { headers, signal: AbortSignal.timeout(6000) }));
+    response.body?.cancel();
+    const status = response.status;
+    const state = [502, 503, 504].includes(status) ? "unreachable" : status >= 500 ? "degraded" : "online";
+    return { up: state === "online", reachable: state !== "unreachable", state, status, ms: Date.now() - started };
+  } catch {
+    return { up: false, reachable: false, state: "unreachable", status: 0, ms: Date.now() - started };
+  }
+}
+
 async function checkArr(env, service) {
   const started = Date.now();
   const configured = arrServiceStatus(env, service);
@@ -54,7 +78,8 @@ export async function onRequest({ request, env }) {
 
   const entries = await Promise.all([
     ...arrServices().map(async service => [service.name, await checkArr(env, service)]),
-    ...Object.entries(PUBLIC_SERVICES).map(async ([name, url]) => [name, await checkPublic(url)])
+    ...Object.entries(PUBLIC_SERVICES).map(async ([name, url]) => [name, await checkPublic(url)]),
+    ...Object.entries(PRIVATE_SERVICES).map(async ([name, check]) => [name, await checkPrivate(env, check)])
   ]);
   return json({ checkedAt: new Date().toISOString(), services: Object.fromEntries(entries) });
 }

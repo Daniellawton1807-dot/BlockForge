@@ -40,7 +40,7 @@ All of these except `/api/metrics` need the Homebase session cookie (`functions/
 | `pitwall/[[path]]` | Pitwall Web, via the bridge (`x-homebase-service: pitwall`): app files, F1 TV catalogue, OpenF1 (server-side login), live-timing and device-bus streams. GET/POST only; signed-out page loads redirect to `/pitwall/` |
 | `metrics` | Glances, public by design (Glances only sees the system disk) |
 
-`/api/health` requires the Homebase session. Sonarr and Radarr are checked through the private ARR bridge using their configured protected API keys; other published apps are checked at their public URLs. Results include `up`, `reachable`, and a `state` such as `online`, `auth_failed`, `not_configured`, `login_required`, `redirected`, `degraded`, or `unreachable`. This avoids treating Sonarr's web login page as its API health. Mocked safety tests live in `dashboard/tests/media-safety.test.mjs` and can be run with `node --test dashboard/tests/media-safety.test.mjs`.
+`/api/health` requires the Homebase session. Sonarr and Radarr are checked through the private ARR bridge using their configured protected API keys; Jarvis, tvbot and Pitwall are checked through the same bridge (any answer from the app counts, Jarvis replies "enter your PIN" without a session); other published apps are checked at their public URLs. Results include `up`, `reachable`, and a `state` such as `online`, `auth_failed`, `not_configured`, `login_required`, `redirected`, `degraded`, or `unreachable`. This avoids treating Sonarr's web login page as its API health. Mocked safety tests live in `dashboard/tests/media-safety.test.mjs` and can be run with `node --test dashboard/tests/media-safety.test.mjs`.
 
 ## The private bridge
 
