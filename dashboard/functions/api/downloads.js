@@ -110,7 +110,8 @@ async function qbitItems(env) {
   if (!Array.isArray(torrents)) throw new Error("qBittorrent returned an invalid queue.");
 
   return torrents
-    .filter(torrent => Number.isFinite(Number(torrent?.progress)) && Number(torrent.progress) < 1 && ["downloading","forcedDL","metaDL","allocating","moving"].includes(torrent?.state))
+    .filter(torrent => Number.isFinite(Number(torrent?.progress)) && Number(torrent.progress) < 1 && ["downloading","forcedDL","metaDL","allocating","moving","queuedDL","stalledDL","pausedDL","stoppedDL"].includes(torrent?.state))
+    .sort((a, b) => (Number(a.priority) > 0 ? Number(a.priority) : 1e9) - (Number(b.priority) > 0 ? Number(b.priority) : 1e9))
     .slice(0, MAX_ITEMS_PER_SOURCE)
     .map((torrent, index) => {
       const progress = Math.max(0, Math.min(100, Number(torrent.progress) * 100));
@@ -118,6 +119,7 @@ async function qbitItems(env) {
       return {
         id: "qbittorrent-" + (torrent.hash ? String(torrent.hash).toLowerCase() : index),
         torrentHash: String(torrent.hash || ""),
+        queuePos: Number(torrent.priority) > 0 ? Number(torrent.priority) : null,
         source: "qBittorrent",
         name: displayName(torrent.name),
         category: mediaType(torrent.category),
@@ -242,6 +244,7 @@ async function sabItems(env) {
       return {
         id: "sabnzbd-" + (slot.nzo_id || index),
         nzoId: String(slot.nzo_id || ""),
+        queuePos: Number.isFinite(Number(slot.index)) ? Number(slot.index) + 1 : index + 1,
         source: "SABnzbd",
         name: displayName(slot.filename),
         category: mediaType(slot.cat),
@@ -345,7 +348,7 @@ export async function onRequest({ env, request }) {
     const id = String(body?.id || "");
     const name = displayName(body?.name || "");
     const replacementService = action === "replace" ? arrServices().find(service => service.name === source) : null;
-    if (!["pause","resume","remove","replace"].includes(action) || (!(["qBittorrent","SABnzbd"].includes(source) || replacementService)) || !name) return json({error:"Invalid download action."},400);
+    if (!["pause","resume","remove","replace","top"].includes(action) || (!(["qBittorrent","SABnzbd"].includes(source) || replacementService)) || !name) return json({error:"Invalid download action."},400);
     if (replacementService && !id.startsWith("arr-" + replacementService.key + "-")) return json({ error: "This is not a failed library event that can be retried." }, 400);
     try {
       // Failed Sonarr/Radarr history items are not downloader queue jobs. Search
@@ -361,28 +364,29 @@ export async function onRequest({ env, request }) {
         if(!login.ok||!sid||!/^Ok\\.?$/i.test(loginText.trim())) throw new Error("qBittorrent login failed.");
         const hash=String(body?.torrentHash||"");
         if(!/^[a-f0-9]{40}$/i.test(hash)) throw new Error("Missing torrent identifier. Refresh the queue and try again.");
-        const command=action==="pause"?"api/v2/torrents/pause":action==="resume"?"api/v2/torrents/resume":"api/v2/torrents/delete";
-        const params=action==="pause"||action==="resume"?{hashes:hash}:{hashes:hash,deleteFiles:"true"};
+        const command=action==="pause"?"api/v2/torrents/pause":action==="resume"?"api/v2/torrents/resume":action==="top"?"api/v2/torrents/topPrio":"api/v2/torrents/delete";
+        const params=action==="pause"||action==="resume"||action==="top"?{hashes:hash}:{hashes:hash,deleteFiles:"true"};
         const response=await fetch(apiUrl(root,command),{method:"POST",headers:{cookie:"SID="+sid,origin:root.origin,referer:root.href,"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams(params).toString(),signal:AbortSignal.timeout(7000),redirect:"manual"});
-        if(!response.ok) throw new Error("qBittorrent rejected the action.");
+        if(!response.ok) throw new Error(action==="top"&&response.status===409?"qBittorrent's queueing is switched off, so downloads can't be ordered.":"qBittorrent rejected the action.");
       } else {
         const apiKey=String(env.SABNZBD_API_KEY||"");
         if(!apiKey) throw new Error("SABnzbd API key is not configured.");
         const root=serviceRoot(env.SABNZBD_BASE_URL,DEFAULT_SABNZBD_URL), url=apiUrl(root,"api");
-        url.searchParams.set("mode",action==="pause"?"queue":"queue");
-        url.searchParams.set("name",action==="pause"?"pause":action==="resume"?"resume":"delete");
+        url.searchParams.set("mode",action==="top"?"switch":"queue");
+        if(action!=="top") url.searchParams.set("name",action==="pause"?"pause":action==="resume"?"resume":"delete");
         url.searchParams.set("output","json"); url.searchParams.set("apikey",apiKey);
         const nzoId=String(body?.nzoId||"");
         if(!/^[A-Za-z0-9_-]{8,160}$/.test(nzoId)) throw new Error("Missing or invalid SABnzbd job identifier. Refresh the queue and try again.");
         url.searchParams.set("value",nzoId);
-        if(action!=="pause" && action!=="resume") url.searchParams.set("del_files","1");
+        if(action==="top") url.searchParams.set("value2","0");
+        else if(action!=="pause" && action!=="resume") url.searchParams.set("del_files","1");
         const actionResult = await readJson(url);
         if (actionResult?.status === false || actionResult?.status === "false") {
-          throw new Error("SABnzbd did not " + (action === "resume" ? "resume" : action === "pause" ? "pause" : "remove") + " this job. It may no longer be in the queue; refresh and try again.");
+          throw new Error("SABnzbd did not " + (action === "resume" ? "resume" : action === "pause" ? "pause" : action === "top" ? "move" : "remove") + " this job. It may no longer be in the queue; refresh and try again.");
         }
       }
       if (action === "replace") return await queueReplacementSearch(env, name);
-      return json({ok:true,message:action==="pause"?"Download paused.":action==="resume"?"Download resumed.":action==="replace"?"Download removed and a replacement search was queued.":"Download removed and downloaded files deleted."});
+      return json({ok:true,message:action==="top"?(source==="qBittorrent"?"Moved to the front of the queue. It starts as soon as a download slot is free.":"Moved to the top of the queue."):action==="pause"?"Download paused.":action==="resume"?"Download resumed.":action==="replace"?"Download removed and a replacement search was queued.":"Download removed and downloaded files deleted."});
     } catch(error) { return json({error:error.message||"Download action failed."},502); }
   }
 

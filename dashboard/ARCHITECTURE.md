@@ -28,7 +28,7 @@ All of these except `/api/metrics` need the Homebase session cookie (`functions/
 | Route | Purpose |
 | --- | --- |
 | `downloads/login`, `logout`, `session` | One shared Homebase sign-in, HMAC cookie on `/api` |
-| `downloads` | GET: qBittorrent + SABnzbd queues, merged with the Sonarr/Radarr queues (stage: downloading, waiting to import, importing, import blocked, imported) and recent history. POST: pause/resume/remove/replace |
+| `downloads` | GET: qBittorrent + SABnzbd queues, merged with the Sonarr/Radarr queues (stage: downloading, waiting to import, importing, import blocked, imported) and recent history. POST: pause/resume/remove/replace/top (move to the front: qBittorrent `topPrio`, SABnzbd `switch` to position 0) |
 | `media/config`, `library`, `search`, `add`, `details`, `manage`, `releases`, `recent`, `calendar` | Sonarr (3 instances) and Radarr, via the bridge |
 | `tv/[[path]]` | The TV remote, proxied to tvbot via the bridge. Allowed: GET `api/status`, `api/foryou`, `api/library`, `api/discover`, `api/locate`, `img/{id}`; POST `api/key`, `api/type`, `api/seek`, `api/playhere`, `cmd` |
 | `autopilot` | GET rules, last check, log; POST `{action:"run"}` checks now, `{action:"settings", rules}` switches rules |

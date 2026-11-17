@@ -10,7 +10,7 @@ window.Hub = (() => {
 
   // icons: 24px paths, filled with currentColor
   const ICONS = {
-    play: "M8 5v14l11-7z", pause: "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z", plus: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z",
+    play: "M8 5v14l11-7z", up: "M12 4l-8 8h5v8h6v-8h5z", pause: "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z", plus: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z",
     search: "M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z",
     refresh: "M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z",
     bell: "M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.1-1.6-5.6-4.5-6.3V4a1.5 1.5 0 0 0-3 0v.7C7.6 5.4 6 7.9 6 11v5l-2 2v1h16v-1z",

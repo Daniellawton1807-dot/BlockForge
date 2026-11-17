@@ -512,7 +512,8 @@
     if (downloads.error) { v.append(note("Couldn't load downloads", downloads.error)); return; }
     const items = visibleDownloadItems();
     dlShape = downloadShape(items);
-    const active = items.filter(i => i.lifecycle === "downloading" || i.lifecycle === "importing"), done = items.filter(i => i.lifecycle === "imported"), failed = items.filter(i => i.lifecycle === "failed" || i.lifecycle === "blocked");
+    const waiting = i => (/queued/i.test(i.status || "") ? 1 : 0), place = i => (i.queuePos > 0 ? i.queuePos : 1e6);
+    const active = items.filter(i => i.lifecycle === "downloading" || i.lifecycle === "importing").sort((a, b) => waiting(a) - waiting(b) || place(a) - place(b)), done = items.filter(i => i.lifecycle === "imported"), failed = items.filter(i => i.lifecycle === "failed" || i.lifecycle === "blocked");
     const stats = el("div", "hub-stats");
     stats.append(...downloadStats(items).map(([k, v, d, cls]) => stat(k, v, d, cls)));
     v.append(stats);
@@ -643,6 +644,7 @@
     const status = i.lifecycle === "failed" ? "Failed" : i.lifecycle === "blocked" ? "Import blocked" : i.lifecycle === "imported" ? "Imported " + dateText(i.eventDate, { day: "numeric", month: "short" }) : i.lifecycle === "importing" ? i.status || "Importing" : paused ? "Paused · " + pct + "%" : pct + "%";
     const eta = i.lifecycle === "downloading" && !paused && i.etaSeconds > 0 ? (i.etaSeconds >= 3600 ? Math.floor(i.etaSeconds / 3600) + "h " + Math.round(i.etaSeconds % 3600 / 60) + "m left" : Math.max(1, Math.round(i.etaSeconds / 60)) + " min left") : "";
     sub.append(el("span", "dl-status", status));
+    if (i.lifecycle === "downloading" && i.queuePos > 0 && /queued/i.test(i.status || "")) sub.append(el("span", null, "#" + i.queuePos + " in line"));
     const etaSpan = el("span", "dl-eta", eta); etaSpan.hidden = !eta; sub.append(etaSpan);
     [i.category, i.service, i.source].filter(Boolean).forEach(x => sub.append(el("span", null, x)));
     info.append(sub);
@@ -651,6 +653,8 @@
     row.append(el("div", "src " + src[0], src[1]), info);
     const acts = el("div", "acts");
     if (i.lifecycle === "downloading") {
+      // not first in its downloader's line: one tap puts it at the front
+      if (i.queuePos > 1 && !paused && (src[0] === "sab" || src[0] === "qb")) acts.append(iconButton("up", "Move to top of the queue", "", () => downloadAction(i, "top")));
       acts.append(iconButton(paused ? "play" : "pause", paused ? "Resume" : "Pause", "", () => downloadAction(i, paused ? "resume" : "pause")));
       acts.append(armed(iconButton("trash", "Remove", "danger"), "Tap again to remove", () => downloadAction(i, "remove")));
     }
@@ -750,7 +754,7 @@
 
   async function downloadAction(item, action) {
     const r = await api("/api/downloads", { method: "POST", body: { action, source: item.source, id: item.id, name: item.name, torrentHash: item.torrentHash, nzoId: item.nzoId } });
-    toast(r.ok ? { pause: "Paused.", resume: "Resumed.", remove: "Removed from the queue.", replace: "Looking for a different release." }[action] : errorText(r, "That didn't work."), r.ok ? {} : "error");
+    toast(r.ok ? (action === "top" && r.data?.message) || { top: "Moved to the top.", pause: "Paused.", resume: "Resumed.", remove: "Removed from the queue.", replace: "Looking for a different release." }[action] : errorText(r, "That didn't work."), r.ok ? {} : "error");
     refreshDownloads();
   }
   // one-tap fixes for a download stuck in a Sonarr/Radarr queue (Autopilot's "fix" action)
