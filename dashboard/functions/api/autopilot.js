@@ -16,7 +16,7 @@ export async function onRequest({ request, env }) {
     if (body?.action === "run") return json(publicState(await runAutopilot(env, "manual")));
     if (body?.action === "fix") {
       const queueId = Number(body.queueId);
-      if (!["research", "remove"].includes(body.fix) || typeof body.serviceKey !== "string" || !Number.isSafeInteger(queueId) || queueId <= 0) return json({ code: "invalid_request", error: "That fix isn't available." }, 400);
+      if (!["research", "remove", "usenet"].includes(body.fix) || typeof body.serviceKey !== "string" || !Number.isSafeInteger(queueId) || queueId <= 0) return json({ code: "invalid_request", error: "That fix isn't available." }, 400);
       return json({ ok: true, message: await fixQueueItem(env, body.serviceKey, queueId, body.fix) });
     }
     if (body?.action === "settings") {

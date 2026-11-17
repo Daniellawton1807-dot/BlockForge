@@ -201,12 +201,34 @@ async function retryAfterFailure(env, service, item) {
 }
 // One-tap fixes from Homebase's Needs attention page, for a download still in a Sonarr/Radarr queue. "research" blocklists
 // the release and searches for another (the same capped retries Autopilot uses); "remove" just takes it out of the queue.
+// Usenet releases for one episode or film that could be grabbed: an existing queue entry doesn't count against them
+const QUEUE_REASON = /already meets cutoff|already in (the )?queue|in queue already/i;
+async function usenetOptions(env, service, id) {
+  const list = await arrCall(env, service, "api/v3/release?" + (service.type === "tv" ? "episodeId=" : "movieId=") + id);
+  return (Array.isArray(list) ? list : [])
+    .filter(r => /usenet/i.test(String(r.protocol?.name || r.protocol)) && (r.rejections || []).every(x => QUEUE_REASON.test(String(x?.reason || x))))
+    .sort((a, b) => qualityRank(b.quality, b.customFormatScore, b.size) - qualityRank(a.quality, a.customFormatScore, a.size));
+}
 export async function fixQueueItem(env, serviceKey, queueId, fix) {
   const service = arrServices().find(s => s.key === serviceKey);
   if (!service || !arrServiceStatus(env, service).configured) throw new Error("That Sonarr/Radarr isn't set up.");
   const queue = await queueOf(env, service), record = queue.find(r => r.id === queueId);
   if (!record) throw new Error("It's no longer in the queue. Refresh to see where it went.");
   const group = record.downloadId ? queue.filter(r => r.downloadId === record.downloadId) : [record];
+  if (fix === "usenet") {   // swap a torrent for a Usenet copy, whatever quality it comes in, as long as the profile allows it
+    const ids = [...new Set(group.map(r => service.type === "tv" ? r.episodeId : r.movieId).filter(Boolean))];
+    if (ids.length !== 1) throw new Error("That's a whole season in one download, so I can't swap it for single Usenet files.");
+    if (!(await usenetOptions(env, service, ids[0])).length) return "There's no usable Usenet release for " + record.title + " yet, so I left the download running.";
+    await removeFromQueue(env, record, { blocklist: true, redownload: false });
+    const pick = (await usenetOptions(env, service, ids[0]))[0];
+    if (!pick) {   // nothing grabbable after all: an ordinary search
+      await arrCall(env, service, "api/v3/command", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify(service.type === "tv" ? { name: "EpisodeSearch", episodeIds: [ids[0]] } : { name: "MoviesSearch", movieIds: [ids[0]] }) });
+      return "Removed it and searched again.";
+    }
+    await arrCall(env, service, "api/v3/release", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(pick) });
+    return "Swapped it for a Usenet copy: " + String(pick.title).slice(0, 80) + " (" + (pick.quality?.quality?.name || "unknown quality") + ", " + (pick.size / 1e9).toFixed(1) + " GB).";
+  }
   await removeFromQueue(env, record, { blocklist: fix === "research", redownload: false });
   if (fix !== "research") return "Removed " + record.title + " from the queue.";
   const ids = [...new Set(group.map(r => service.type === "tv" ? r.episodeId : r.movieId).filter(Boolean))];
