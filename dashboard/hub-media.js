@@ -282,7 +282,14 @@
     const have = new Set(all.map(p => p.mediaType + p.tmdbId));
     const hot = (trending || []).map(t => ({ mediaType: t.type, tmdbId: Number(t.tmdb), title: t.title, year: Number(t.year) || null, overview: t.overview, posterUrl: tmdb(t.poster), backdropUrl: "",
       rating: Number(t.rating) || 0, because: [], genres: [] })).filter(p => (fyType === "all" || p.mediaType === fyType) && !have.has(p.mediaType + p.tmdbId) && !inLibrary(p) && p.posterUrl).slice(0, 14);
-    if (extra.length) { const s = section("PICKED FOR YOU", "More you might like", plural(extra.length, "pick")); s.append(grid(extra, (p, i) => pickTile(p, i, true))); v.append(s); }
+    if (extra.length) {
+      const s = section("PICKED FOR YOU", "More you might like", plural(extra.length, "pick")), PAGE = 18, g = grid(extra.slice(0, PAGE), (p, i) => pickTile(p, i, true)); s.append(g);
+      if (extra.length > PAGE) {
+        const more = button("Show " + (extra.length - PAGE) + " more", "small ghost", () => { extra.slice(PAGE).forEach((p, i) => g.append(pickTile(p, i, true))); more.remove(); }, "plus");
+        more.style.margin = "14px auto 0"; more.style.display = "flex"; s.append(more);
+      }
+      v.append(s);
+    }
     if (hot.length && !fyGenre) { const s = section("TRENDING NOW", "What everyone's watching", plural(hot.length, "title")); s.append(rail(hot.map((p, i) => pickTile(p, i, false)))); v.append(s); }
   }
   // continue watching, trending and the calendar load after the page draws, then it redraws once
