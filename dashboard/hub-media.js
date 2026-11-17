@@ -271,12 +271,15 @@
     // a row for any show or film with at least three picks, then everything else in one grid, each saying why
     const groups = new Map();
     for (const p of picks) { const k = p.because[0] || ""; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); }
-    const extra = []; let rows = 0;
+    // every "because you watched" row holds the same number of picks: as many as the fifth-biggest group can fill (4 to 8), the rest go to the grid below
+    const sizes = [...groups].filter(([seed]) => seed).map(([, list]) => list.length).sort((x, y) => y - x);
+    const per = Math.max(4, Math.min(8, sizes[Math.min(4, sizes.length - 1)] || 4)), extra = []; let rows = 0;
     for (const [seed, list] of groups) {
-      if (!seed || list.length < 3 || rows >= 4) { extra.push(...list); continue; }
+      if (!seed || list.length < per || rows >= 5) { extra.push(...list); continue; }
       rows++;
-      const s = section("BECAUSE YOU WATCHED", seed, plural(list.length, "pick"));
-      s.append(rail(list.map((p, i) => pickTile(p, i, false)))); v.append(s);
+      const s = section("BECAUSE YOU WATCHED", seed, plural(per, "pick"));
+      s.append(rail(list.slice(0, per).map((p, i) => pickTile(p, i, false)))); v.append(s);
+      extra.push(...list.slice(per));
     }
     // what everyone is watching, without what you have, were picked or hid
     const have = new Set(all.map(p => p.mediaType + p.tmdbId));
