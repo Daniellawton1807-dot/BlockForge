@@ -656,6 +656,8 @@
       // not first in its downloader's line: one tap puts it at the front
       if (i.queuePos > 1 && !paused && (src[0] === "sab" || src[0] === "qb")) acts.append(iconButton("up", "Move to top of the queue", "", () => downloadAction(i, "top")));
       acts.append(iconButton(paused ? "play" : "pause", paused ? "Resume" : "Pause", "", () => downloadAction(i, paused ? "resume" : "pause")));
+      // a bad or slow release (a torrent when Usenet has it): delete it, never pick it again, and search for a different one
+      if (i.serviceKey && i.queueId && (src[0] === "qb" || src[0] === "sab")) acts.append(armed(iconButton("refresh", "Delete and find another release"), "Tap again to delete and search again", () => queueFix(i.serviceKey, i.queueId, "research")));
       acts.append(armed(iconButton("trash", "Remove", "danger"), "Tap again to remove", () => downloadAction(i, "remove")));
     }
     // a blocked import, or one Sonarr/Radarr is waiting on: open their manual import right here

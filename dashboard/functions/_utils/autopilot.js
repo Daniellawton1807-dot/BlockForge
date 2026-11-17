@@ -211,7 +211,11 @@ export async function fixQueueItem(env, serviceKey, queueId, fix) {
   if (fix !== "research") return "Removed " + record.title + " from the queue.";
   const ids = [...new Set(group.map(r => service.type === "tv" ? r.episodeId : r.movieId).filter(Boolean))];
   if (!ids.length) return "Blocklisted that release.";
-  if (ids.length === 1) return "Blocklisted that release. " + await retryAfterFailure(env, service, ids[0]);
+  if (ids.length === 1) {   // asked for by a person: always search, whatever the automatic retry limit says
+    await arrCall(env, service, "api/v3/command", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(service.type === "tv" ? { name: "EpisodeSearch", episodeIds: [ids[0]] } : { name: "MoviesSearch", movieIds: [ids[0]] }) });
+    return "Removed that release and blocklisted it. Searching for another one now.";
+  }
   await arrCall(env, service, "api/v3/command", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "EpisodeSearch", episodeIds: ids }) });
   return "Blocklisted that release and searched for " + ids.length + " episodes again.";
 }
