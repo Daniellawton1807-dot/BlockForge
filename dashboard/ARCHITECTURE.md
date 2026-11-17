@@ -30,7 +30,7 @@ All of these except `/api/metrics` need the Homebase session cookie (`functions/
 | `downloads/login`, `logout`, `session` | One shared Homebase sign-in, HMAC cookie on `/api` |
 | `downloads` | GET: qBittorrent + SABnzbd queues, merged with the Sonarr/Radarr queues (stage: downloading, waiting to import, importing, import blocked, imported) and recent history. POST: pause/resume/remove/replace |
 | `media/config`, `library`, `search`, `add`, `details`, `manage`, `releases`, `recent`, `calendar` | Sonarr (3 instances) and Radarr, via the bridge |
-| `tv/[[path]]` | The TV remote, proxied to tvbot via the bridge. Allowed: GET `api/status`, `api/foryou`, `api/locate`, `img/{id}`; POST `api/key`, `api/type`, `api/seek`, `api/playhere`, `cmd` |
+| `tv/[[path]]` | The TV remote, proxied to tvbot via the bridge. Allowed: GET `api/status`, `api/foryou`, `api/library`, `api/discover`, `api/locate`, `img/{id}`; POST `api/key`, `api/type`, `api/seek`, `api/playhere`, `cmd` |
 | `autopilot` | GET rules, last check, log; POST `{action:"run"}` checks now, `{action:"settings", rules}` switches rules |
 | `autopilot/run` | The scheduled run (POST with `x-autopilot-token`, no cookie; the Worker confirms the token) |
 | `report` | GET: last 7 days of imports (Sonarr/Radarr history), who watched what (tvbot watchdata), Autopilot log, media-drive forecast and cleanup size. Read-only |

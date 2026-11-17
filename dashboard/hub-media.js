@@ -8,6 +8,7 @@
   let view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : store.get("hb_media_view", "foryou");
   if (!VIEWS.includes(view)) view = "foryou";
   let services = [], library = [], forYou = null, forYouBusy = false, forYouError = "", recent = null, calendar = null, calendarAt = 0, downloads = null, health = {}, healthLoaded = false, healthError = "", mediaConfigError = "";
+  let fyType = store.get("hb_fy_type", "all"), fyGenre = "", cont = null, trending = null;
   let libFilter = store.get("hb_lib_filter", "all"), libSort = store.get("hb_lib_sort", "added"), upFilter = "all";
   let searching = false, searchTimer, searchSeq = 0, remoteResults = null, remoteError = "";
   let libCheck = null, libCheckError = "", libCheckAll = false;
@@ -229,34 +230,100 @@
       if (view !== "foryou" || searching) return;
       fresh();
     }
-    const picks = forYou.map(f => ({ mediaType: f.type, tmdbId: Number(f.tmdb), title: f.title, year: Number(f.year) || null, overview: f.overview, posterUrl: tmdb(f.poster),
-      backdropUrl: tmdb(f.backdrop, "w1280"), rating: Number(f.rating) || 0, because: f.because || [], fromForYou: true })).filter(p => !inLibrary(p));
+    loadForYouExtras();
+    const all = forYou.map(f => ({ mediaType: f.type, tmdbId: Number(f.tmdb), title: f.title, year: Number(f.year) || null, overview: f.overview, posterUrl: tmdb(f.poster),
+      backdropUrl: tmdb(f.backdrop, "w1280"), rating: Number(f.rating) || 0, because: f.because || [], genres: f.genres || [], fromForYou: true })).filter(p => !inLibrary(p));
+    const filtered = fyType !== "all" || Boolean(fyGenre);
+    const picks = all.filter(p => (fyType === "all" || p.mediaType === fyType) && (!fyGenre || p.genres.includes(fyGenre)));
     v.append(forYouBar());
+    if (all.length) v.append(forYouFilters(all));
 
     if (picks.length) v.append(spotlight(picks.filter(p => p.backdropUrl).slice(0, 5)));
-    else v.append(note(forYouError ? "Recommendations aren't available" : "Nothing new to suggest", forYouError || "Watch a few things and check back. Picks come from what you've watched lately."));
+    else v.append(note(forYouError ? "Recommendations aren't available" : filtered ? "Nothing matches that" : "Nothing new to suggest", forYouError || (filtered ? "Try another filter." : "Watch a few things and check back. Picks come from what you've watched lately.")));
 
-    const landed = [], seen = new Set();
-    for (const r of recent || []) { const k = r.serviceKey + r.title; if (seen.has(k)) continue; seen.add(k); landed.push(r); }
-    if (landed.length) {
-      const s = section("JUST LANDED", "Recently downloaded", plural(landed.length, "title"));
-      s.append(rail(landed.slice(0, 24).map((r, i) => {
-        const mine = library.find(l => l.serviceKey === r.serviceKey && l.title === r.title);
-        return tile({ poster: r.posterUrl || mine?.posterUrl, title: r.title, sub: r.episodeLabel || dateText(r.date, { day: "numeric", month: "short" }), badge: "New", badgeClass: "new",
-          onClick: () => mine ? openLibraryItem(mine) : setView("library") }, i);
-      })));
-      v.append(s);
+    if (!filtered) {
+      // what you were in the middle of, and the next episode of what you follow: tap to play on the living room TV
+      const seenShow = new Set(), watching = (cont || []).filter(c => { const k = c.name; if (seenShow.has(k)) return false; seenShow.add(k); return true; });
+      if (watching.length) {
+        const s = section("CONTINUE WATCHING", "Pick up where you left off", "tap to play on the Living Room TV");
+        s.append(rail(watching.slice(0, 20).map((c, i) => tile({ poster: `/api/tv/img/${encodeURIComponent(c.poster)}?h=420`, title: c.name, sub: c.sub, progress: c.progress > 0 ? c.progress : null, onClick: () => playContinue(c) }, i))));
+        v.append(s);
+      }
+      const fresh7 = newEpisodes();
+      if (fresh7.length) {
+        const s = section("NEW EPISODES", "From the shows you follow", plural(fresh7.length, "episode"));
+        s.append(rail(fresh7.map((c, i) => tile({ poster: c.posterUrl, title: c.title, sub: [c.code, c.when].filter(Boolean).join(" · "), badge: c.hasFile ? "New" : c.aired ? "Aired" : "Soon", badgeClass: c.hasFile ? "new" : "",
+          onClick: () => openLibraryItem(library.find(l => l.serviceKey === c.serviceKey && l.id === c.id) || { serviceKey: c.serviceKey, id: c.id, title: c.title, mediaType: "tv", posterUrl: c.posterUrl, fanartUrl: c.fanartUrl }, { season: Number(c.code.slice(1, 3)) }) }, i))));
+        v.append(s);
+      }
+      const landed = [], seen = new Set();
+      for (const r of recent || []) { const k = r.serviceKey + r.title; if (seen.has(k)) continue; seen.add(k); landed.push(r); }
+      if (landed.length) {
+        const s = section("JUST LANDED", "Recently downloaded", plural(landed.length, "title"));
+        s.append(rail(landed.slice(0, 24).map((r, i) => {
+          const mine = library.find(l => l.serviceKey === r.serviceKey && l.title === r.title);
+          return tile({ poster: r.posterUrl || mine?.posterUrl, title: r.title, sub: r.episodeLabel || dateText(r.date, { day: "numeric", month: "short" }), badge: "New", badgeClass: "new",
+            onClick: () => mine ? openLibraryItem(mine) : setView("library") }, i);
+        })));
+        v.append(s);
+      }
     }
-    // a row for any show with plenty of picks, then everything else in one grid, each saying why
+    // a row for any show or film with at least three picks, then everything else in one grid, each saying why
     const groups = new Map();
     for (const p of picks) { const k = p.because[0] || ""; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); }
-    const extra = [];
+    const extra = []; let rows = 0;
     for (const [seed, list] of groups) {
-      if (!seed || list.length < 5) { extra.push(...list); continue; }
+      if (!seed || list.length < 3 || rows >= 4) { extra.push(...list); continue; }
+      rows++;
       const s = section("BECAUSE YOU WATCHED", seed, plural(list.length, "pick"));
       s.append(rail(list.map((p, i) => pickTile(p, i, false)))); v.append(s);
     }
+    // what everyone is watching, without what you have, were picked or hid
+    const have = new Set(all.map(p => p.mediaType + p.tmdbId));
+    const hot = (trending || []).map(t => ({ mediaType: t.type, tmdbId: Number(t.tmdb), title: t.title, year: Number(t.year) || null, overview: t.overview, posterUrl: tmdb(t.poster), backdropUrl: "",
+      rating: Number(t.rating) || 0, because: [], genres: [] })).filter(p => (fyType === "all" || p.mediaType === fyType) && !have.has(p.mediaType + p.tmdbId) && !inLibrary(p) && p.posterUrl).slice(0, 14);
     if (extra.length) { const s = section("PICKED FOR YOU", "More you might like", plural(extra.length, "pick")); s.append(grid(extra, (p, i) => pickTile(p, i, true))); v.append(s); }
+    if (hot.length && !fyGenre) { const s = section("TRENDING NOW", "What everyone's watching", plural(hot.length, "title")); s.append(rail(hot.map((p, i) => pickTile(p, i, false)))); v.append(s); }
+  }
+  // continue watching, trending and the calendar load after the page draws, then it redraws once
+  let extrasAt = 0, extrasBusy = false;
+  async function loadForYouExtras() {
+    if (extrasBusy || Date.now() - extrasAt < 5 * 60000) return;
+    extrasBusy = true;
+    const [a, b, t, c] = await Promise.all([api("/api/tv/api/library?kind=continue"), api("/api/tv/api/library?kind=nextup"), api("/api/tv/api/discover"),
+      calendar && Date.now() - calendarAt < 5 * 60000 ? null : api("/api/media/calendar?days=21")]);
+    cont = [...(a.ok && Array.isArray(a.data) ? a.data : []), ...(b.ok && Array.isArray(b.data) ? b.data : [])];
+    trending = t.ok && Array.isArray(t.data) ? t.data : [];
+    if (c && c.ok) { calendar = c.data.items || []; calendarAt = Date.now(); }
+    extrasAt = Date.now(); extrasBusy = false;
+    if (view === "foryou" && !searching && !sheetOpen() && scrollY < 120) draw();
+  }
+  // episodes of your shows that came out in the last week (downloaded first), and those out in the next three days
+  function newEpisodes() {
+    const now = Date.now(), list = [];
+    for (const c of calendar || []) {
+      if (c.mediaType !== "tv" || c.serviceKey === "sonarr-mum" || !c.code) continue;
+      const t = Date.parse(c.date); if (!t) continue;
+      const aired = t <= now;
+      if (aired && now - t > 7 * 86400000) continue;
+      if (!aired && t - now > 3 * 86400000) continue;
+      list.push({ ...c, aired, t, when: aired ? (c.hasFile ? "out " + dayLabel(t).toLowerCase() : "not downloaded yet") : dayLabel(t).toLowerCase() });
+    }
+    return list.sort((a, b) => (b.hasFile - a.hasFile) || (a.aired === b.aired ? (a.aired ? b.t - a.t : a.t - b.t) : a.aired ? -1 : 1)).slice(0, 16);
+  }
+  async function playContinue(c) {
+    const m = /S(\d+) · E(\d+)/.exec(c.sub || ""), what = c.name + (m ? ` season ${m[1]} episode ${m[2]}` : "");
+    const r = await api("/api/tv/cmd", { method: "POST", body: { text: "play " + what + TV_SUFFIX["living room"] } });
+    toast(r.ok ? r.data.text || "Playing on the Living Room TV." : errorText(r, "The TV didn't answer."), r.ok ? { action: { label: "Open remote", onClick: () => { location.href = "/remote/"; } } } : "error");
+  }
+  function forYouFilters(all) {
+    const tools = el("div", "hub-toolbar"), chips = el("div", "hub-chips");
+    const add = (label, on, fn) => { const c = el("button", "hub-chip" + (on ? " on" : ""), label); c.type = "button"; c.onclick = fn; chips.append(c); };
+    for (const [k, l] of [["all", "Everything"], ["tv", "Shows"], ["movie", "Films"]]) add(l, fyType === k, () => { fyType = k; fyGenre = ""; store.set("hb_fy_type", k); draw(); });
+    const counts = new Map();
+    for (const p of all) if (fyType === "all" || p.mediaType === fyType) for (const g of p.genres) counts.set(g, (counts.get(g) || 0) + 1);
+    for (const [g] of [...counts].filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).slice(0, 8)) add(g, fyGenre === g, () => { fyGenre = fyGenre === g ? "" : g; draw(); });
+    tools.append(chips); return tools;
   }
   function forYouBar() {
     const bar = el("div", "fy-bar"), left = el("div", "fy-hint", "Open a pick to hide it or mark it watched. Refresh swaps in new ideas.");
@@ -307,7 +374,10 @@
       box.append(s);
     }
   }
-  const pickTile = (p, i, why) => tile({ poster: p.posterUrl, title: p.title, sub: why && p.because[0] ? "Because you watched " + p.because[0] : [p.year, typeName(p.mediaType)].filter(Boolean).join(" · "),
+  // a pick that's already coming down (in the download queue under its name)
+  const flat = t => String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const isDownloading = p => { const n = flat(p.title); return n.length > 3 && (downloads?.items || []).some(d => ["downloading", "importing"].includes(d.lifecycle) && (flat(d.label || d.name).includes(n))); };
+  const pickTile = (p, i, why) => tile({ poster: p.posterUrl, title: p.title, badge: isDownloading(p) ? "Downloading" : null, badgeClass: "new", sub: why && p.because[0] ? "Because you watched " + p.because[0] : [p.year, typeName(p.mediaType)].filter(Boolean).join(" · "),
     rating: p.rating >= 6 ? p.rating : null, onClick: () => openRequest(p) }, i);
   function spotlight(items) {
     if (!items.length) return el("div");
