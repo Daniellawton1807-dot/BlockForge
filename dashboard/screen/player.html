@@ -80,7 +80,7 @@ const post = (p, extra) => JF.api("/Sessions/Playing" + p, { method: "POST", bod
 let panel = null;
 function stats() {
   const b = v.buffered, ahead = b.length ? (b.end(b.length - 1) - v.currentTime) : 0, q = v.getVideoPlaybackQuality ? v.getVideoPlaybackQuality() : {};
-  return [`Stream: ${play ? play.method : "?"} at up to ${mbps(bitrate)}`, `Buffered ahead: ${ahead.toFixed(1)} s`, `Stalls in the last 90 s: ${stalls.filter(t => Date.now() - t < 90000).length}`, `Dropped frames: ${q.droppedVideoFrames || 0} of ${q.totalVideoFrames || 0}`, `Position: ${v.currentTime.toFixed(1)} s, speed ${v.playbackRate.toFixed(2)}`].join("\n");
+  return [`Stream: ${play ? play.method : "?"} at up to ${mbps(bitrate)}`, `This browser decodes: ${["h264", "hevc", "hevc10", "vp9", "av1"].filter(k => JF.can()[k]).join(", ") || "?"}`, `Buffered ahead: ${ahead.toFixed(1)} s`, `Stalls in the last 90 s: ${stalls.filter(t => Date.now() - t < 90000).length}`, `Dropped frames: ${q.droppedVideoFrames || 0} of ${q.totalVideoFrames || 0}`, `Position: ${v.currentTime.toFixed(1)} s, speed ${v.playbackRate.toFixed(2)}`].join("\n");
 }
 $("#fix").onclick = () => { resync(); msg("Sound and picture re-synced"); setTimeout(() => msg(""), 1200); };
 $("#low").onclick = () => { const next = STEPS.find(s => s < bitrate) || STEPS[STEPS.length - 1]; bitrate = next; JF.store.set("wd.br", String(next)); msg("Switching to " + mbps(next)); load(v.currentTime).catch(() => {}); };

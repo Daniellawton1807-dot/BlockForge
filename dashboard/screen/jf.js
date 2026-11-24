@@ -24,21 +24,25 @@ const JF = (() => {
   const logout = () => store.del(SK);
   const img = (id, h = 420, type = "Primary") => `${BASE}/Items/${id}/Images/${type}?maxHeight=${h}&quality=80`;   // pictures need no sign-in
   // what this browser can play, so Jellyfin only sends formats it can show
+  const hevcMse = c => !!(window.MediaSource && MediaSource.isTypeSupported(`video/mp4; codecs="${c}"`));   // HEVC only where this PC's GPU/browser really decodes it
   function can() {
     const v = document.createElement("video"), ok = t => !!v.canPlayType(t);
-    return { h264: ok('video/mp4; codecs="avc1.640028"'), hevc: ok('video/mp4; codecs="hvc1.1.6.L93.B0"'), vp9: ok('video/webm; codecs="vp9"'), vp8: ok('video/webm; codecs="vp8"'), av1: ok('video/mp4; codecs="av01.0.05M.08"'),
+    return { h264: ok('video/mp4; codecs="avc1.640028"'), hevc: ok('video/mp4; codecs="hvc1.1.6.L93.B0"') && hevcMse('hvc1.1.6.L93.B0'), hevc10: hevcMse('hvc1.2.4.L153.B0'), mkv: ok("video/x-matroska"), vp9: ok('video/webm; codecs="vp9"'), vp8: ok('video/webm; codecs="vp8"'), av1: ok('video/mp4; codecs="av01.0.05M.08"'),
       aac: ok('audio/mp4; codecs="mp4a.40.2"'), mp3: ok("audio/mpeg"), opus: ok('audio/webm; codecs="opus"'), mse: !!window.MediaSource };
   }
   function deviceProfile(maxBitrate) {
     const c = can(), direct = [], codecs = [];
     const vc = [c.h264 && "h264", c.hevc && "hevc", c.vp9 && "vp9", c.av1 && "av1"].filter(Boolean), ac = [c.aac && "aac", c.mp3 && "mp3", c.opus && "opus"].filter(Boolean);
-    if (c.h264) direct.push({ Container: "mp4,m4v", Type: "Video", VideoCodec: "h264", AudioCodec: ac.filter(a => a !== "opus").join(",") || "aac" });
+    if (c.hevc && c.mkv) direct.push({ Container: "mkv", Type: "Video", VideoCodec: c.h264 ? "hevc,h264" : "hevc", AudioCodec: ac.filter(a => a !== "opus").join(",") || "aac" });
+    if (c.hevc) direct.push({ Container: "mp4,m4v", Type: "Video", VideoCodec: c.h264 ? "hevc,h264" : "hevc", AudioCodec: ac.filter(a => a !== "opus").join(",") || "aac" });
+    else if (c.h264) direct.push({ Container: "mp4,m4v", Type: "Video", VideoCodec: "h264", AudioCodec: ac.filter(a => a !== "opus").join(",") || "aac" });
     if (c.vp9 || c.vp8) direct.push({ Container: "webm", Type: "Video", VideoCodec: "vp8,vp9", AudioCodec: "opus,vorbis" });
     const trans = [];
+    if (c.hevc && c.mse) trans.push({ Container: "mp4", Type: "Video", AudioCodec: "aac,mp3", VideoCodec: c.h264 ? "hevc,h264" : "hevc", Context: "Streaming", Protocol: "hls", MaxAudioChannels: "2", MinSegments: "1", BreakOnNonKeyFrames: true });   // fMP4 HLS: Jellyfin copies HEVC instead of re-encoding it
     if (c.h264 && c.mse) trans.push({ Container: "ts", Type: "Video", AudioCodec: "aac,mp3", VideoCodec: "h264", Context: "Streaming", Protocol: "hls", MaxAudioChannels: "2", MinSegments: "1", BreakOnNonKeyFrames: true });
     if (!trans.length) trans.push({ Container: "webm", Type: "Video", AudioCodec: "opus,vorbis", VideoCodec: "vp9,vp8", Context: "Streaming", Protocol: "http", MaxAudioChannels: "2" });
     return { Name: "WebDisplays Screen", MaxStreamingBitrate: maxBitrate, MaxStaticBitrate: maxBitrate, MusicStreamingTranscodingBitrate: 192000, DirectPlayProfiles: direct, TranscodingProfiles: trans,
-      ContainerProfiles: [], CodecProfiles: [{ Type: "Video", Codec: "h264", Conditions: [{ Condition: "LessThanEqual", Property: "VideoLevel", Value: "51", IsRequired: false }] }],
+      ContainerProfiles: [], CodecProfiles: [{ Type: "Video", Codec: "h264", Conditions: [{ Condition: "LessThanEqual", Property: "VideoLevel", Value: "51", IsRequired: false }] }].concat(c.hevc ? [{ Type: "Video", Codec: "hevc", Conditions: [{ Condition: "LessThanEqual", Property: "VideoBitDepth", Value: c.hevc10 ? "10" : "8", IsRequired: false }] }] : []),
       SubtitleProfiles: [{ Format: "vtt", Method: "External" }] };
   }
   const ticksToMin = t => Math.round((t || 0) / 600000000);
