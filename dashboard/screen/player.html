@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Screen Player</title>
+<link rel="stylesheet" href="screen.css?v=1">
+</head>
+<body class="player">
+<video id="v" controls playsinline></video>
+<div id="top"><a class="btn" id="back" href="./">← Back</a><span class="title" id="title"></span></div>
+<div id="msg">Loading…</div>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<script src="jf.js?v=1"></script>
+<script>
+/* The address is only ?id=<film or episode>, so the screen's sync opens the same one for everyone and keeps the
+   <video> at the same second, paused or playing, for all of them. Playback always starts from 0 (the resume point is
+   a seek after loading), so everyone's video clock is the film's clock. */
+const $ = s => document.querySelector(s), v = $("#v"), msg = t => { $("#msg").textContent = t || ""; $("#msg").hidden = !t; };
+const q = new URLSearchParams(location.search), id = q.get("id"), session = JF.session();
+const BITRATE = Math.min(40000000, +q.get("br") || 8000000);
+let hideTimer = null; document.addEventListener("mousemove", () => { $("#top").classList.remove("hide"); clearTimeout(hideTimer); hideTimer = setTimeout(() => $("#top").classList.add("hide"), 3500); }); hideTimer = setTimeout(() => $("#top").classList.add("hide"), 5000);
+const tick = x => Math.round(x * 1e7);
+
+async function start() {
+  if (!id) return msg("No film chosen.");
+  if (!session) { location.href = "./"; return; }
+  const item = await JF.api(`/Users/${session.userId}/Items/${id}`);
+  $("#title").textContent = item.Type === "Episode" ? `${item.SeriesName} · S${item.ParentIndexNumber}E${item.IndexNumber} · ${item.Name}` : item.Name; document.title = item.Name;
+  if (item.Type === "Episode") $("#back").href = `./?series=${item.SeriesId}&season=${item.SeasonId}`;
+  const info = await JF.api(`/Items/${id}/PlaybackInfo?UserId=${session.userId}&MaxStreamingBitrate=${BITRATE}&AutoOpenLiveStream=true`, { method: "POST", body: JSON.stringify({ DeviceProfile: JF.deviceProfile(BITRATE) }) });
+  const ms = (info.MediaSources || [])[0]; if (!ms) return msg("Jellyfin has nothing to play for this.");
+  const key = `api_key=${encodeURIComponent(session.token)}`; let url, hls = false;
+  if (ms.SupportsDirectPlay || ms.SupportsDirectStream) url = `${JF.BASE}/Videos/${id}/stream?static=true&MediaSourceId=${ms.Id}&Tag=${encodeURIComponent(ms.ETag || "")}&DeviceId=${JF.deviceId()}&PlaySessionId=${info.PlaySessionId}&${key}`;
+  else if (ms.TranscodingUrl) { url = JF.BASE + ms.TranscodingUrl; if (!/api_key=/i.test(url)) url += (url.includes("?") ? "&" : "?") + key; hls = /\.m3u8/i.test(url); }
+  else return msg("This browser can't play that format, and Jellyfin couldn't convert it.");
+  const playMethod = ms.SupportsDirectPlay ? "DirectPlay" : ms.SupportsDirectStream ? "DirectStream" : "Transcode";
+  if (hls && !(window.Hls && Hls.isSupported())) { if (v.canPlayType("application/vnd.apple.mpegurl")) v.src = url; else return msg("This browser can't play streamed video."); }
+  else if (hls) { const h = new Hls({ maxBufferLength: 40, enableWorker: true }); h.on(Hls.Events.ERROR, (e, d) => { if (d.fatal) msg("Playback error: " + d.details); }); h.loadSource(url); h.attachMedia(v); }
+  else v.src = url;
+  const resume = (item.UserData && item.UserData.PlaybackPositionTicks || 0) / 1e7, wanted = q.has("t") ? +q.get("t") : resume;
+  v.addEventListener("loadedmetadata", () => { if (wanted > 30 && wanted < (v.duration || 1e9) - 30) v.currentTime = wanted; }, { once: true });
+  v.addEventListener("playing", () => msg(""));
+  v.addEventListener("waiting", () => msg("Buffering…")); v.addEventListener("canplay", () => msg(""));
+  v.play().catch(() => msg("Press play to start"));
+  // tell Jellyfin what this viewer is watching, so Continue watching and watched marks follow each person
+  const base = () => ({ ItemId: id, MediaSourceId: ms.Id, PlaySessionId: info.PlaySessionId, PlayMethod: playMethod, CanSeek: true, PositionTicks: tick(v.currentTime || 0), IsPaused: v.paused });
+  const post = (p, extra) => JF.api("/Sessions/Playing" + p, { method: "POST", body: JSON.stringify({ ...base(), ...extra }) }).catch(() => {});
+  v.addEventListener("play", () => post("", {}), { once: true }); setInterval(() => { if (!v.paused) post("/Progress", { EventName: "timeupdate" }); }, 10000);
+  v.addEventListener("pause", () => post("/Progress", { EventName: "pause" })); v.addEventListener("ended", () => post("/Stopped", {}));
+  addEventListener("pagehide", () => { const b = JSON.stringify(base()); try { fetch(JF.BASE + "/Sessions/Playing/Stopped", { method: "POST", keepalive: true, headers: { "Authorization": `MediaBrowser Client="WebDisplays Screen", Device="Minecraft screen", DeviceId="${JF.deviceId()}", Version="1.0", Token="${session.token}"`, "Content-Type": "application/json" }, body: b }); } catch {} });
+}
+start().catch(e => { if (e.code === 401) location.href = "./"; else msg("Couldn't start: " + e.message); });
+</script>
+</body>
+</html>

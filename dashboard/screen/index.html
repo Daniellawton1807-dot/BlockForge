@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Screen Player</title>
+<link rel="stylesheet" href="screen.css?v=1">
+</head>
+<body>
+<header id="head" hidden>
+  <span class="brand">SCREEN PLAYER</span>
+  <nav id="nav"></nav>
+  <form class="search" method="get" action="./"><input type="text" name="q" placeholder="Search shows and films" autocomplete="off"><button class="primary" type="submit">Search</button></form>
+  <span class="note" id="who"></span> <button id="out" type="button">Sign out</button>
+</header>
+<main id="main"></main>
+<script src="jf.js?v=1"></script>
+<script>
+/* One address per place (home, a list, a show, a search), so the screen's sync carries everyone to the same page.
+   Nothing about who is signed in is in the address. */
+const $ = s => document.querySelector(s), main = $("#main"), q = new URLSearchParams(location.search), PER = 30;
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const link = (href, label, cls) => { const a = el("a", cls, label); a.href = href; return a; };
+
+function loginBox(msg) {
+  $("#head").hidden = true; main.replaceChildren();
+  const box = el("form", "box"); box.append(el("h1", null, "Sign in to Jellyfin"), el("div", "note", "Once per screen. Your password stays in this browser and is never in the page address."));
+  const u = el("input"), p = el("input"); u.type = "text"; p.type = "password"; u.name = "u"; p.name = "p"; u.autocomplete = "username";
+  box.append(el("label", null, "Name"), u, el("label", null, "Password"), p);
+  const err = el("div", "err", msg || ""), go = el("button", "primary", "Sign in"); go.type = "submit"; go.style.marginTop = "18px"; box.append(go, err);
+  box.onsubmit = async e => { e.preventDefault(); err.textContent = "Signing in…"; try { await JF.login(u.value.trim(), p.value); location.reload(); } catch (x) { err.textContent = x.message; } };
+  main.append(box); u.focus();
+}
+const tile = (item, href, wide) => {
+  const a = link(href, "", "tile"), art = el("div", "art" + (wide ? " wide" : "")); const pic = wide && item.ParentThumbItemId ? [item.ParentThumbItemId, "Thumb"] : [item.Type === "Episode" ? (item.SeriesId || item.Id) : item.Id, "Primary"];
+  art.style.backgroundImage = `url("${JF.img(pic[0], wide ? 300 : 420, pic[1])}")`;
+  const ud = item.UserData || {}; if (ud.PlayedPercentage > 1 && ud.PlayedPercentage < 99) { const b = el("div", "bar"); b.style.width = ud.PlayedPercentage + "%"; art.append(b); }
+  const ep = item.Type === "Episode"; a.append(art, el("div", "t", ep ? item.SeriesName : item.Name), el("div", "s", ep ? `S${item.ParentIndexNumber} · E${item.IndexNumber} · ${item.Name}` : [item.ProductionYear, item.Type === "Series" ? "Show" : "Film"].filter(Boolean).join(" · ")));
+  return a;
+};
+const target = it => it.Type === "Series" ? `?series=${it.Id}` : `player.html?id=${it.Id}`;
+const section = (title, items, wide) => { if (!items.length) return; main.append(el("h2", null, title)); const g = el("div", "grid"); items.forEach(it => g.append(tile(it, target(it), wide))); main.append(g); };
+
+async function page() {
+  const s = JF.session(); if (!s) return loginBox();
+  $("#head").hidden = false; $("#who").textContent = s.name; $("#out").onclick = () => { JF.logout(); location.href = "./"; };
+  const view = q.get("view"), term = q.get("q"), series = q.get("series"), page = +q.get("page") || 0, uid = s.userId, F = "&Fields=ProductionYear&EnableUserData=true";
+  const nav = $("#nav"); nav.replaceChildren(); [["Home", "./", !view && !term && !series], ["Shows", "?view=shows", view === "shows"], ["Films", "?view=films", view === "films"]].forEach(([l, h, on]) => nav.append(link(h, l, on ? "on" : "")));
+  if (series) {
+    const show = await JF.api(`/Users/${uid}/Items/${series}`), seasons = (await JF.api(`/Shows/${series}/Seasons?UserId=${uid}`)).Items, season = q.get("season") || (seasons[0] && seasons[0].Id);
+    main.append(el("h2", null, show.Name)); if (show.Overview) main.append(el("p", "note", show.Overview.slice(0, 400)));
+    const bar = el("div"); bar.style.cssText = "display:flex;gap:12px;flex-wrap:wrap;margin:18px 0"; seasons.forEach(se => bar.append(link(`?series=${series}&season=${se.Id}`, se.Name, "btn" + (se.Id === season ? " primary" : "")))); main.append(bar);
+    if (season) { const eps = (await JF.api(`/Shows/${series}/Episodes?UserId=${uid}&SeasonId=${season}&Fields=Overview&EnableUserData=true`)).Items;
+      eps.forEach(e => { const r = link(`player.html?id=${e.Id}`, "", "row"), pct = e.UserData && e.UserData.Played ? "watched" : e.UserData && e.UserData.PlayedPercentage > 1 ? Math.round(e.UserData.PlayedPercentage) + "% watched" : "";
+        const d = el("div"); d.append(el("div", null, e.Name), el("div", "d", [JF.ticksToMin(e.RunTimeTicks) + " min", pct].filter(Boolean).join(" · "))); r.append(el("div", "n", e.IndexNumber != null ? e.IndexNumber : "·"), d); main.append(r); }); }
+    return;
+  }
+  if (term) { const r = await JF.api(`/Users/${uid}/Items?searchTerm=${encodeURIComponent(term)}&IncludeItemTypes=Series,Movie&Recursive=true&Limit=60${F}`); main.append(el("h2", null, `Results for “${term}”`)); if (!r.Items.length) main.append(el("p", "note", "Nothing found.")); section("", r.Items); return; }
+  if (view === "shows" || view === "films") {
+    const r = await JF.api(`/Users/${uid}/Items?IncludeItemTypes=${view === "shows" ? "Series" : "Movie"}&Recursive=true&SortBy=SortName&Limit=${PER}&StartIndex=${page * PER}${F}`);
+    section(view === "shows" ? "All shows" : "All films", r.Items); const pg = el("div", "pages"); if (page > 0) pg.append(link(`?view=${view}&page=${page - 1}`, "← Back", "btn")); if ((page + 1) * PER < r.TotalRecordCount) pg.append(link(`?view=${view}&page=${page + 1}`, "More →", "btn")); main.append(pg); return;
+  }
+  const [resume, next, latest] = await Promise.all([JF.api(`/Users/${uid}/Items/Resume?Limit=12&MediaTypes=Video${F}`), JF.api(`/Shows/NextUp?UserId=${uid}&Limit=12${F}`), JF.api(`/Users/${uid}/Items/Latest?Limit=18&IncludeItemTypes=Series,Movie${F}`)]);
+  const seen = new Set(); const uniq = a => a.filter(i => { const k = i.SeriesId || i.Id; if (seen.has(k)) return false; seen.add(k); return true; });
+  section("Continue watching", uniq(resume.Items || []), true); section("Next episode", uniq(next.Items || []), true); section("Recently added", latest || []);
+  const c = JF.can(); main.append(el("div", "codecs", "This screen's browser can play: " + [c.h264 && "H.264", c.hevc && "HEVC", c.vp9 && "VP9", c.av1 && "AV1", c.aac && "AAC", c.mp3 && "MP3", c.opus && "Opus"].filter(Boolean).join(", ")));
+}
+page().catch(e => { if (e.code === 401) loginBox(e.message); else { $("#head").hidden = true; main.replaceChildren(el("div", "box", "Couldn't reach Jellyfin: " + e.message)); } });
+</script>
+</body>
+</html>
