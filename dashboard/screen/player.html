@@ -120,6 +120,12 @@ function paint() {
 }
 ["timeupdate", "progress", "play", "pause", "seeking", "seeked", "durationchange", "loadedmetadata"].forEach(n => v.addEventListener(n, paint)); setInterval(paint, 500);
 $("#nextBtn").onclick = () => { if (nextEp) location.href = `player.html?id=${nextEp.Id}&t=0`; };
+/* Told from outside (Jarvis, or any Jellyfin remote): pause, resume, stop, seek, next episode. */
+JF.onState = (cmd, ticks) => {
+  if (cmd === "Pause") v.pause(); else if (cmd === "Unpause") v.play().catch(() => {}); else if (cmd === "PlayPause") (v.paused ? v.play().catch(() => {}) : v.pause());
+  else if (cmd === "Stop") location.href = "./"; else if (cmd === "Seek" && isFinite(v.duration)) v.currentTime = Math.max(0, Math.min(v.duration - 1, ticks / 1e7));
+  else if (cmd === "NextTrack" && nextEp) location.href = `player.html?id=${nextEp.Id}&t=0`;
+};
 const menu = $("#menu"); let menuFor = "";
 function openMenu(kind) {
   if (menuFor === kind && !menu.hidden) { menu.hidden = true; return; }

@@ -75,5 +75,35 @@ const JF = (() => {
   const adminLock = () => { try { sessionStorage.removeItem("wd.admin"); } catch {} };
   /* On a shared in-world screen everything typed is sent to everyone at it. The screen's page script (__wdLive) is how we tell. */
   const onSharedScreen = () => !!window.__wdLive;
-  return { BASE, api, login, logout, session, img, can, deviceProfile, store, deviceId, ticksToMin, prefs, savePrefs, hiddenSet, hiddenSave, isHidden, isShow, isAdmin, adminUnlock, adminLock, onSharedScreen };
+
+  /* Remote control: this page registers with Jellyfin as a player that can be told what to do, like the TV apps, so Jarvis (or any Jellyfin remote)
+     can say "play X" or "pause". It needs a signed-in session; every page of the Screen Player keeps the connection while it is open. */
+  let rws = null, rka = null, rtry = 0;
+  const here = () => location.pathname.replace(/[^/]*$/, "");
+  async function playItem(itemId, startTicks) {
+    const s = session(); if (!s) return;
+    let it = await api(`/Users/${s.userId}/Items/${itemId}`);
+    if (it.Type === "Series" || it.Type === "Season") {   // a show: carry on with the next episode, or the first
+      const sid = it.Type === "Series" ? it.Id : it.SeriesId;
+      it = ((await api(`/Shows/NextUp?UserId=${s.userId}&SeriesId=${sid}&Limit=1`)).Items || [])[0] || ((await api(`/Shows/${sid}/Episodes?UserId=${s.userId}&Limit=1`)).Items || [])[0];
+    }
+    if (!it) return;
+    const cur = new URLSearchParams(location.search);
+    if (/player\.html$/.test(location.pathname) && cur.get("id") === it.Id && startTicks == null) return;   // already on it
+    location.href = `${here()}player.html?id=${it.Id}${startTicks != null ? "&t=" + Math.round(startTicks / 1e7) : ""}`;
+  }
+  function remote() {
+    const s = session(); if (!s || rws) return;
+    let w; try { w = rws = new WebSocket(BASE.replace(/^http/, "ws") + "/socket?ApiKey=" + encodeURIComponent(s.token) + "&deviceId=" + encodeURIComponent(deviceId())); } catch { rws = null; return; }
+    w.onopen = () => { rtry = 0; clearInterval(rka); rka = setInterval(() => { try { w.send(JSON.stringify({ MessageType: "KeepAlive" })); } catch {} }, 25000);
+      fetch(BASE + "/Sessions/Capabilities/Full", { method: "POST", headers: { "Authorization": header(s.token), "Content-Type": "application/json" }, body: JSON.stringify({ PlayableMediaTypes: ["Video"], SupportedCommands: [], SupportsMediaControl: true, SupportsPersistentIdentifier: false }) }).catch(() => {}); };
+    w.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } const d = m.Data || {};
+      if (m.MessageType === "ForceKeepAlive") w.send(JSON.stringify({ MessageType: "KeepAlive" }));
+      else if (m.MessageType === "Play" && (!d.PlayCommand || d.PlayCommand === "PlayNow") && (d.ItemIds || [])[0]) playItem(d.ItemIds[0], d.StartPositionTicks > 0 || d.StartPositionTicks === 0 ? d.StartPositionTicks : null).catch(() => {});
+      else if (m.MessageType === "Playstate" && JF.onState) JF.onState(d.Command, d.SeekPositionTicks); };
+    w.onclose = () => { rws = null; clearInterval(rka); };
+  }
+  setInterval(() => { if (!rws && session()) remote(); }, 4000); setTimeout(remote, 0);
+  const JF = { onState: null };
+  return Object.assign(JF, { BASE, api, login, logout, session, img, can, deviceProfile, store, deviceId, ticksToMin, prefs, savePrefs, hiddenSet, hiddenSave, isHidden, isShow, isAdmin, adminUnlock, adminLock, onSharedScreen });
 })();
