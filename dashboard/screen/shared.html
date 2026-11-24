@@ -27,7 +27,7 @@
 (() => {
   const $ = id => document.getElementById(id), q = new URLSearchParams(location.search), cv = $("c"), g = cv.getContext("2d"), msg = $("msg"), url = $("url");
   const me = (() => { try { let i = localStorage.getItem("wd.sb"); if (!i) localStorage.setItem("wd.sb", i = Math.random().toString(36).slice(2, 10)); return i; } catch { return Math.random().toString(36).slice(2, 10); } })();
-  const host = q.get("host") || (/(^|\.)danielvault\.uk$/.test(location.hostname) ? "wss://minecraft.danielvault.uk/sb" : (location.protocol === "https:" ? "wss://" : "ws://") + location.host);
+  const host = q.get("host") || (/(^|\.)danielvault\.uk$/.test(location.hostname) ? "wss://browser.danielvault.uk" : (location.protocol === "https:" ? "wss://" : "ws://") + location.host);
   let ws, retry = 0, meta = {}, buttons = 0, away;
   const cursors = new Map();
   const send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
