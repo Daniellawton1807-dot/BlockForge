@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shared Browser</title>
+<style>
+  :root{--bg:#0b0d12;--bar:#161a22;--fg:#e8eaf0;--mut:#8b93a5;--acc:#4f8cff}
+  [hidden]{display:none!important}
+  *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px system-ui,sans-serif;overflow:hidden}
+  #bar{position:fixed;top:0;left:0;right:0;height:46px;display:flex;gap:8px;align-items:center;padding:6px 10px;background:var(--bar);z-index:2;transition:transform .2s}
+  #bar.away{transform:translateY(-100%)}
+  button{all:unset;cursor:pointer;min-width:34px;height:34px;display:grid;place-items:center;border-radius:17px;background:#232938;font-size:16px}
+  button:hover{background:#2e3650}
+  #url{flex:1;min-width:0;height:34px;border:0;border-radius:17px;padding:0 14px;background:#232938;color:var(--fg);font:inherit;outline:none}
+  #url:focus{box-shadow:0 0 0 2px var(--acc)}
+  #who{color:var(--mut);font-size:13px;white-space:nowrap}
+  #stage{position:fixed;inset:0;display:grid;place-items:center}
+  canvas{max-width:100%;max-height:100%;background:#000;touch-action:none;outline:none;cursor:default}
+  #msg{position:fixed;inset:0;display:grid;place-items:center;color:var(--mut);pointer-events:none;text-align:center;padding:20px}
+  .cur{position:fixed;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;border:2px solid #fff;pointer-events:none;z-index:1;transition:left .06s linear,top .06s linear}
+  .cur b{position:absolute;left:14px;top:10px;font:11px system-ui;background:#000a;color:#fff;border-radius:6px;padding:1px 5px;white-space:nowrap}
+</style></head><body>
+<div id="bar"><button id="back" title="Back" type="button">←</button><button id="fwd" title="Forward" type="button">→</button><button id="reload" title="Reload" type="button">⟳</button><button id="home" title="Home" type="button">⌂</button>
+  <input id="url" placeholder="Search or type an address" autocomplete="off" spellcheck="false"><span id="who"></span></div>
+<div id="stage"><canvas id="c" tabindex="0"></canvas></div><div id="msg">Connecting…</div>
+<script>
+/* A window onto one browser running on the home server. Everyone on the same ?room= sees the same picture and drives the same page.
+   Address: shared.html?room=cinema&k=KEY[&host=wss://…][&n=Name][&w=1280&h=720]   (the key comes from ~/sharedbrowser/config.json) */
+(() => {
+  const $ = id => document.getElementById(id), q = new URLSearchParams(location.search), cv = $("c"), g = cv.getContext("2d"), msg = $("msg"), url = $("url");
+  const me = (() => { try { let i = localStorage.getItem("wd.sb"); if (!i) localStorage.setItem("wd.sb", i = Math.random().toString(36).slice(2, 10)); return i; } catch { return Math.random().toString(36).slice(2, 10); } })();
+  const host = q.get("host") || (location.protocol === "https:" ? "wss://" : "ws://") + location.host;
+  let ws, retry = 0, meta = {}, buttons = 0, away;
+  const cursors = new Map();
+  const send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+  function connect() {
+    const p = new URLSearchParams({ room: q.get("room") || "main", k: q.get("k") || "", id: me, n: q.get("n") || "" });
+    if (q.get("w")) { p.set("w", q.get("w")); p.set("h", q.get("h") || "720"); }
+    ws = new WebSocket(host + "/ws?" + p); ws.binaryType = "blob";
+    ws.onopen = () => { retry = 0; msg.textContent = "Starting the browser…"; };
+    ws.onmessage = async e => {
+      if (typeof e.data !== "string") { try { const bm = await createImageBitmap(e.data); if (cv.width !== bm.width || cv.height !== bm.height) { cv.width = bm.width; cv.height = bm.height; } g.drawImage(bm, 0, 0); bm.close(); msg.hidden = true; } catch {} return; }
+      const m = JSON.parse(e.data);
+      if (m.t === "meta") { meta = m; if (document.activeElement !== url) url.value = m.url === "about:blank" ? "" : m.url; $("who").textContent = m.n > 1 ? m.n + " watching" : ""; document.title = m.title || "Shared Browser"; }
+      else if (m.t === "cur") dot(m);
+      else if (m.t === "gone") { const d = cursors.get(m.id); if (d) { d.remove(); cursors.delete(m.id); } }
+      else if (m.t === "err") { msg.hidden = false; msg.textContent = "Browser error: " + m.msg; }
+    };
+    ws.onclose = () => { msg.hidden = false; msg.textContent = "Reconnecting…"; setTimeout(connect, Math.min(8000, 800 * ++retry)); };
+  }
+  const hue = id => [...id].reduce((a, c) => a + c.charCodeAt(0), 0) * 47 % 360;
+  function dot(m) {
+    let d = cursors.get(m.id); if (!d) { d = document.createElement("div"); d.className = "cur"; d.style.borderColor = `hsl(${hue(m.id)} 90% 65%)`; const b = document.createElement("b"); b.textContent = m.n || ""; if (!m.n) b.hidden = true; d.append(b); document.body.append(d); cursors.set(m.id, d); clearTimeout(d.t); }
+    const r = cv.getBoundingClientRect(); d.style.left = r.left + m.x * r.width + "px"; d.style.top = r.top + m.y * r.height + "px"; d.hidden = false; clearTimeout(d.t); d.t = setTimeout(() => { d.hidden = true; }, 4000);
+  }
+  const pos = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }; };
+  let lastMove = 0;
+  cv.addEventListener("pointermove", e => { const t = performance.now(); if (t - lastMove < 33) return; lastMove = t; const p = pos(e); send({ t: "mv", ...p, bs: buttons }); send({ t: "cur", ...p }); });
+  cv.addEventListener("pointerdown", e => { cv.focus(); buttons |= 1 << (e.button | 0); cv.setPointerCapture(e.pointerId); send({ t: "dn", ...pos(e), b: e.button, n: e.detail || 1 }); e.preventDefault(); });
+  cv.addEventListener("pointerup", e => { buttons &= ~(1 << (e.button | 0)); send({ t: "up", ...pos(e), b: e.button, n: e.detail || 1 }); e.preventDefault(); });
+  cv.addEventListener("contextmenu", e => e.preventDefault());
+  cv.addEventListener("wheel", e => { const k = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 600 : 1; send({ t: "wh", ...pos(e), dx: e.deltaX * k, dy: e.deltaY * k }); e.preventDefault(); }, { passive: false });
+  const typing = () => document.activeElement === url;
+  addEventListener("keydown", e => { if (typing()) return; if (e.key === "Dead" || e.key === "Process" || e.key === "Unidentified") return; send({ t: "kd", k: e.key }); if (!(e.ctrlKey || e.metaKey) || e.key.length > 1) e.preventDefault(); });
+  addEventListener("keyup", e => { if (typing()) return; if (e.key === "Dead" || e.key === "Process" || e.key === "Unidentified") return; send({ t: "ku", k: e.key }); });
+  addEventListener("paste", e => { if (typing()) return; const s = e.clipboardData && e.clipboardData.getData("text"); if (s) { send({ t: "tx", s }); e.preventDefault(); } });
+  url.addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") { send({ t: "nav", u: url.value }); url.blur(); cv.focus(); } else if (e.key === "Escape") { url.value = meta.url || ""; url.blur(); } });
+  url.addEventListener("focus", () => url.select());
+  for (const k of ["back", "fwd", "reload", "home"]) $(k).onclick = () => { send({ t: k }); cv.focus(); };
+  addEventListener("pointermove", () => { $("bar").classList.remove("away"); clearTimeout(away); away = setTimeout(() => { if (!typing()) $("bar").classList.add("away"); }, 3500); });
+  if (q.get("w")) addEventListener("load", () => send({ t: "size", w: +q.get("w"), h: +q.get("h") || 720 }));
+  connect();
+})();
+</script></body></html>
