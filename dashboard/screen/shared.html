@@ -27,17 +27,12 @@
   @keyframes wiggle{from{transform:rotate(-1.6deg)}to{transform:rotate(1.6deg)}}
   .hint{position:absolute;left:0;right:0;bottom:3vmin;text-align:center;font-size:2.3vmin;opacity:.75;text-shadow:0 1px 5px #0008}
   /* ---- app view ---- */
-  #stage{position:fixed;inset:0;background:#000;display:grid;place-items:center}
-  canvas{max-width:100%;max-height:100%;touch-action:none;outline:none;cursor:default}
-  #bar{position:fixed;top:1.6vmin;left:50%;transform:translateX(-50%);width:min(96vw,150vmin);height:7vmin;min-height:40px;display:flex;gap:1vmin;align-items:center;padding:0 1.2vmin;border-radius:99px;background:#1c1f2bcc;backdrop-filter:blur(2vmin);border:1px solid #ffffff22;box-shadow:0 1vmin 4vmin #0008;z-index:3;transition:opacity .25s,transform .25s}
-  #bar.away{opacity:0;transform:translate(-50%,-140%);pointer-events:none}
-  #bar button{all:unset;cursor:pointer;flex:none;width:5vmin;height:5vmin;min-width:30px;min-height:30px;display:grid;place-items:center;border-radius:50%;font-size:max(2.8vmin,16px);background:#ffffff14;color:#fff}
-  #bar button:hover{background:#ffffff30}
-  #url{flex:1;min-width:0;height:5vmin;min-height:30px;border:0;border-radius:99px;padding:0 2vmin;background:#ffffff14;color:#fff;font:inherit;font-size:max(2.3vmin,14px);outline:none;-webkit-user-select:text;user-select:text}
-  #url:focus{background:#ffffff22;box-shadow:0 0 0 2px #4f8cff}
-  #n{font-size:max(2vmin,12px);opacity:.7;white-space:nowrap}
-  #homebtn{position:fixed;left:50%;bottom:1.4vmin;transform:translateX(-50%);width:30vmin;height:2.4vmin;min-height:14px;border-radius:99px;background:#fffd;border:0;cursor:pointer;z-index:3;box-shadow:0 0 0 .5vmin #0006;transition:opacity .25s}
-  #homebtn.away{opacity:.18}
+  #stage{position:fixed;inset:0;background:#000}
+  canvas{display:block;width:100%;height:100%;object-fit:contain;touch-action:none;outline:none;cursor:default}
+  #__wdbar{display:none!important}   /* the MinePad injects its own pill; this page draws the same one, wired to the shared home */
+  #ask{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);width:min(80vw,900px);padding:10px;border-radius:99px;background:#1c1c1ee6;backdrop-filter:blur(14px);box-shadow:0 4px 18px #000a;z-index:7}
+  #ask input{width:100%;height:46px;border:0;border-radius:99px;padding:0 22px;background:#ffffff22;color:#fff;font:600 18px system-ui,sans-serif;outline:none;-webkit-user-select:text;user-select:text}
+  #toast{position:fixed;left:50%;bottom:74px;transform:translateX(-50%);padding:10px 20px;border-radius:99px;background:#000c;color:#fff;font:600 16px system-ui,sans-serif;z-index:8}
   #msg{position:fixed;inset:0;display:grid;place-items:center;color:#c9cfdd;pointer-events:none;text-align:center;padding:20px;font-size:3vmin;z-index:6;background:#000a}
   #loading{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;color:#fffa;font-size:3vmin;z-index:2}
   .cur{position:fixed;width:2.2vmin;height:2.2vmin;min-width:12px;min-height:12px;margin:-1.1vmin 0 0 -1.1vmin;border-radius:50%;border:2px solid #fff;background:#ffffff33;pointer-events:none;z-index:5;transition:left .06s linear,top .06s linear}
@@ -52,9 +47,9 @@
   <div class="hint">Tap an app. Everyone on this screen sees the same thing.</div>
 </div>
 <div id="stage" hidden><canvas id="c" tabindex="0"></canvas><div id="loading">Opening…</div></div>
-<div id="bar" hidden><button id="back" title="Back" type="button">←</button><button id="fwd" title="Forward" type="button">→</button><button id="reload" title="Reload" type="button">⟳</button>
-  <input id="url" placeholder="Search or type an address" autocomplete="off" spellcheck="false"><button id="pin" title="Pin to home" type="button">☆</button><button id="snd" title="Sound" type="button" hidden>🔇</button><span id="n"></span></div>
-<button id="homebtn" title="Home" type="button" hidden></button>
+<div id="wrap" hidden><div id="pill"></div></div>
+<div id="ask" hidden><input id="url" placeholder="Search or type an address, then Enter" autocomplete="off" spellcheck="false"></div>
+<div id="toast" hidden></div>
 <div id="msg">Connecting…</div>
 <script>
 /* One browser on the home server, one home screen, shared by everyone on the same ?room=. Tapping an app opens it for everybody; the home
@@ -75,7 +70,7 @@
     ws.onmessage = e => {
       if (typeof e.data !== "string") { const u8 = new Uint8Array(e.data); if (u8[0] === 1) audioIn(u8); else frame(e.data); return; }
       const m = JSON.parse(e.data);
-      if (m.t === "meta") { meta = m; if (document.activeElement !== url) url.value = m.url === "about:blank" ? "" : m.url; $("n").textContent = m.n > 1 ? m.n + " here" : ""; $("who2").textContent = m.n > 1 ? m.n + " watching" : ""; $("pin").textContent = st.pins.some(x => x.u === m.url) ? "★" : "☆"; }
+      if (m.t === "meta") { meta = m; $("who2").textContent = m.n > 1 ? m.n + " watching" : ""; paintPill(); }
       else if (m.t === "state") { st = m; view(); }
       else if (m.t === "cur") dot(m);
       else if (m.t === "gone") { const d = cursors.get(m.id); if (d) { d.remove(); cursors.delete(m.id); } }
@@ -116,14 +111,14 @@
   const tick = () => { const n = new Date(), t = n.getHours() + ":" + ("0" + n.getMinutes()).slice(-2); $("clock").textContent = $("big").textContent = t; $("date").textContent = n.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }); };
   tick(); setInterval(tick, 5000);
   function view() {
-    const app = st.view === "app"; $("home").hidden = app; $("stage").hidden = !app; $("bar").hidden = !app; $("homebtn").hidden = !app;
-    if (app) { $("loading").hidden = !!latest; wake(); cv.focus(); } else { document.body.classList.remove("editing"); $("edit").textContent = "Edit"; tiles(); $("loading").hidden = false; latest = null; }
+    const app = st.view === "app"; $("home").hidden = app; $("stage").hidden = !app; $("wrap").hidden = !app; if (!app) { collapse(); closeAsk(); }
+    if (app) { $("loading").hidden = !!latest; cv.focus(); } else { document.body.classList.remove("editing"); $("edit").textContent = "Edit"; tiles(); $("loading").hidden = false; latest = null; }
     document.title = app ? (meta.title || "Shared Browser") : "Shared Home";
   }
-  $("homebtn").onclick = () => send({ t: "home" });
 
   /* ---- cursors ---- */
-  const area = () => st.view === "app" ? cv.getBoundingClientRect() : { left: 0, top: 0, width: innerWidth, height: innerHeight };
+  const picture = () => { const r = cv.getBoundingClientRect(), k = Math.min(r.width / (cv.width || 1), r.height / (cv.height || 1)), w = (cv.width || 1) * k, h = (cv.height || 1) * k; return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, width: w, height: h }; };
+  const area = () => st.view === "app" ? picture() : { left: 0, top: 0, width: innerWidth, height: innerHeight };
   function dot(m) {
     let d = cursors.get(m.id); if (!d) { d = document.createElement("div"); d.className = "cur"; d.style.borderColor = `hsl(${hue(m.id)} 90% 65%)`; const b = document.createElement("b"); b.textContent = m.n || ""; b.hidden = !m.n; d.append(b); document.body.append(d); cursors.set(m.id, d); }
     const r = area(); d.style.left = r.left + m.x * r.width + "px"; d.style.top = r.top + m.y * r.height + "px"; d.hidden = false; clearTimeout(d.t); d.t = setTimeout(() => { d.hidden = true; }, 4000);
@@ -132,30 +127,51 @@
   addEventListener("pointermove", e => {
     const t = performance.now(); if (t - lastCur < 40) return; lastCur = t;
     const r = area(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height; send({ t: "cur", x, y });
-    if (st.view === "app" && e.target === cv) send({ t: "mv", x, y, bs: buttons }); wake();
+    if (st.view === "app" && e.target === cv) send({ t: "mv", x, y, bs: buttons });
   });
 
   /* ---- driving the browser ---- */
-  const pos = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }; };
+  const pos = e => { const r = picture(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }; };
   cv.addEventListener("pointerdown", e => { cv.focus(); buttons |= 1 << (e.button | 0); cv.setPointerCapture(e.pointerId); send({ t: "dn", ...pos(e), b: e.button, n: e.detail || 1 }); e.preventDefault(); });
   cv.addEventListener("pointerup", e => { buttons &= ~(1 << (e.button | 0)); send({ t: "up", ...pos(e), b: e.button, n: e.detail || 1 }); e.preventDefault(); });
   cv.addEventListener("contextmenu", e => e.preventDefault());
   cv.addEventListener("wheel", e => { const k = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 600 : 1; send({ t: "wh", ...pos(e), dx: e.deltaX * k, dy: e.deltaY * k }); e.preventDefault(); }, { passive: false });
-  const typing = () => document.activeElement === url, skip = k => k === "Dead" || k === "Process" || k === "Unidentified";
+  const typing = () => !$("ask").hidden, skip = k => k === "Dead" || k === "Process" || k === "Unidentified";
   addEventListener("keydown", e => { if (typing() || st.view !== "app" || skip(e.key)) return; send({ t: "kd", k: e.key }); if (!(e.ctrlKey || e.metaKey) || e.key.length > 1) e.preventDefault(); });
   addEventListener("keyup", e => { if (typing() || st.view !== "app" || skip(e.key)) return; send({ t: "ku", k: e.key }); });
   addEventListener("paste", e => { if (typing() || st.view !== "app") return; const s = e.clipboardData && e.clipboardData.getData("text"); if (s) { send({ t: "tx", s }); e.preventDefault(); } });
-  url.addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") { send({ t: "nav", u: url.value }); url.blur(); cv.focus(); } else if (e.key === "Escape") { url.value = meta.url || ""; url.blur(); } });
-  url.addEventListener("focus", () => url.select());
-  for (const k of ["back", "fwd", "reload"]) $(k).onclick = () => { send({ t: k }); cv.focus(); };
-  $("pin").onclick = () => { if (meta.url && meta.url !== "about:blank") send({ t: st.pins.some(x => x.u === meta.url) ? "unpin" : "pin", u: meta.url, title: (meta.title || "").slice(0, 24) }); };
-  function wake() { $("bar").classList.remove("away"); $("homebtn").classList.remove("away"); clearTimeout(away); away = setTimeout(() => { if (!typing()) { $("bar").classList.add("away"); $("homebtn").classList.add("away"); } }, 3500); }
+
+
+  /* ---- the bar: the MinePad's own pill (slim white line at the bottom; hover or tap for Home / Back / Pin), wired to the shared home ---- */
+  const svg = d => { const ns = "http://www.w3.org/2000/svg", e = document.createElementNS(ns, "svg"), q = document.createElementNS(ns, "path"); e.setAttribute("viewBox", "0 0 24 24"); e.setAttribute("width", "22"); e.setAttribute("height", "22"); e.setAttribute("fill", "#fff"); q.setAttribute("d", d); e.append(q); return e; };
+  const wrap = $("wrap"), pill = $("pill"); wrap.style.cssText = "position:fixed;left:50%;bottom:6px;transform:translateX(-50%);z-index:2147483646;font:600 15px system-ui,sans-serif;color:#fff;";
+  const SLIM = "height:7px;width:150px;border-radius:99px;background:#fffd;box-shadow:0 0 8px #000a;transition:all .2s;cursor:pointer;", OPEN = "height:auto;width:auto;border-radius:99px;background:#1c1c1ee6;backdrop-filter:blur(14px);box-shadow:0 4px 18px #000a;transition:all .2s;display:flex;gap:8px;padding:6px;cursor:default;";
+  let isOpen = false, hideT; pill.style.cssText = SLIM;
+  const toast = m => { const t = $("toast"); t.textContent = m; t.hidden = false; clearTimeout(t.h); t.h = setTimeout(() => { t.hidden = true; }, 2200); };
+  const pinned = () => st.pins.some(x => x.u === meta.url);
+  function btn(path, label, fn) {
+    const b = document.createElement("div"), lb = document.createElement("span"); b.title = label; lb.style.marginLeft = "6px"; lb.textContent = label; b.append(svg(path), lb);
+    b.style.cssText = "display:flex;align-items:center;padding:8px 14px;border-radius:99px;background:#ffffff22;white-space:nowrap;"; b.label = lb;
+    b.onmouseenter = () => { b.style.background = "#ffffff55"; }; b.onmouseleave = () => { b.style.background = "#ffffff22"; };
+    b.onclick = e => { e.stopPropagation(); fn(b); }; return b;
+  }
+  const bHome = btn("M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z", "Home", () => send({ t: "home" })),
+    bBack = btn("M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z", "Back", () => send({ t: "back" })),
+    bPin = btn("M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z", "Pin", () => { if (!meta.url || meta.url === "about:blank") return toast("Nothing to pin yet"); const was = pinned(); send({ t: was ? "unpin" : "pin", u: meta.url, title: (meta.title || "").slice(0, 24) }); toast(was ? "Removed from Home" : "Pinned to Home"); }),
+    bGo = btn("M15.5 14h-.79l-.28-.27A6.47 6.47 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z", "Search", () => { collapse(); $("ask").hidden = false; url.value = ""; url.focus(); }),
+    bSnd = btn("M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z", "Sound", () => toggleSound());
+  function paintPill() { bPin.label.textContent = pinned() ? "Unpin" : "Pin"; bSnd.label.textContent = on && AC && AC.state === "running" ? "Sound on" : "Sound off"; }
+  function expand() { clearTimeout(hideT); if (isOpen) return; isOpen = true; paintPill(); pill.style.cssText = OPEN; const items = [bHome, bBack, bPin, bGo]; if (typeof AudioDecoder !== "undefined") items.push(bSnd); pill.replaceChildren(...items); }
+  function collapse() { clearTimeout(hideT); isOpen = false; pill.replaceChildren(); pill.style.cssText = SLIM; }
+  wrap.onmouseenter = expand; wrap.onclick = expand; wrap.onmouseleave = () => { hideT = setTimeout(collapse, 700); };
+  const closeAsk = () => { $("ask").hidden = true; url.blur(); cv.focus(); };
+  url.addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") { const v = url.value.trim(); closeAsk(); if (v) send({ t: "nav", u: v }); } else if (e.key === "Escape") closeAsk(); });
 
   /* ---- sound: 20 ms Opus packets per audio source, decoded here and queued ~120 ms ahead ---- */
-  window.__sbStats = { audio: 0 }; const snd = $("snd"); let AC = null, gain = null, on = true; const srcs = new Map();
-  function sound() { if (AC) return AC; if (typeof AudioDecoder === "undefined") return null; AC = new AudioContext(); gain = AC.createGain(); gain.connect(AC.destination); snd.hidden = false; paintSnd(); return AC; }
-  const paintSnd = () => { snd.textContent = on && AC && AC.state === "running" ? "🔊" : "🔇"; };
-  snd.onclick = () => { if (AC && AC.state !== "running") { AC.resume(); on = true; } else on = !on; if (gain) gain.gain.value = on ? 1 : 0; paintSnd(); cv.focus(); };
+  window.__sbStats = { audio: 0 }; let AC = null, gain = null, on = true; const srcs = new Map();
+  function sound() { if (AC) return AC; if (typeof AudioDecoder === "undefined") return null; AC = new AudioContext(); gain = AC.createGain(); gain.connect(AC.destination); paintPill(); return AC; }
+  const paintSnd = () => paintPill();
+  const toggleSound = () => { if (!sound()) return; if (AC.state !== "running") { AC.resume().then(paintSnd); on = true; } else on = !on; if (gain) gain.gain.value = on ? 1 : 0; paintSnd(); };
   for (const ev of ["pointerdown", "keydown"]) addEventListener(ev, () => { if (AC && AC.state === "suspended" && on) AC.resume().then(paintSnd); }, true);
   function audioIn(u8) {
     if (!sound()) return; const id = new DataView(u8.buffer, u8.byteOffset + 1, 4).getUint32(0); let d = srcs.get(id);
