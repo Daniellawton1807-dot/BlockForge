@@ -9,6 +9,7 @@
 <body>
 <header id="head" hidden>
   <span class="brand">SCREEN PLAYER</span>
+  <a class="btn" id="sbhome" href="#" hidden>⌂ Home</a>
   <nav id="nav"></nav>
   <form class="search" method="get" action="./"><input type="text" name="q" placeholder="Search shows and films" autocomplete="off"><button class="primary" type="submit">Search</button></form>
   <span class="note" id="who"></span> <a class="btn" id="adm" href="?admin=1" title="Hide titles from this account's Screen Player">Admin</a> <button id="out" type="button">Sign out</button>
@@ -150,6 +151,7 @@ async function adminPage(uid, pf, F) {
   }
 }
 page().catch(e => { if (e.code === 401) loginBox(e.message); else { $("#head").hidden = true; main.replaceChildren(el("div", "box", "Couldn't reach Jellyfin: " + e.message)); } });
+try { const h = localStorage.getItem("wd.sbhome"); if (h) { const a = document.getElementById("sbhome"); a.href = h; a.hidden = false; } } catch {}
 </script>
 </body>
 </html>

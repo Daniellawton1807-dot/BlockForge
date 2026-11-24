@@ -1,52 +1,157 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Shared Browser</title>
+<title>Shared Home</title>
 <style>
-  :root{--bg:#0b0d12;--bar:#161a22;--fg:#e8eaf0;--mut:#8b93a5;--acc:#4f8cff}
   [hidden]{display:none!important}
-  *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px system-ui,sans-serif;overflow:hidden}
-  #bar{position:fixed;top:0;left:0;right:0;height:46px;display:flex;gap:8px;align-items:center;padding:6px 10px;background:var(--bar);z-index:2;transition:transform .2s}
-  #bar.away{transform:translateY(-100%)}
-  button{all:unset;cursor:pointer;min-width:34px;height:34px;display:grid;place-items:center;border-radius:17px;background:#232938;font-size:16px}
-  button:hover{background:#2e3650}
-  #url{flex:1;min-width:0;height:34px;border:0;border-radius:17px;padding:0 14px;background:#232938;color:var(--fg);font:inherit;outline:none}
-  #url:focus{box-shadow:0 0 0 2px var(--acc)}
-  #who{color:var(--mut);font-size:13px;white-space:nowrap}
-  #stage{position:fixed;inset:0;display:grid;place-items:center}
-  canvas{max-width:100%;max-height:100%;background:#000;touch-action:none;outline:none;cursor:default}
-  #msg{position:fixed;inset:0;display:grid;place-items:center;color:var(--mut);pointer-events:none;text-align:center;padding:20px}
-  .cur{position:fixed;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;border:2px solid #fff;pointer-events:none;z-index:1;transition:left .06s linear,top .06s linear}
-  .cur b{position:absolute;left:14px;top:10px;font:11px system-ui;background:#000a;color:#fff;border-radius:6px;padding:1px 5px;white-space:nowrap}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-user-select:none;user-select:none}
+  html,body{height:100%;width:100%;overflow:hidden;background:#07071a;color:#fff;font-family:-apple-system,"SF Pro Display","Segoe UI",system-ui,sans-serif}
+  /* ---- home screen (same look as the MinePad home) ---- */
+  #home{position:fixed;inset:0}
+  .wall{position:absolute;inset:0;background:radial-gradient(120% 90% at 20% 10%,#2b59ff 0%,transparent 55%),radial-gradient(100% 80% at 90% 20%,#a23bff 0%,transparent 55%),radial-gradient(110% 90% at 60% 100%,#ff4f8b 0%,transparent 60%),#0d0f2e}
+  .status{position:absolute;top:0;left:0;right:0;height:6.5vmin;padding:0 4vmin;display:flex;align-items:center;justify-content:space-between;font-weight:600;font-size:2.6vmin;text-shadow:0 1px 6px #0006}
+  .widget{position:absolute;top:9vmin;left:5vmin;text-shadow:0 2px 14px #0007}
+  .widget .t{font-size:13vmin;font-weight:700;letter-spacing:-.02em;line-height:1}.widget .d{font-size:3.4vmin;font-weight:500;opacity:.9;margin-top:1vmin}
+  .pill{position:absolute;padding:1.4vmin 3vmin;border-radius:99px;background:#ffffff30;backdrop-filter:blur(2vmin);font-size:2.6vmin;font-weight:600;cursor:pointer;border:1px solid #ffffff40}
+  .pill:hover{background:#ffffff55}
+  #edit{top:9vmin;right:5vmin}
+  .grid{position:absolute;left:5vmin;right:5vmin;top:34vmin;bottom:9vmin;overflow:hidden;display:grid;grid-template-columns:repeat(5,1fr);grid-auto-rows:min-content;gap:4vmin 2vmin;justify-items:center;align-content:start}
+  .app{position:relative;display:flex;flex-direction:column;align-items:center;gap:1.1vmin;cursor:pointer;width:17vmin;transition:transform .15s}
+  .app:active{transform:scale(.9)}
+  .ico{width:15vmin;height:15vmin;border-radius:3.6vmin;display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 1vmin 3vmin #0005;transition:transform .15s,box-shadow .15s;font-size:7vmin;font-weight:700;background:#fff}
+  .ico img{width:62%;height:62%;object-fit:contain}
+  .app:hover .ico{transform:scale(1.07);box-shadow:0 1.4vmin 4vmin #0008,0 0 0 .5vmin #ffffffb0}
+  .lbl{font-size:2.4vmin;font-weight:500;text-shadow:0 1px 5px #0008;max-width:17vmin;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .x{display:none;position:absolute;top:-1.2vmin;left:0;width:4.4vmin;height:4.4vmin;border-radius:50%;background:#e5e5eacc;color:#222;font-size:3.4vmin;line-height:4.4vmin;text-align:center;font-weight:700;z-index:2}
+  body.editing .x{display:block}
+  body.editing .app{animation:wiggle .3s ease-in-out infinite alternate}
+  @keyframes wiggle{from{transform:rotate(-1.6deg)}to{transform:rotate(1.6deg)}}
+  .hint{position:absolute;left:0;right:0;bottom:3vmin;text-align:center;font-size:2.3vmin;opacity:.75;text-shadow:0 1px 5px #0008}
+  /* ---- app view ---- */
+  #stage{position:fixed;inset:0;background:#000;display:grid;place-items:center}
+  canvas{max-width:100%;max-height:100%;touch-action:none;outline:none;cursor:default}
+  #bar{position:fixed;top:1.6vmin;left:50%;transform:translateX(-50%);width:min(96vw,150vmin);height:7vmin;min-height:40px;display:flex;gap:1vmin;align-items:center;padding:0 1.2vmin;border-radius:99px;background:#1c1f2bcc;backdrop-filter:blur(2vmin);border:1px solid #ffffff22;box-shadow:0 1vmin 4vmin #0008;z-index:3;transition:opacity .25s,transform .25s}
+  #bar.away{opacity:0;transform:translate(-50%,-140%);pointer-events:none}
+  #bar button{all:unset;cursor:pointer;flex:none;width:5vmin;height:5vmin;min-width:30px;min-height:30px;display:grid;place-items:center;border-radius:50%;font-size:max(2.8vmin,16px);background:#ffffff14;color:#fff}
+  #bar button:hover{background:#ffffff30}
+  #url{flex:1;min-width:0;height:5vmin;min-height:30px;border:0;border-radius:99px;padding:0 2vmin;background:#ffffff14;color:#fff;font:inherit;font-size:max(2.3vmin,14px);outline:none;-webkit-user-select:text;user-select:text}
+  #url:focus{background:#ffffff22;box-shadow:0 0 0 2px #4f8cff}
+  #n{font-size:max(2vmin,12px);opacity:.7;white-space:nowrap}
+  #homebtn{position:fixed;left:50%;bottom:1.4vmin;transform:translateX(-50%);width:30vmin;height:2.4vmin;min-height:14px;border-radius:99px;background:#fffd;border:0;cursor:pointer;z-index:3;box-shadow:0 0 0 .5vmin #0006;transition:opacity .25s}
+  #homebtn.away{opacity:.18}
+  #msg{position:fixed;inset:0;display:grid;place-items:center;color:#c9cfdd;pointer-events:none;text-align:center;padding:20px;font-size:3vmin;z-index:6;background:#000a}
+  #loading{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;color:#fffa;font-size:3vmin;z-index:2}
+  .cur{position:fixed;width:2.2vmin;height:2.2vmin;min-width:12px;min-height:12px;margin:-1.1vmin 0 0 -1.1vmin;border-radius:50%;border:2px solid #fff;background:#ffffff33;pointer-events:none;z-index:5;transition:left .06s linear,top .06s linear}
+  .cur b{position:absolute;left:100%;top:60%;font:600 max(1.8vmin,11px) system-ui;background:#000b;color:#fff;border-radius:6px;padding:1px 6px;white-space:nowrap}
 </style></head><body>
-<div id="bar"><button id="back" title="Back" type="button">←</button><button id="fwd" title="Forward" type="button">→</button><button id="reload" title="Reload" type="button">⟳</button><button id="home" title="Home" type="button">⌂</button>
-  <button id="snd" title="Sound" type="button" hidden>🔇</button><input id="url" placeholder="Search or type an address" autocomplete="off" spellcheck="false"><span id="who"></span></div>
-<div id="stage"><canvas id="c" tabindex="0"></canvas></div><div id="msg">Connecting…</div>
+<div id="home">
+  <div class="wall"></div>
+  <div class="status"><span id="clock"></span><span id="who2"></span></div>
+  <div class="widget"><div class="t" id="big"></div><div class="d" id="date"></div></div>
+  <div class="pill" id="edit">Edit</div>
+  <div class="grid" id="grid"></div>
+  <div class="hint">Tap an app. Everyone on this screen sees the same thing.</div>
+</div>
+<div id="stage" hidden><canvas id="c" tabindex="0"></canvas><div id="loading">Opening…</div></div>
+<div id="bar" hidden><button id="back" title="Back" type="button">←</button><button id="fwd" title="Forward" type="button">→</button><button id="reload" title="Reload" type="button">⟳</button>
+  <input id="url" placeholder="Search or type an address" autocomplete="off" spellcheck="false"><button id="pin" title="Pin to home" type="button">☆</button><button id="snd" title="Sound" type="button" hidden>🔇</button><span id="n"></span></div>
+<button id="homebtn" title="Home" type="button" hidden></button>
+<div id="msg">Connecting…</div>
 <script>
-/* A window onto one browser running on the home server. Everyone on the same ?room= sees the same picture and drives the same page.
-   Address: shared.html?room=cinema&k=KEY[&host=wss://…][&n=Name][&w=1280&h=720]   (the key comes from ~/sharedbrowser/config.json) */
+/* One browser on the home server, one home screen, shared by everyone on the same ?room=. Tapping an app opens it for everybody; the home
+   button brings everybody back. Address: shared.html?room=cinema&k=KEY[&n=Name][&host=wss://…][&w=…&h=…] (key from ~/sharedbrowser/config.json) */
 (() => {
-  const $ = id => document.getElementById(id), q = new URLSearchParams(location.search), cv = $("c"), g = cv.getContext("2d"), msg = $("msg"), url = $("url");
+  const $ = id => document.getElementById(id), q = new URLSearchParams(location.search), cv = $("c"), g = cv.getContext("2d"), msg = $("msg"), url = $("url"), grid = $("grid");
   const me = (() => { try { let i = localStorage.getItem("wd.sb"); if (!i) localStorage.setItem("wd.sb", i = Math.random().toString(36).slice(2, 10)); return i; } catch { return Math.random().toString(36).slice(2, 10); } })();
+  try { localStorage.setItem("wd.sbhome", location.href); } catch {}   // the Screen Player's Home link comes back here
   const host = q.get("host") || (/(^|\.)danielvault\.uk$/.test(location.hostname) ? "wss://browser.danielvault.uk" : (location.protocol === "https:" ? "wss://" : "ws://") + location.host);
-  let ws, retry = 0, meta = {}, buttons = 0, away;
-  const cursors = new Map();
-  const send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+  let ws, retry = 0, meta = {}, st = { view: "home", pins: [] }, buttons = 0, away, sized = false;
+  const cursors = new Map(), send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+
+  /* ---- connection ---- */
   function connect() {
     const p = new URLSearchParams({ room: q.get("room") || "main", k: q.get("k") || "", id: me, n: q.get("n") || "" });
-    if (q.get("w")) { p.set("w", q.get("w")); p.set("h", q.get("h") || "720"); }
-    ws = new WebSocket(host + "/ws?" + p); ws.binaryType = "blob";
-    ws.onopen = () => { retry = 0; msg.textContent = "Starting the browser…"; };
-    ws.onmessage = async e => {
-      if (typeof e.data !== "string") { try { const u8 = new Uint8Array(await e.data.arrayBuffer()); if (u8[0] === 1) return audioIn(u8); } catch { return; } try { const bm = await createImageBitmap(e.data); if (cv.width !== bm.width || cv.height !== bm.height) { cv.width = bm.width; cv.height = bm.height; } g.drawImage(bm, 0, 0); bm.close(); msg.hidden = true; } catch {} return; }
+    ws = new WebSocket(host + "/ws?" + p); ws.binaryType = "arraybuffer";
+    ws.onopen = () => { retry = 0; msg.hidden = true; sized = false; fit(); };
+    ws.onmessage = e => {
+      if (typeof e.data !== "string") { const u8 = new Uint8Array(e.data); if (u8[0] === 1) audioIn(u8); else frame(e.data); return; }
       const m = JSON.parse(e.data);
-      if (m.t === "meta") { meta = m; if (document.activeElement !== url) url.value = m.url === "about:blank" ? "" : m.url; $("who").textContent = m.n > 1 ? m.n + " watching" : ""; document.title = m.title || "Shared Browser"; }
+      if (m.t === "meta") { meta = m; if (document.activeElement !== url) url.value = m.url === "about:blank" ? "" : m.url; $("n").textContent = m.n > 1 ? m.n + " here" : ""; $("who2").textContent = m.n > 1 ? m.n + " watching" : ""; $("pin").textContent = st.pins.some(x => x.u === m.url) ? "★" : "☆"; }
+      else if (m.t === "state") { st = m; view(); }
       else if (m.t === "cur") dot(m);
       else if (m.t === "gone") { const d = cursors.get(m.id); if (d) { d.remove(); cursors.delete(m.id); } }
       else if (m.t === "err") { msg.hidden = false; msg.textContent = "Browser error: " + m.msg; }
     };
     ws.onclose = () => { msg.hidden = false; msg.textContent = "Reconnecting…"; setTimeout(connect, Math.min(8000, 800 * ++retry)); };
   }
-  /* Sound: the server sends 20 ms Opus packets per audio source; decode them here and queue them ~120 ms ahead. */
+  /* Ask for a picture that suits this window (about one megapixel at most), unless the address fixes a size. */
+  function fit() {
+    if (sized) return; sized = true; let w = +q.get("w"), h = +q.get("h");
+    if (!w) { w = innerWidth; h = innerHeight; const k = Math.min(1, Math.sqrt(1e6 / (w * h))); w = Math.max(320, Math.round(w * k / 2) * 2); h = Math.max(240, Math.round(h * k / 2) * 2); }
+    send({ t: "size", w, h });
+  }
+
+  /* ---- drawing: always the newest frame, never a backlog ---- */
+  let latest = null, decoding = false;
+  async function frame(buf) {
+    latest = buf; if (decoding) return; decoding = true;
+    while (latest) { const b = latest; latest = null; try { const bm = await createImageBitmap(new Blob([b], { type: "image/jpeg" })); if (cv.width !== bm.width || cv.height !== bm.height) { cv.width = bm.width; cv.height = bm.height; } g.drawImage(bm, 0, 0); bm.close(); $("loading").hidden = true; } catch {} }
+    decoding = false;
+  }
+
+  /* ---- home screen ---- */
+  const hue = s => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 0), hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
+  function tiles() {
+    grid.replaceChildren(...st.pins.map(p => {
+      const a = document.createElement("div"); a.className = "app";
+      const ico = document.createElement("span"); ico.className = "ico";
+      const img = document.createElement("img"); img.src = "https://www.google.com/s2/favicons?sz=128&domain=" + encodeURIComponent(hostOf(p.u));
+      img.onerror = () => { img.remove(); ico.style.background = `hsl(${hue(hostOf(p.u))},60%,45%)`; ico.style.color = "#fff"; ico.textContent = (p.t || "?").charAt(0).toUpperCase(); }; ico.append(img);
+      const x = document.createElement("span"); x.className = "x"; x.textContent = "×"; x.onclick = e => { e.stopPropagation(); send({ t: "unpin", u: p.u }); };
+      const l = document.createElement("span"); l.className = "lbl"; l.textContent = p.t; a.append(x, ico, l);
+      a.onclick = () => { if (document.body.classList.contains("editing")) return; if (p.local) location.href = p.u; else send({ t: "open", u: p.u }); };
+      return a;
+    }));
+  }
+  $("edit").onclick = () => { const on = document.body.classList.toggle("editing"); $("edit").textContent = on ? "Done" : "Edit"; };
+  const tick = () => { const n = new Date(), t = n.getHours() + ":" + ("0" + n.getMinutes()).slice(-2); $("clock").textContent = $("big").textContent = t; $("date").textContent = n.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }); };
+  tick(); setInterval(tick, 5000);
+  function view() {
+    const app = st.view === "app"; $("home").hidden = app; $("stage").hidden = !app; $("bar").hidden = !app; $("homebtn").hidden = !app;
+    if (app) { $("loading").hidden = !!latest; wake(); cv.focus(); } else { document.body.classList.remove("editing"); $("edit").textContent = "Edit"; tiles(); $("loading").hidden = false; latest = null; }
+    document.title = app ? (meta.title || "Shared Browser") : "Shared Home";
+  }
+  $("homebtn").onclick = () => send({ t: "home" });
+
+  /* ---- cursors ---- */
+  const area = () => st.view === "app" ? cv.getBoundingClientRect() : { left: 0, top: 0, width: innerWidth, height: innerHeight };
+  function dot(m) {
+    let d = cursors.get(m.id); if (!d) { d = document.createElement("div"); d.className = "cur"; d.style.borderColor = `hsl(${hue(m.id)} 90% 65%)`; const b = document.createElement("b"); b.textContent = m.n || ""; b.hidden = !m.n; d.append(b); document.body.append(d); cursors.set(m.id, d); }
+    const r = area(); d.style.left = r.left + m.x * r.width + "px"; d.style.top = r.top + m.y * r.height + "px"; d.hidden = false; clearTimeout(d.t); d.t = setTimeout(() => { d.hidden = true; }, 4000);
+  }
+  let lastCur = 0;
+  addEventListener("pointermove", e => {
+    const t = performance.now(); if (t - lastCur < 40) return; lastCur = t;
+    const r = area(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height; send({ t: "cur", x, y });
+    if (st.view === "app" && e.target === cv) send({ t: "mv", x, y, bs: buttons }); wake();
+  });
+
+  /* ---- driving the browser ---- */
+  const pos = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }; };
+  cv.addEventListener("pointerdown", e => { cv.focus(); buttons |= 1 << (e.button | 0); cv.setPointerCapture(e.pointerId); send({ t: "dn", ...pos(e), b: e.button, n: e.detail || 1 }); e.preventDefault(); });
+  cv.addEventListener("pointerup", e => { buttons &= ~(1 << (e.button | 0)); send({ t: "up", ...pos(e), b: e.button, n: e.detail || 1 }); e.preventDefault(); });
+  cv.addEventListener("contextmenu", e => e.preventDefault());
+  cv.addEventListener("wheel", e => { const k = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 600 : 1; send({ t: "wh", ...pos(e), dx: e.deltaX * k, dy: e.deltaY * k }); e.preventDefault(); }, { passive: false });
+  const typing = () => document.activeElement === url, skip = k => k === "Dead" || k === "Process" || k === "Unidentified";
+  addEventListener("keydown", e => { if (typing() || st.view !== "app" || skip(e.key)) return; send({ t: "kd", k: e.key }); if (!(e.ctrlKey || e.metaKey) || e.key.length > 1) e.preventDefault(); });
+  addEventListener("keyup", e => { if (typing() || st.view !== "app" || skip(e.key)) return; send({ t: "ku", k: e.key }); });
+  addEventListener("paste", e => { if (typing() || st.view !== "app") return; const s = e.clipboardData && e.clipboardData.getData("text"); if (s) { send({ t: "tx", s }); e.preventDefault(); } });
+  url.addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") { send({ t: "nav", u: url.value }); url.blur(); cv.focus(); } else if (e.key === "Escape") { url.value = meta.url || ""; url.blur(); } });
+  url.addEventListener("focus", () => url.select());
+  for (const k of ["back", "fwd", "reload"]) $(k).onclick = () => { send({ t: k }); cv.focus(); };
+  $("pin").onclick = () => { if (meta.url && meta.url !== "about:blank") send({ t: st.pins.some(x => x.u === meta.url) ? "unpin" : "pin", u: meta.url, title: (meta.title || "").slice(0, 24) }); };
+  function wake() { $("bar").classList.remove("away"); $("homebtn").classList.remove("away"); clearTimeout(away); away = setTimeout(() => { if (!typing()) { $("bar").classList.add("away"); $("homebtn").classList.add("away"); } }, 3500); }
+
+  /* ---- sound: 20 ms Opus packets per audio source, decoded here and queued ~120 ms ahead ---- */
   window.__sbStats = { audio: 0 }; const snd = $("snd"); let AC = null, gain = null, on = true; const srcs = new Map();
   function sound() { if (AC) return AC; if (typeof AudioDecoder === "undefined") return null; AC = new AudioContext(); gain = AC.createGain(); gain.connect(AC.destination); snd.hidden = false; paintSnd(); return AC; }
   const paintSnd = () => { snd.textContent = on && AC && AC.state === "running" ? "🔊" : "🔇"; };
@@ -63,27 +168,7 @@
     window.__sbStats.audio++; const s = AC.createBufferSource(); s.buffer = buf; s.connect(gain); const now = AC.currentTime; if (d.t < now + 0.02 || d.t > now + 0.7) d.t = now + 0.12; s.start(d.t); d.t += buf.duration;
   }
   setInterval(() => { for (const [id, d] of srcs) if (Date.now() - d.seen > 10000) { try { d.dec.close(); } catch {} srcs.delete(id); } }, 5000);
-  const hue = id => [...id].reduce((a, c) => a + c.charCodeAt(0), 0) * 47 % 360;
-  function dot(m) {
-    let d = cursors.get(m.id); if (!d) { d = document.createElement("div"); d.className = "cur"; d.style.borderColor = `hsl(${hue(m.id)} 90% 65%)`; const b = document.createElement("b"); b.textContent = m.n || ""; if (!m.n) b.hidden = true; d.append(b); document.body.append(d); cursors.set(m.id, d); clearTimeout(d.t); }
-    const r = cv.getBoundingClientRect(); d.style.left = r.left + m.x * r.width + "px"; d.style.top = r.top + m.y * r.height + "px"; d.hidden = false; clearTimeout(d.t); d.t = setTimeout(() => { d.hidden = true; }, 4000);
-  }
-  const pos = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }; };
-  let lastMove = 0;
-  cv.addEventListener("pointermove", e => { const t = performance.now(); if (t - lastMove < 33) return; lastMove = t; const p = pos(e); send({ t: "mv", ...p, bs: buttons }); send({ t: "cur", ...p }); });
-  cv.addEventListener("pointerdown", e => { cv.focus(); buttons |= 1 << (e.button | 0); cv.setPointerCapture(e.pointerId); send({ t: "dn", ...pos(e), b: e.button, n: e.detail || 1 }); e.preventDefault(); });
-  cv.addEventListener("pointerup", e => { buttons &= ~(1 << (e.button | 0)); send({ t: "up", ...pos(e), b: e.button, n: e.detail || 1 }); e.preventDefault(); });
-  cv.addEventListener("contextmenu", e => e.preventDefault());
-  cv.addEventListener("wheel", e => { const k = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 600 : 1; send({ t: "wh", ...pos(e), dx: e.deltaX * k, dy: e.deltaY * k }); e.preventDefault(); }, { passive: false });
-  const typing = () => document.activeElement === url;
-  addEventListener("keydown", e => { if (typing()) return; if (e.key === "Dead" || e.key === "Process" || e.key === "Unidentified") return; send({ t: "kd", k: e.key }); if (!(e.ctrlKey || e.metaKey) || e.key.length > 1) e.preventDefault(); });
-  addEventListener("keyup", e => { if (typing()) return; if (e.key === "Dead" || e.key === "Process" || e.key === "Unidentified") return; send({ t: "ku", k: e.key }); });
-  addEventListener("paste", e => { if (typing()) return; const s = e.clipboardData && e.clipboardData.getData("text"); if (s) { send({ t: "tx", s }); e.preventDefault(); } });
-  url.addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") { send({ t: "nav", u: url.value }); url.blur(); cv.focus(); } else if (e.key === "Escape") { url.value = meta.url || ""; url.blur(); } });
-  url.addEventListener("focus", () => url.select());
-  for (const k of ["back", "fwd", "reload", "home"]) $(k).onclick = () => { send({ t: k }); cv.focus(); };
-  addEventListener("pointermove", () => { $("bar").classList.remove("away"); clearTimeout(away); away = setTimeout(() => { if (!typing()) $("bar").classList.add("away"); }, 3500); });
-  if (q.get("w")) addEventListener("load", () => send({ t: "size", w: +q.get("w"), h: +q.get("h") || 720 }));
-  connect();
+
+  tiles(); connect();
 })();
 </script></body></html>
