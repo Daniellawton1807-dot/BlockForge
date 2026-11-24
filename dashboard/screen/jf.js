@@ -45,16 +45,20 @@ const JF = (() => {
   /* Titles hidden from the Screen Player. They live in this account's own Jellyfin settings (display preferences, client "screenplayer"),
      so everyone signed in as the account, on any PC, sees the same list. */
   const prefPath = () => { const s = session(); return `/DisplayPreferences/screenplayer?userId=${s.userId}&client=screenplayer`; };
-  let hiddenCache = null;
-  async function hiddenSet(force) {
-    if (!hiddenCache || force) { hiddenCache = (async () => { try { const d = await api(prefPath()); return new Set(String((d.CustomPrefs || {}).hidden || "").split(",").filter(Boolean)); } catch (e) { if (e.code === 401) throw e; return new Set(); } })(); }
-    return hiddenCache;
+  let prefsCache = null;
+  /* The account's Screen Player settings: the hidden titles and whether the Shows tab is hidden (films only). */
+  async function prefs(force) {
+    if (!prefsCache || force) prefsCache = (async () => { try { const d = await api(prefPath()), c = d.CustomPrefs || {}; return { hidden: new Set(String(c.hidden || "").split(",").filter(Boolean)), hideShows: c.hideShows === "1" }; } catch (e) { if (e.code === 401) throw e; return { hidden: new Set(), hideShows: false }; } })();
+    return prefsCache;
   }
-  async function hiddenSave(set) {
-    const d = await api(prefPath()); d.CustomPrefs = { ...(d.CustomPrefs || {}), hidden: [...set].join(",") }; d.Id = d.Id || "screenplayer"; d.Client = "screenplayer";
-    await api(prefPath(), { method: "POST", body: JSON.stringify(d) }); hiddenCache = Promise.resolve(new Set(set));
+  async function savePrefs(p) {
+    const d = await api(prefPath()); d.CustomPrefs = { ...(d.CustomPrefs || {}), hidden: [...p.hidden].join(","), hideShows: p.hideShows ? "1" : "0" }; d.Id = d.Id || "screenplayer"; d.Client = "screenplayer";
+    await api(prefPath(), { method: "POST", body: JSON.stringify(d) }); prefsCache = Promise.resolve({ hidden: new Set(p.hidden), hideShows: !!p.hideShows });
   }
+  const hiddenSet = async force => (await prefs(force)).hidden;
+  const hiddenSave = async set => { const p = await prefs(); await savePrefs({ hidden: set, hideShows: p.hideShows }); };
   const isHidden = (item, hidden) => !!item && (hidden.has(item.Id) || (item.SeriesId && hidden.has(item.SeriesId)));
+  const isShow = item => !!item && (item.Type === "Series" || item.Type === "Episode" || item.Type === "Season");
   /* Admin: the account's password again. Unlocked for 10 minutes in this browser tab only. */
   const adminUntil = () => +(sessionStorage.getItem("wd.admin") || 0);
   const isAdmin = () => { try { return adminUntil() > Date.now(); } catch { return false; } };
@@ -67,5 +71,5 @@ const JF = (() => {
   const adminLock = () => { try { sessionStorage.removeItem("wd.admin"); } catch {} };
   /* On a shared in-world screen everything typed is sent to everyone at it. The screen's page script (__wdLive) is how we tell. */
   const onSharedScreen = () => !!window.__wdLive;
-  return { BASE, api, login, logout, session, img, can, deviceProfile, store, deviceId, ticksToMin, hiddenSet, hiddenSave, isHidden, isAdmin, adminUnlock, adminLock, onSharedScreen };
+  return { BASE, api, login, logout, session, img, can, deviceProfile, store, deviceId, ticksToMin, prefs, savePrefs, hiddenSet, hiddenSave, isHidden, isShow, isAdmin, adminUnlock, adminLock, onSharedScreen };
 })();

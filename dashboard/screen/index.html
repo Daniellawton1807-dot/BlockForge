@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Screen Player</title>
-<link rel="stylesheet" href="screen.css?v=1">
+<link rel="stylesheet" href="screen.css?v=2">
 </head>
 <body>
 <header id="head" hidden>
@@ -14,7 +14,7 @@
   <span class="note" id="who"></span> <a class="btn" id="adm" href="?admin=1" title="Hide titles from this account's Screen Player">Admin</a> <button id="out" type="button">Sign out</button>
 </header>
 <main id="main"></main>
-<script src="jf.js?v=1"></script>
+<script src="jf.js?v=2"></script>
 <script>
 /* One address per place (home, a list, a show, a search), so the screen's sync carries everyone to the same page.
    Nothing about who is signed in is in the address. */
@@ -41,43 +41,84 @@ const tile = (item, href, wide) => {
   const ep = item.Type === "Episode"; a.append(art, el("div", "t", ep ? item.SeriesName : item.Name), el("div", "s", ep ? `S${item.ParentIndexNumber} · E${item.IndexNumber} · ${item.Name}` : [item.ProductionYear, item.Type === "Series" ? "Show" : "Film"].filter(Boolean).join(" · ")));
   return a;
 };
-const target = it => it.Type === "Series" ? `?series=${it.Id}` : `player.html?id=${it.Id}`;
-const section = (title, items, wide) => { if (!items.length) return; main.append(el("h2", null, title)); const g = el("div", "grid"); items.forEach(it => g.append(tile(it, target(it), wide))); main.append(g); };
+const target = it => it.Type === "Series" ? `?series=${it.Id}` : it.Type === "Movie" ? `?film=${it.Id}` : `player.html?id=${it.Id}`;
+const section = (title, items, wide, more) => { if (!items.length) return; const hd = el("div", "sechead"); hd.append(el("h2", null, title)); if (more) hd.append(link(more[0], more[1], "more")); main.append(hd); const g = el("div", "grid"); items.forEach(it => g.append(tile(it, target(it), wide))); main.append(g); };
+const mins = t => { const m = JF.ticksToMin(t); return m >= 60 ? Math.floor(m / 60) + "h " + (m % 60) + "m" : m + " min"; };
+const backdrop = it => JF.img(it.Type === "Episode" ? (it.SeriesId || it.Id) : it.Id, 720, "Backdrop");
+const meta = it => [it.ProductionYear, it.OfficialRating, it.RunTimeTicks && it.Type !== "Series" ? mins(it.RunTimeTicks) : null, it.CommunityRating ? "★ " + it.CommunityRating.toFixed(1) : null, (it.Genres || []).slice(0, 3).join(", ")].filter(Boolean).join("  ·  ");
+/* A big picture across the top with what to do next. */
+function hero(it, label, href) {
+  const h = el("section", "hero"); h.style.backgroundImage = `linear-gradient(90deg, #0b0b10f0 15%, #0b0b1099 55%, #0b0b1033), url("${backdrop(it)}")`;
+  const ep = it.Type === "Episode", ud = it.UserData || {}, left = it.RunTimeTicks && ud.PlaybackPositionTicks ? JF.ticksToMin(it.RunTimeTicks - ud.PlaybackPositionTicks) : 0;
+  const inner = el("div", "in"); inner.append(el("div", "kicker", label), el("h1", null, ep ? it.SeriesName : it.Name), el("div", "sub", ep ? `S${it.ParentIndexNumber} · E${it.IndexNumber} · ${it.Name}` : meta(it)));
+  if (left > 0) inner.append(el("div", "sub", left + " min left"));
+  const bar = el("div", "actions"); bar.append(link(href, ud.PlaybackPositionTicks > 0 ? "▶  Resume" : "▶  Play", "btn primary big"));
+  if (ud.PlaybackPositionTicks > 0) bar.append(link(href + (href.includes("?") ? "&" : "?") + "t=0", "From the start", "btn big"));
+  inner.append(bar); h.append(inner); main.append(h);
+}
+const nextOf = async (uid, series) => { const n = await JF.api(`/Shows/NextUp?UserId=${uid}&SeriesId=${series}&Limit=1&EnableUserData=true`); return (n.Items || [])[0]; };
+const detail = (it, buttons) => {
+  const h = el("section", "hero tall"); h.style.backgroundImage = `linear-gradient(90deg, #0b0b10f5 20%, #0b0b10aa 60%, #0b0b1044), url("${backdrop(it)}")`;
+  const inner = el("div", "in"), poster = el("div", "poster"); poster.style.backgroundImage = `url("${JF.img(it.Id, 520)}")`;
+  const txt = el("div", "txt"); txt.append(el("h1", null, it.Name), el("div", "sub", meta(it)));
+  if (it.Type === "Series" && it.ChildCount) txt.append(el("div", "sub", it.ChildCount + " season" + (it.ChildCount === 1 ? "" : "s")));
+  if (it.Overview) txt.append(el("p", "overview", it.Overview)); const bar = el("div", "actions"); buttons.forEach(b => bar.append(b)); txt.append(bar);
+  inner.append(poster, txt); h.append(inner); main.append(h);
+};
 
 async function page() {
   const s = JF.session(); if (!s) return loginBox();
   $("#head").hidden = false; $("#who").textContent = s.name; $("#out").onclick = () => { JF.logout(); location.href = "./"; };
-  const view = q.get("view"), term = q.get("q"), series = q.get("series"), page = +q.get("page") || 0, uid = s.userId, F = "&Fields=ProductionYear&EnableUserData=true";
-  const hidden = await JF.hiddenSet(), EX = hidden.size ? "&ExcludeItemIds=" + [...hidden].slice(0, 120).join(",") : "", vis = a => (a || []).filter(i => !JF.isHidden(i, hidden));
-  if (q.has("admin")) return adminPage(uid, hidden, F);
-  const nav = $("#nav"); nav.replaceChildren(); [["Home", "./", !view && !term && !series], ["Shows", "?view=shows", view === "shows"], ["Films", "?view=films", view === "films"]].forEach(([l, h, on]) => nav.append(link(h, l, on ? "on" : "")));
-  if (series && hidden.has(series) && !JF.isAdmin()) { main.append(el("div", "box", "This title isn't available.")); return; }
+  const view = q.get("view"), term = q.get("q"), series = q.get("series"), film = q.get("film"), page = +q.get("page") || 0, uid = s.userId, F = "&Fields=ProductionYear,CommunityRating,OfficialRating,Genres&EnableUserData=true";
+  const pf = await JF.prefs(), hidden = pf.hidden, filmsOnly = pf.hideShows && !JF.isAdmin();
+  const EX = hidden.size ? "&ExcludeItemIds=" + [...hidden].slice(0, 120).join(",") : "", vis = a => (a || []).filter(i => !JF.isHidden(i, hidden) && !(filmsOnly && JF.isShow(i)));
+  if (q.has("admin")) return adminPage(uid, pf, F);
+  const nav = $("#nav"); nav.replaceChildren(); const tabs = [["Home", "./", !view && !term && !series && !film]]; if (!filmsOnly) tabs.push(["Shows", "?view=shows", view === "shows"]); tabs.push(["Films", "?view=films", view === "films"]);
+  tabs.forEach(([l, h, on]) => nav.append(link(h, l, on ? "on" : ""))); $("#head form input").placeholder = filmsOnly ? "Search films" : "Search shows and films";
+  const types = filmsOnly ? "Movie" : "Series,Movie";
+  if ((series || view === "shows") && filmsOnly) { main.append(el("div", "box", "This isn't available.")); return; }
   if (series) {
-    const show = await JF.api(`/Users/${uid}/Items/${series}`), seasons = (await JF.api(`/Shows/${series}/Seasons?UserId=${uid}`)).Items, season = q.get("season") || (seasons[0] && seasons[0].Id);
-    main.append(el("h2", null, show.Name)); if (show.Overview) main.append(el("p", "note", show.Overview.slice(0, 400)));
-    const bar = el("div"); bar.style.cssText = "display:flex;gap:12px;flex-wrap:wrap;margin:18px 0"; seasons.forEach(se => bar.append(link(`?series=${series}&season=${se.Id}`, se.Name, "btn" + (se.Id === season ? " primary" : "")))); main.append(bar);
+    if (hidden.has(series) && !JF.isAdmin()) { main.append(el("div", "box", "This title isn't available.")); return; }
+    const show = await JF.api(`/Users/${uid}/Items/${series}?Fields=Genres,Overview,CommunityRating,OfficialRating`), seasons = (await JF.api(`/Shows/${series}/Seasons?UserId=${uid}`)).Items, season = q.get("season") || (seasons[0] && seasons[0].Id);
+    show.ChildCount = show.ChildCount || seasons.length; const nx = await nextOf(uid, series).catch(() => null);
+    const firstEp = !nx ? ((await JF.api(`/Shows/${series}/Episodes?UserId=${uid}&Limit=1&EnableUserData=true`)).Items || [])[0] : null, go = nx || firstEp;
+    const btns = []; if (go) { const started = nx && nx.UserData && nx.UserData.PlaybackPositionTicks > 0; btns.push(link(`player.html?id=${go.Id}`, started ? `▶  Resume S${go.ParentIndexNumber} E${go.IndexNumber}` : nx ? `▶  Play next: S${go.ParentIndexNumber} E${go.IndexNumber}` : `▶  Play S${go.ParentIndexNumber} E${go.IndexNumber}`, "btn primary big")); }
+    detail(show, btns);
+    const bar = el("div"); bar.style.cssText = "display:flex;gap:12px;flex-wrap:wrap;margin:26px 0 8px"; seasons.forEach(se => bar.append(link(`?series=${series}&season=${se.Id}`, se.Name, "btn" + (se.Id === season ? " primary" : "")))); main.append(bar);
     if (season) { const eps = (await JF.api(`/Shows/${series}/Episodes?UserId=${uid}&SeasonId=${season}&Fields=Overview&EnableUserData=true`)).Items;
-      eps.forEach(e => { const r = link(`player.html?id=${e.Id}`, "", "row"), pct = e.UserData && e.UserData.Played ? "watched" : e.UserData && e.UserData.PlayedPercentage > 1 ? Math.round(e.UserData.PlayedPercentage) + "% watched" : "";
-        const d = el("div"); d.append(el("div", null, e.Name), el("div", "d", [JF.ticksToMin(e.RunTimeTicks) + " min", pct].filter(Boolean).join(" · "))); r.append(el("div", "n", e.IndexNumber != null ? e.IndexNumber : "·"), d); main.append(r); }); }
+      eps.forEach(e => { const ud = e.UserData || {}, r = link(`player.html?id=${e.Id}`, "", "row ep"), th = el("div", "thumb"); th.style.backgroundImage = `url("${JF.img(e.Id, 180)}")`;
+        if (ud.PlayedPercentage > 1 && ud.PlayedPercentage < 99) { const b = el("div", "bar"); b.style.width = ud.PlayedPercentage + "%"; th.append(b); }
+        const d = el("div", "grow"); d.append(el("div", "ttl", `${e.IndexNumber != null ? e.IndexNumber + ". " : ""}${e.Name}`), el("div", "d", [mins(e.RunTimeTicks), ud.Played ? "✓ watched" : ud.PlayedPercentage > 1 ? Math.round(ud.PlayedPercentage) + "% watched" : ""].filter(Boolean).join(" · ")));
+        if (e.Overview) d.append(el("div", "d clamp", e.Overview)); r.append(th, d); if (ud.Played) r.append(el("div", "tick", "✓")); main.append(r); }); }
     return;
   }
-  if (term) { const r = await JF.api(`/Users/${uid}/Items?searchTerm=${encodeURIComponent(term)}&IncludeItemTypes=Series,Movie&Recursive=true&Limit=60${F}${EX}`); main.append(el("h2", null, `Results for “${term}”`)); if (!r.Items.length) main.append(el("p", "note", "Nothing found.")); section("", r.Items); return; }
+  if (film) {
+    const m = await JF.api(`/Users/${uid}/Items/${film}?Fields=Genres,Overview,CommunityRating,OfficialRating`); if (JF.isHidden(m, hidden) && !JF.isAdmin()) { main.append(el("div", "box", "This title isn't available.")); return; }
+    const ud = m.UserData || {}, b = [link(`player.html?id=${m.Id}`, ud.PlaybackPositionTicks > 0 ? "▶  Resume" : "▶  Play", "btn primary big")]; if (ud.PlaybackPositionTicks > 0) b.push(link(`player.html?id=${m.Id}&t=0`, "From the start", "btn big")); detail(m, b); return;
+  }
+  if (term) { const r = await JF.api(`/Users/${uid}/Items?searchTerm=${encodeURIComponent(term)}&IncludeItemTypes=${types}&Recursive=true&Limit=60${F}${EX}`); main.append(el("h2", null, `Results for “${term}”`)); if (!r.Items.length) main.append(el("p", "note", "Nothing found.")); section("", r.Items); return; }
   if (view === "shows" || view === "films") {
     const r = await JF.api(`/Users/${uid}/Items?IncludeItemTypes=${view === "shows" ? "Series" : "Movie"}&Recursive=true&SortBy=SortName&Limit=${PER}&StartIndex=${page * PER}${F}${EX}`);
     section(view === "shows" ? "All shows" : "All films", r.Items); const pg = el("div", "pages"); if (page > 0) pg.append(link(`?view=${view}&page=${page - 1}`, "← Back", "btn")); if ((page + 1) * PER < r.TotalRecordCount) pg.append(link(`?view=${view}&page=${page + 1}`, "More →", "btn")); main.append(pg); return;
   }
-  const [resume, next, latest] = await Promise.all([JF.api(`/Users/${uid}/Items/Resume?Limit=12&MediaTypes=Video${F}`), JF.api(`/Shows/NextUp?UserId=${uid}&Limit=12${F}`), JF.api(`/Users/${uid}/Items/Latest?Limit=18&IncludeItemTypes=Series,Movie${F}`)]);
-  const seen = new Set(); const uniq = a => a.filter(i => { const k = i.SeriesId || i.Id; if (seen.has(k)) return false; seen.add(k); return true; });
-  section("Continue watching", uniq(vis(resume.Items)), true); section("Next episode", uniq(vis(next.Items)), true); section("Recently added", vis(latest));
+  // home
+  const list = (type, sort, n) => JF.api(`/Users/${uid}/Items?IncludeItemTypes=${type}&Recursive=true&SortBy=${sort}&SortOrder=Descending&Limit=${n}${F}${EX}`);
+  const [resume, next, films, shows, top] = await Promise.all([JF.api(`/Users/${uid}/Items/Resume?Limit=12&MediaTypes=Video${F}`), filmsOnly ? { Items: [] } : JF.api(`/Shows/NextUp?UserId=${uid}&Limit=12${F}`), list("Movie", "DateCreated", 14), filmsOnly ? { Items: [] } : list("Series", "DateCreated", 14), list("Movie", "CommunityRating", 14)]);
+  const seen = new Set(), uniq = a => a.filter(i => { const k = i.SeriesId || i.Id; if (seen.has(k)) return false; seen.add(k); return true; });
+  const cont = uniq(vis(resume.Items)), nxt = uniq(vis(next.Items)), lead = cont[0] || nxt[0] || vis(films.Items)[0];
+  if (lead) { const isResume = lead === cont[0]; hero(lead, isResume ? "Continue watching" : lead === nxt[0] ? "Up next" : "Featured film", target(lead).startsWith("?") ? `player.html?id=${lead.Id}` : target(lead)); }
+  section("Continue watching", cont.slice(lead === cont[0] ? 1 : 0), true); section("New episodes", nxt.slice(lead === nxt[0] ? 1 : 0), true);
+  section("Films", vis(films.Items), false, ["?view=films", "See all films →"]); if (!filmsOnly) section("Shows", vis(shows.Items), false, ["?view=shows", "See all shows →"]); section("Top rated films", vis(top.Items).slice(0, 12));
   const c = JF.can(); main.append(el("div", "codecs", "This screen's browser can play: " + [c.h264 && "H.264", c.hevc && "HEVC", c.vp9 && "VP9", c.av1 && "AV1", c.aac && "AAC", c.mp3 && "MP3", c.opus && "Opus"].filter(Boolean).join(", ")));
 }
 
-/* Admin: hide titles from everyone who uses this account in the Screen Player. Needs the account's password again. */
-async function adminPage(uid, hidden, F) {
+/* Admin: hide titles, or the whole Shows tab, from everyone who uses this account in the Screen Player. Needs the account's password again. */
+async function adminPage(uid, pf, F) {
+  const hidden = pf.hidden;
   $("#nav").replaceChildren(link("./", "← Back", ""));
   main.append(el("h2", null, "Admin"));
   const gate = () => {
-    const box = el("form", "box"); box.style.margin = "6vh auto"; box.append(el("h1", null, "Admin"), el("div", "note", "Type this account's password again to hide titles. It unlocks for 10 minutes, in this tab only."));
+    const box = el("form", "box"); box.style.margin = "6vh auto"; box.append(el("h1", null, "Admin"), el("div", "note", "Type this account's password again to change what's hidden. It unlocks for 10 minutes, in this tab only."));
     const p = el("input"); p.type = "password"; p.autocomplete = "current-password"; box.append(el("label", null, "Password"), p);
     const err = el("div", "err", ""), go = el("button", "primary", "Unlock"); go.type = "submit"; go.style.marginTop = "18px"; box.append(go, err);
     const warn = el("div", "note", "Careful: this is a shared screen, so everything you type is sent to everyone at it. Open this on your MinePad or a normal browser instead."); warn.style.cssText = "margin-top:16px;padding:12px 14px;border-radius:12px;background:#3a2a10;color:#ffd9a0"; warn.hidden = true; box.append(warn);
@@ -87,13 +128,16 @@ async function adminPage(uid, hidden, F) {
   };
   if (!JF.isAdmin()) return gate();
   const lock = el("button", null, "Lock admin"); lock.type = "button"; lock.onclick = () => { JF.adminLock(); location.reload(); }; main.append(lock);
-  main.append(el("p", "note", "Hidden titles disappear from the Screen Player for everyone signed in as this account, on every PC. They're still in Jellyfin itself."));
-  const save = async next => { await JF.hiddenSave(next); location.reload(); };
+  main.append(el("p", "note", "What you hide disappears from the Screen Player for everyone signed in as this account, on every PC. It's all still in Jellyfin itself."));
+  const save = async (nextHidden, hideShows) => { await JF.savePrefs({ hidden: nextHidden, hideShows }); location.reload(); };
+  main.append(el("h2", null, "Shows tab"));
+  const row = el("div", "row"); const d = el("div", "grow"); d.append(el("div", "ttl", pf.hideShows ? "Shows are hidden: the Screen Player shows films only" : "Shows are visible"), el("div", "d", "Hides the Shows tab, show pages, episodes in Continue watching and search results. You can still see everything while this admin page is unlocked."));
+  const tg = el("button", "primary", pf.hideShows ? "Show the Shows tab" : "Hide the Shows tab"); tg.type = "button"; tg.onclick = () => save(hidden, !pf.hideShows); row.append(d, tg); main.append(row);
   main.append(el("h2", null, "Hidden now"));
   if (hidden.size) {
     const r = await JF.api(`/Users/${uid}/Items?Ids=${[...hidden].join(",")}&Fields=ProductionYear`); const g = el("div", "grid");
-    for (const it of r.Items || []) { const t = tile(it, "#", false); t.removeAttribute("href"); const b = el("button", "primary", "Unhide"); b.type = "button"; b.style.cssText = "margin:0 12px 12px"; b.onclick = () => save(new Set([...hidden].filter(x => x !== it.Id))); t.append(b); g.append(t); }
-    main.append(g); const known = new Set((r.Items || []).map(i => i.Id)); const gone = [...hidden].filter(x => !known.has(x)); if (gone.length) { const b = el("button", null, `Forget ${gone.length} title(s) no longer in the library`); b.type = "button"; b.onclick = () => save(new Set([...hidden].filter(x => known.has(x)))); main.append(b); }
+    for (const it of r.Items || []) { const t = tile(it, "#", false); t.removeAttribute("href"); const b = el("button", "primary", "Unhide"); b.type = "button"; b.style.cssText = "margin:0 12px 12px"; b.onclick = () => save(new Set([...hidden].filter(x => x !== it.Id)), pf.hideShows); t.append(b); g.append(t); }
+    main.append(g); const known = new Set((r.Items || []).map(i => i.Id)); const gone = [...hidden].filter(x => !known.has(x)); if (gone.length) { const b = el("button", null, `Forget ${gone.length} title(s) no longer in the library`); b.type = "button"; b.onclick = () => save(new Set([...hidden].filter(x => known.has(x))), pf.hideShows); main.append(b); }
   } else main.append(el("p", "note", "Nothing is hidden."));
   main.append(el("h2", null, "Find a title to hide"));
   const f = el("form"); f.style.cssText = "display:flex;gap:10px;margin-bottom:20px"; const si = el("input"); si.type = "text"; si.placeholder = "Search shows and films"; si.value = q.get("find") || ""; si.name = "find"; const hid = el("input"); hid.type = "hidden"; hid.name = "admin"; hid.value = "1";
@@ -101,7 +145,7 @@ async function adminPage(uid, hidden, F) {
   const term = q.get("find");
   if (term) {
     const r = await JF.api(`/Users/${uid}/Items?searchTerm=${encodeURIComponent(term)}&IncludeItemTypes=Series,Movie&Recursive=true&Limit=40${F}`); const g = el("div", "grid");
-    for (const it of r.Items || []) { const t = tile(it, "#", false); t.removeAttribute("href"); const on = hidden.has(it.Id), b = el("button", on ? null : "primary", on ? "Unhide" : "Hide"); b.type = "button"; b.style.cssText = "margin:0 12px 12px"; b.onclick = () => save(on ? new Set([...hidden].filter(x => x !== it.Id)) : new Set([...hidden, it.Id])); t.append(b); g.append(t); }
+    for (const it of r.Items || []) { const t = tile(it, "#", false); t.removeAttribute("href"); const on = hidden.has(it.Id), b = el("button", on ? null : "primary", on ? "Unhide" : "Hide"); b.type = "button"; b.style.cssText = "margin:0 12px 12px"; b.onclick = () => save(on ? new Set([...hidden].filter(x => x !== it.Id)) : new Set([...hidden, it.Id]), pf.hideShows); t.append(b); g.append(t); }
     if (!(r.Items || []).length) main.append(el("p", "note", "Nothing found.")); main.append(g);
   }
 }

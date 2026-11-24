@@ -4,14 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Screen Player</title>
-<link rel="stylesheet" href="screen.css?v=1">
+<link rel="stylesheet" href="screen.css?v=3">
 </head>
 <body class="player">
-<video id="v" controls playsinline></video>
+<video id="v" playsinline></video>
 <div id="top"><a class="btn" id="back" href="./">← Back</a><span class="title" id="title"></span><span style="margin-left:auto;display:flex;gap:10px"><button type="button" id="fix" title="Pause and jump to the same second: re-locks sound and picture">Fix sound</button><button type="button" id="low" title="Ask for a lighter stream if it keeps buffering">Lighter</button><button type="button" id="info">Info</button></span></div>
+<div id="big" hidden><svg viewBox="0 0 24 24" width="84" height="84"><path d="M8 5v14l11-7z" fill="#fff"/></svg></div>
 <div id="msg">Loading…</div>
+<div id="bar">
+  <div id="seek"><div id="buf"></div><div id="fill"></div></div>
+  <div class="ctl">
+    <button type="button" id="pp" class="round" title="Play / pause"><svg viewBox="0 0 24 24" width="34" height="34"><path id="ppi" d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="#fff"/></svg></button>
+    <button type="button" id="b10" title="Back 10 seconds">−10 s</button>
+    <button type="button" id="f10" title="Forward 10 seconds">+10 s</button>
+    <span id="time">0:00 / 0:00</span>
+    <span style="flex:1"></span>
+    <button type="button" id="audioBtn">Audio</button>
+    <button type="button" id="subBtn">Subtitles</button>
+    <button type="button" id="nextBtn" class="primary" hidden>Next episode ▶</button>
+  </div>
+  <div id="menu" hidden></div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
-<script src="jf.js?v=1"></script>
+<script src="jf.js?v=2"></script>
 <script>
 /* The address is only ?id=<film or episode>, so the screen's sync opens the same one for everyone and keeps the
    <video> at the same second, paused or playing, for all of them. Playback always starts from 0 (the resume point is
@@ -20,7 +35,7 @@ const $ = s => document.querySelector(s), v = $("#v"), msg = t => { $("#msg").te
 const q = new URLSearchParams(location.search), id = q.get("id"), session = JF.session();
 const STEPS = [20000000, 8000000, 5000000, 3000000, 2000000];   // bits per second, tried from the viewer's own setting downwards
 const saved = +JF.store.get("wd.br") || 0;
-let bitrate = +q.get("br") || saved || 8000000, hls = null, play = null, stalls = [], lastWait = 0, info = null;
+let bitrate = +q.get("br") || saved || 8000000, hls = null, play = null, stalls = [], lastWait = 0, info = null, audioIdx = null, defaultAudio = null, subIdx = -1, nextEp = null;
 let hideTimer = null; document.addEventListener("mousemove", () => { $("#top").classList.remove("hide"); clearTimeout(hideTimer); hideTimer = setTimeout(() => $("#top").classList.add("hide"), 3500); }); hideTimer = setTimeout(() => $("#top").classList.add("hide"), 5000);
 const tick = x => Math.round(x * 1e7);
 const mbps = b => (b / 1e6).toFixed(b % 1e6 ? 1 : 0) + " Mbit/s";
@@ -29,7 +44,8 @@ const mbps = b => (b / 1e6).toFixed(b % 1e6 ? 1 : 0) + " Mbit/s";
 async function load(startAt) {
   if (hls) { try { hls.destroy(); } catch {} hls = null; }
   v.removeAttribute("src"); v.load(); msg("Loading…");
-  info = await JF.api(`/Items/${id}/PlaybackInfo?UserId=${session.userId}&MaxStreamingBitrate=${bitrate}&AutoOpenLiveStream=true`, { method: "POST", body: JSON.stringify({ DeviceProfile: JF.deviceProfile(bitrate) }) });
+  const switched = audioIdx != null && defaultAudio != null && audioIdx !== defaultAudio;   // another sound track: Jellyfin has to convert it for us
+  info = await JF.api(`/Items/${id}/PlaybackInfo?UserId=${session.userId}&MaxStreamingBitrate=${bitrate}&AutoOpenLiveStream=true${audioIdx != null ? "&AudioStreamIndex=" + audioIdx : ""}${switched ? "&enableDirectPlay=false&enableDirectStream=false" : ""}`, { method: "POST", body: JSON.stringify({ DeviceProfile: JF.deviceProfile(bitrate) }) });
   const ms = (info.MediaSources || [])[0]; if (!ms) return msg("Jellyfin has nothing to play for this.");
   const key = `api_key=${encodeURIComponent(session.token)}`; let url, isHls = false;
   if (ms.SupportsDirectPlay || ms.SupportsDirectStream) url = `${JF.BASE}/Videos/${id}/stream?static=true&MediaSourceId=${ms.Id}&Tag=${encodeURIComponent(ms.ETag || "")}&DeviceId=${JF.deviceId()}&PlaySessionId=${info.PlaySessionId}&${key}`;
@@ -39,7 +55,9 @@ async function load(startAt) {
   if (isHls && !(window.Hls && Hls.isSupported())) { if (v.canPlayType("application/vnd.apple.mpegurl")) v.src = url; else return msg("This browser can't play streamed video."); }
   else if (isHls) { hls = new Hls({ maxBufferLength: 40, enableWorker: true }); hls.on(Hls.Events.ERROR, (e, d) => { if (d.fatal) msg("Playback error: " + d.details); }); hls.loadSource(url); hls.attachMedia(v); }
   else v.src = url;
-  v.addEventListener("loadedmetadata", () => { if (startAt > 30 && startAt < (v.duration || 1e9) - 30) v.currentTime = startAt; }, { once: true });
+  if (defaultAudio == null) defaultAudio = ms.DefaultAudioStreamIndex != null ? ms.DefaultAudioStreamIndex : null;
+  addTracks(ms);
+  v.addEventListener("loadedmetadata", () => { if (startAt > 1 && startAt < (v.duration || 1e9) - 5) v.currentTime = startAt; }, { once: true });
   v.play().catch(() => msg("Press play to start"));
 }
 /* Pause, jump to the very same second and carry on: makes the sound and picture lock together again. */
@@ -68,15 +86,62 @@ $("#fix").onclick = () => { resync(); msg("Sound and picture re-synced"); setTim
 $("#low").onclick = () => { const next = STEPS.find(s => s < bitrate) || STEPS[STEPS.length - 1]; bitrate = next; JF.store.set("wd.br", String(next)); msg("Switching to " + mbps(next)); load(v.currentTime).catch(() => {}); };
 $("#info").onclick = () => { if (panel) { panel.remove(); panel = null; return; } panel = document.createElement("pre"); panel.style.cssText = "position:fixed;left:24px;bottom:90px;z-index:4;background:#000b;padding:14px 18px;border-radius:12px;font:16px/1.4 monospace;color:#fff;margin:0"; document.body.append(panel); const f = () => { if (panel) { panel.textContent = stats(); setTimeout(f, 1000); } }; f(); };
 
+/* Subtitles: Jellyfin hands text subtitles over as WebVTT, shown as a track on the video. (Picture subtitles can't be shown this way.) */
+function textSubs(ms) { return ((ms && ms.MediaStreams) || []).filter(s => s.Type === "Subtitle" && (s.IsTextSubtitleStream || s.DeliveryUrl)); }
+let subTrack = null;
+function vttTime(s) { const m = /^(?:(\d+):)?(\d+):(\d+)[.,](\d+)$/.exec(s.trim()); return m ? (+(m[1] || 0)) * 3600 + (+m[2]) * 60 + (+m[3]) + (+("0." + m[4])) : NaN; }
+async function addTracks(ms) {
+  if (subTrack) { subTrack.mode = "disabled"; [...(subTrack.cues || [])].forEach(c => subTrack.removeCue(c)); subTrack = null; }
+  if (subIdx < 0) return; const s = textSubs(ms).find(x => x.Index === subIdx); if (!s) return;
+  const base = s.DeliveryUrl ? JF.BASE + s.DeliveryUrl : `${JF.BASE}/Videos/${id}/${ms.Id}/Subtitles/${s.Index}/0/Stream.vtt`;
+  const url = base + (/api_key=/i.test(base) ? "" : (base.includes("?") ? "&" : "?") + "api_key=" + encodeURIComponent(session.token));
+  try {
+    const text = await (await fetch(url)).text(), tr = v.addTextTrack("subtitles", s.DisplayTitle || s.Language || "Subtitles", s.Language || "");
+    for (const block of text.replace(/\r/g, "").split(/\n\n+/)) { const lines = block.split("\n"), i = lines.findIndex(l => l.includes("-->")); if (i < 0) continue; const [a, b] = lines[i].split("-->"), t0 = vttTime(a), t1 = vttTime(b.trim().split(" ")[0]); if (isFinite(t0) && isFinite(t1)) tr.addCue(new VTTCue(t0, t1, lines.slice(i + 1).join("\n").replace(/<[^>]+>/g, "").trim())); }
+    tr.mode = "showing"; subTrack = tr;
+  } catch (e) { msg("Couldn't load those subtitles"); setTimeout(() => msg(""), 2000); }
+}
+async function findNext(item) {
+  if (item.Type !== "Episode") return null;
+  const l = (await JF.api(`/Shows/${item.SeriesId}/Episodes?UserId=${session.userId}`)).Items || [], i = l.findIndex(e => e.Id === item.Id);
+  return i >= 0 && l[i + 1] ? l[i + 1] : null;
+}
+
+/* The controls: big targets for the laser pointer, sound and subtitle choice, skip, a seek bar, and "Next episode" near the end. */
+const fmt = t => { t = Math.max(0, Math.floor(t || 0)); const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0"); };
+const toggle = () => { if (v.paused) v.play().catch(() => {}); else v.pause(); };
+const skip = d => { v.currentTime = Math.max(0, Math.min((isFinite(v.duration) ? v.duration : 1e9) - 1, v.currentTime + d)); };
+$("#pp").onclick = toggle; $("#b10").onclick = () => skip(-10); $("#f10").onclick = () => skip(10); v.onclick = toggle; $("#big").onclick = toggle;
+$("#seek").onclick = e => { const r = $("#seek").getBoundingClientRect(); if (isFinite(v.duration) && v.duration) v.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * v.duration; };
+function paint() {
+  const d = isFinite(v.duration) ? v.duration : 0; $("#fill").style.width = d ? (v.currentTime / d * 100) + "%" : "0%"; const b = v.buffered; $("#buf").style.width = d && b.length ? (b.end(b.length - 1) / d * 100) + "%" : "0%";
+  $("#time").textContent = fmt(v.currentTime) + " / " + fmt(d); $("#ppi").setAttribute("d", v.paused ? "M8 5v14l11-7z" : "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"); $("#big").hidden = !v.paused || v.seeking || !v.currentSrc;
+  $("#nextBtn").hidden = !(nextEp && d && (d - v.currentTime < 50 || v.ended));
+}
+["timeupdate", "progress", "play", "pause", "seeking", "seeked", "durationchange", "loadedmetadata"].forEach(n => v.addEventListener(n, paint)); setInterval(paint, 500);
+$("#nextBtn").onclick = () => { if (nextEp) location.href = `player.html?id=${nextEp.Id}&t=0`; };
+const menu = $("#menu"); let menuFor = "";
+function openMenu(kind) {
+  if (menuFor === kind && !menu.hidden) { menu.hidden = true; return; }
+  menuFor = kind; menu.replaceChildren(); const ms = play && play.ms, entry = (label, on, fn) => { const b = document.createElement("button"); b.type = "button"; b.textContent = (on ? "✓  " : "      ") + label; if (on) b.className = "primary"; b.onclick = () => { menu.hidden = true; fn(); }; menu.append(b); };
+  if (kind === "audio") { const a = ((ms && ms.MediaStreams) || []).filter(s => s.Type === "Audio"); if (!a.length) entry("No other sound tracks", false, () => {}); const cur = audioIdx != null ? audioIdx : defaultAudio; a.forEach(s => entry(s.DisplayTitle || s.Language || "Track " + s.Index, s.Index === cur, () => { audioIdx = s.Index; msg("Switching sound track…"); load(v.currentTime).catch(() => {}); })); }
+  else { entry("Off", subIdx < 0, () => { subIdx = -1; addTracks(ms); }); const t = textSubs(ms); if (!t.length) entry("No subtitles for this", false, () => {}); t.forEach(s => entry(s.DisplayTitle || s.Language || "Subtitles " + s.Index, subIdx === s.Index, () => { subIdx = s.Index; JF.store.set("wd.subLang", s.Language || ""); addTracks(ms); })); }
+  menu.hidden = false;
+}
+$("#audioBtn").onclick = () => openMenu("audio"); $("#subBtn").onclick = () => openMenu("sub");
+document.addEventListener("mousemove", () => { $("#bar").classList.remove("hide"); clearTimeout(barTimer); barTimer = setTimeout(() => { if (v.paused === false) $("#bar").classList.add("hide"); menu.hidden = true; }, 3500); }); let barTimer = null;
+
 async function start() {
   if (!id) return msg("No film chosen.");
   if (!session) { location.href = "./"; return; }
   const item = await JF.api(`/Users/${session.userId}/Items/${id}`);
-  if (JF.isHidden(item, await JF.hiddenSet()) && !JF.isAdmin()) { $("#title").textContent = ""; return msg("This title isn't available."); }
+  const pf = await JF.prefs();
+  if ((JF.isHidden(item, pf.hidden) || (pf.hideShows && JF.isShow(item))) && !JF.isAdmin()) { $("#title").textContent = ""; return msg("This title isn't available."); }
   $("#title").textContent = item.Type === "Episode" ? `${item.SeriesName} · S${item.ParentIndexNumber}E${item.IndexNumber} · ${item.Name}` : item.Name; document.title = item.Name;
   if (item.Type === "Episode") $("#back").href = `./?series=${item.SeriesId}&season=${item.SeasonId}`;
   const resume = (item.UserData && item.UserData.PlaybackPositionTicks || 0) / 1e7;
-  await load(q.has("t") ? +q.get("t") : resume);
+  nextEp = await findNext(item).catch(() => null);
+  await load(q.has("t") ? +q.get("t") : resume > 30 ? resume : 0);
   v.addEventListener("play", () => post("", {}), { once: true }); setInterval(() => { if (!v.paused) post("/Progress", { EventName: "timeupdate" }); }, 10000);
   v.addEventListener("pause", () => post("/Progress", { EventName: "pause" })); v.addEventListener("ended", () => post("/Stopped", {}));
   addEventListener("pagehide", () => { const b = JSON.stringify(base()); try { fetch(JF.BASE + "/Sessions/Playing/Stopped", { method: "POST", keepalive: true, headers: { "Authorization": `MediaBrowser Client="WebDisplays Screen", Device="Minecraft screen", DeviceId="${JF.deviceId()}", Version="1.0", Token="${session.token}"`, "Content-Type": "application/json" }, body: b }); } catch {} });
