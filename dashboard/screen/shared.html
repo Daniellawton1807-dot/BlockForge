@@ -19,7 +19,7 @@
   .cur b{position:absolute;left:14px;top:10px;font:11px system-ui;background:#000a;color:#fff;border-radius:6px;padding:1px 5px;white-space:nowrap}
 </style></head><body>
 <div id="bar"><button id="back" title="Back" type="button">←</button><button id="fwd" title="Forward" type="button">→</button><button id="reload" title="Reload" type="button">⟳</button><button id="home" title="Home" type="button">⌂</button>
-  <input id="url" placeholder="Search or type an address" autocomplete="off" spellcheck="false"><span id="who"></span></div>
+  <button id="snd" title="Sound" type="button" hidden>🔇</button><input id="url" placeholder="Search or type an address" autocomplete="off" spellcheck="false"><span id="who"></span></div>
 <div id="stage"><canvas id="c" tabindex="0"></canvas></div><div id="msg">Connecting…</div>
 <script>
 /* A window onto one browser running on the home server. Everyone on the same ?room= sees the same picture and drives the same page.
@@ -27,7 +27,7 @@
 (() => {
   const $ = id => document.getElementById(id), q = new URLSearchParams(location.search), cv = $("c"), g = cv.getContext("2d"), msg = $("msg"), url = $("url");
   const me = (() => { try { let i = localStorage.getItem("wd.sb"); if (!i) localStorage.setItem("wd.sb", i = Math.random().toString(36).slice(2, 10)); return i; } catch { return Math.random().toString(36).slice(2, 10); } })();
-  const host = q.get("host") || (location.protocol === "https:" ? "wss://" : "ws://") + location.host;
+  const host = q.get("host") || (/(^|\.)danielvault\.uk$/.test(location.hostname) ? "wss://minecraft.danielvault.uk/sb" : (location.protocol === "https:" ? "wss://" : "ws://") + location.host);
   let ws, retry = 0, meta = {}, buttons = 0, away;
   const cursors = new Map();
   const send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
@@ -37,7 +37,7 @@
     ws = new WebSocket(host + "/ws?" + p); ws.binaryType = "blob";
     ws.onopen = () => { retry = 0; msg.textContent = "Starting the browser…"; };
     ws.onmessage = async e => {
-      if (typeof e.data !== "string") { try { const bm = await createImageBitmap(e.data); if (cv.width !== bm.width || cv.height !== bm.height) { cv.width = bm.width; cv.height = bm.height; } g.drawImage(bm, 0, 0); bm.close(); msg.hidden = true; } catch {} return; }
+      if (typeof e.data !== "string") { try { const u8 = new Uint8Array(await e.data.arrayBuffer()); if (u8[0] === 1) return audioIn(u8); } catch { return; } try { const bm = await createImageBitmap(e.data); if (cv.width !== bm.width || cv.height !== bm.height) { cv.width = bm.width; cv.height = bm.height; } g.drawImage(bm, 0, 0); bm.close(); msg.hidden = true; } catch {} return; }
       const m = JSON.parse(e.data);
       if (m.t === "meta") { meta = m; if (document.activeElement !== url) url.value = m.url === "about:blank" ? "" : m.url; $("who").textContent = m.n > 1 ? m.n + " watching" : ""; document.title = m.title || "Shared Browser"; }
       else if (m.t === "cur") dot(m);
@@ -46,6 +46,23 @@
     };
     ws.onclose = () => { msg.hidden = false; msg.textContent = "Reconnecting…"; setTimeout(connect, Math.min(8000, 800 * ++retry)); };
   }
+  /* Sound: the server sends 20 ms Opus packets per audio source; decode them here and queue them ~120 ms ahead. */
+  window.__sbStats = { audio: 0 }; const snd = $("snd"); let AC = null, gain = null, on = true; const srcs = new Map();
+  function sound() { if (AC) return AC; if (typeof AudioDecoder === "undefined") return null; AC = new AudioContext(); gain = AC.createGain(); gain.connect(AC.destination); snd.hidden = false; paintSnd(); return AC; }
+  const paintSnd = () => { snd.textContent = on && AC && AC.state === "running" ? "🔊" : "🔇"; };
+  snd.onclick = () => { if (AC && AC.state !== "running") { AC.resume(); on = true; } else on = !on; if (gain) gain.gain.value = on ? 1 : 0; paintSnd(); cv.focus(); };
+  for (const ev of ["pointerdown", "keydown"]) addEventListener(ev, () => { if (AC && AC.state === "suspended" && on) AC.resume().then(paintSnd); }, true);
+  function audioIn(u8) {
+    if (!sound()) return; const id = new DataView(u8.buffer, u8.byteOffset + 1, 4).getUint32(0); let d = srcs.get(id);
+    if (!d) { d = { t: 0 }; d.dec = new AudioDecoder({ output: ad => play(d, ad), error: () => srcs.delete(id) }); d.dec.configure({ codec: "opus", sampleRate: 48000, numberOfChannels: 2 }); srcs.set(id, d); }
+    d.seen = Date.now(); try { d.dec.decode(new EncodedAudioChunk({ type: "key", timestamp: Math.round(performance.now() * 1000), data: u8.subarray(5) })); } catch {}
+  }
+  function play(d, ad) {
+    const n = ad.numberOfFrames, ch = ad.numberOfChannels, buf = AC.createBuffer(ch, n, ad.sampleRate);
+    for (let c = 0; c < ch; c++) { const f = new Float32Array(n); ad.copyTo(f, { planeIndex: c, format: "f32-planar" }); buf.copyToChannel(f, c); } ad.close();
+    window.__sbStats.audio++; const s = AC.createBufferSource(); s.buffer = buf; s.connect(gain); const now = AC.currentTime; if (d.t < now + 0.02 || d.t > now + 0.7) d.t = now + 0.12; s.start(d.t); d.t += buf.duration;
+  }
+  setInterval(() => { for (const [id, d] of srcs) if (Date.now() - d.seen > 10000) { try { d.dec.close(); } catch {} srcs.delete(id); } }, 5000);
   const hue = id => [...id].reduce((a, c) => a + c.charCodeAt(0), 0) * 47 % 360;
   function dot(m) {
     let d = cursors.get(m.id); if (!d) { d = document.createElement("div"); d.className = "cur"; d.style.borderColor = `hsl(${hue(m.id)} 90% 65%)`; const b = document.createElement("b"); b.textContent = m.n || ""; if (!m.n) b.hidden = true; d.append(b); document.body.append(d); cursors.set(m.id, d); clearTimeout(d.t); }
