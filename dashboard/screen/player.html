@@ -8,7 +8,7 @@
 </head>
 <body class="player">
 <video id="v" playsinline></video>
-<div id="top"><a class="btn" id="back" href="./">← Back</a><span class="title" id="title"></span><span style="margin-left:auto;display:flex;gap:10px"><button type="button" id="fix" title="Pause and jump to the same second: re-locks sound and picture">Fix sound</button><button type="button" id="low" title="Ask for a lighter stream if it keeps buffering">Lighter</button><button type="button" id="info">Info</button></span></div>
+<div id="top"><a class="btn" id="back" href="./">← Back</a><a class="btn" id="sbhome" href="#" hidden>⌂ Home</a><span class="title" id="title"></span><span style="margin-left:auto;display:flex;gap:10px"><button type="button" id="fix" title="Pause and jump to the same second: re-locks sound and picture">Fix sound</button><button type="button" id="low" title="Ask for a lighter stream if it keeps buffering">Lighter</button><button type="button" id="info">Info</button></span></div>
 <div id="big" hidden><svg viewBox="0 0 24 24" width="84" height="84"><path d="M8 5v14l11-7z" fill="#fff"/></svg></div>
 <div id="msg">Loading…</div>
 <div id="bar">
@@ -27,6 +27,7 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="jf.js?v=2"></script>
+<script>try { const h = localStorage.getItem("wd.sbhome"); if (h) { document.head.insertAdjacentHTML("beforeend", "<style>#__wdbar{display:none!important}</style>"); addEventListener("DOMContentLoaded", () => { const a = document.getElementById("sbhome"); a.href = h; a.hidden = false; }); } } catch {}</script>
 <script>
 /* The address is only ?id=<film or episode>, so the screen's sync opens the same one for everyone and keeps the
    <video> at the same second, paused or playing, for all of them. Playback always starts from 0 (the resume point is
