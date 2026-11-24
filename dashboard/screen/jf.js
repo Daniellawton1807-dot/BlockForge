@@ -42,5 +42,30 @@ const JF = (() => {
       SubtitleProfiles: [{ Format: "vtt", Method: "External" }] };
   }
   const ticksToMin = t => Math.round((t || 0) / 600000000);
-  return { BASE, api, login, logout, session, img, can, deviceProfile, store, deviceId, ticksToMin };
+  /* Titles hidden from the Screen Player. They live in this account's own Jellyfin settings (display preferences, client "screenplayer"),
+     so everyone signed in as the account, on any PC, sees the same list. */
+  const prefPath = () => { const s = session(); return `/DisplayPreferences/screenplayer?userId=${s.userId}&client=screenplayer`; };
+  let hiddenCache = null;
+  async function hiddenSet(force) {
+    if (!hiddenCache || force) { hiddenCache = (async () => { try { const d = await api(prefPath()); return new Set(String((d.CustomPrefs || {}).hidden || "").split(",").filter(Boolean)); } catch (e) { if (e.code === 401) throw e; return new Set(); } })(); }
+    return hiddenCache;
+  }
+  async function hiddenSave(set) {
+    const d = await api(prefPath()); d.CustomPrefs = { ...(d.CustomPrefs || {}), hidden: [...set].join(",") }; d.Id = d.Id || "screenplayer"; d.Client = "screenplayer";
+    await api(prefPath(), { method: "POST", body: JSON.stringify(d) }); hiddenCache = Promise.resolve(new Set(set));
+  }
+  const isHidden = (item, hidden) => !!item && (hidden.has(item.Id) || (item.SeriesId && hidden.has(item.SeriesId)));
+  /* Admin: the account's password again. Unlocked for 10 minutes in this browser tab only. */
+  const adminUntil = () => +(sessionStorage.getItem("wd.admin") || 0);
+  const isAdmin = () => { try { return adminUntil() > Date.now(); } catch { return false; } };
+  async function adminUnlock(pw) {
+    const s = session(); const r = await fetch(BASE + "/Users/AuthenticateByName", { method: "POST", headers: { "Authorization": header(), "Content-Type": "application/json" }, body: JSON.stringify({ Username: s.name, Pw: pw }) });
+    if (r.status === 401 || r.status === 400) throw new Error("That isn't the password for " + s.name + ".");
+    if (!r.ok) throw new Error("Jellyfin answered " + r.status);
+    try { sessionStorage.setItem("wd.admin", String(Date.now() + 10 * 60000)); } catch {}
+  }
+  const adminLock = () => { try { sessionStorage.removeItem("wd.admin"); } catch {} };
+  /* On a shared in-world screen everything typed is sent to everyone at it. The screen's page script (__wdLive) is how we tell. */
+  const onSharedScreen = () => !!window.__wdLive;
+  return { BASE, api, login, logout, session, img, can, deviceProfile, store, deviceId, ticksToMin, hiddenSet, hiddenSave, isHidden, isAdmin, adminUnlock, adminLock, onSharedScreen };
 })();

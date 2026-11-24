@@ -11,7 +11,7 @@
   <span class="brand">SCREEN PLAYER</span>
   <nav id="nav"></nav>
   <form class="search" method="get" action="./"><input type="text" name="q" placeholder="Search shows and films" autocomplete="off"><button class="primary" type="submit">Search</button></form>
-  <span class="note" id="who"></span> <button id="out" type="button">Sign out</button>
+  <span class="note" id="who"></span> <a class="btn" id="adm" href="?admin=1" title="Hide titles from this account's Screen Player">Admin</a> <button id="out" type="button">Sign out</button>
 </header>
 <main id="main"></main>
 <script src="jf.js?v=1"></script>
@@ -28,7 +28,10 @@ function loginBox(msg) {
   const u = el("input"), p = el("input"); u.type = "text"; p.type = "password"; u.name = "u"; p.name = "p"; u.autocomplete = "username";
   box.append(el("label", null, "Name"), u, el("label", null, "Password"), p);
   const err = el("div", "err", msg || ""), go = el("button", "primary", "Sign in"); go.type = "submit"; go.style.marginTop = "18px"; box.append(go, err);
-  box.onsubmit = async e => { e.preventDefault(); err.textContent = "Signing in…"; try { await JF.login(u.value.trim(), p.value); location.reload(); } catch (x) { err.textContent = x.message; } };
+  const warn = el("div", "note", ""); warn.style.cssText = "margin-top:16px;padding:12px 14px;border-radius:12px;background:#3a2a10;color:#ffd9a0"; warn.hidden = true;
+  warn.textContent = "Careful: this is a shared screen, so everything you type here is sent to everyone at it. Sign in on your MinePad (it's private) instead. The login is shared with the screens on this PC.";
+  box.append(warn); const check = () => { warn.hidden = !JF.onSharedScreen(); }; check(); setTimeout(check, 2500);
+  box.onsubmit = async e => { e.preventDefault(); if (JF.onSharedScreen() && !box.dataset.ok) { box.dataset.ok = "1"; err.textContent = "Press Sign in again if you really want to type your password on this shared screen."; return; } err.textContent = "Signing in…"; try { await JF.login(u.value.trim(), p.value); location.reload(); } catch (x) { err.textContent = x.message; } };
   main.append(box); u.focus();
 }
 const tile = (item, href, wide) => {
@@ -45,7 +48,10 @@ async function page() {
   const s = JF.session(); if (!s) return loginBox();
   $("#head").hidden = false; $("#who").textContent = s.name; $("#out").onclick = () => { JF.logout(); location.href = "./"; };
   const view = q.get("view"), term = q.get("q"), series = q.get("series"), page = +q.get("page") || 0, uid = s.userId, F = "&Fields=ProductionYear&EnableUserData=true";
+  const hidden = await JF.hiddenSet(), EX = hidden.size ? "&ExcludeItemIds=" + [...hidden].slice(0, 120).join(",") : "", vis = a => (a || []).filter(i => !JF.isHidden(i, hidden));
+  if (q.has("admin")) return adminPage(uid, hidden, F);
   const nav = $("#nav"); nav.replaceChildren(); [["Home", "./", !view && !term && !series], ["Shows", "?view=shows", view === "shows"], ["Films", "?view=films", view === "films"]].forEach(([l, h, on]) => nav.append(link(h, l, on ? "on" : "")));
+  if (series && hidden.has(series) && !JF.isAdmin()) { main.append(el("div", "box", "This title isn't available.")); return; }
   if (series) {
     const show = await JF.api(`/Users/${uid}/Items/${series}`), seasons = (await JF.api(`/Shows/${series}/Seasons?UserId=${uid}`)).Items, season = q.get("season") || (seasons[0] && seasons[0].Id);
     main.append(el("h2", null, show.Name)); if (show.Overview) main.append(el("p", "note", show.Overview.slice(0, 400)));
@@ -55,15 +61,49 @@ async function page() {
         const d = el("div"); d.append(el("div", null, e.Name), el("div", "d", [JF.ticksToMin(e.RunTimeTicks) + " min", pct].filter(Boolean).join(" · "))); r.append(el("div", "n", e.IndexNumber != null ? e.IndexNumber : "·"), d); main.append(r); }); }
     return;
   }
-  if (term) { const r = await JF.api(`/Users/${uid}/Items?searchTerm=${encodeURIComponent(term)}&IncludeItemTypes=Series,Movie&Recursive=true&Limit=60${F}`); main.append(el("h2", null, `Results for “${term}”`)); if (!r.Items.length) main.append(el("p", "note", "Nothing found.")); section("", r.Items); return; }
+  if (term) { const r = await JF.api(`/Users/${uid}/Items?searchTerm=${encodeURIComponent(term)}&IncludeItemTypes=Series,Movie&Recursive=true&Limit=60${F}${EX}`); main.append(el("h2", null, `Results for “${term}”`)); if (!r.Items.length) main.append(el("p", "note", "Nothing found.")); section("", r.Items); return; }
   if (view === "shows" || view === "films") {
-    const r = await JF.api(`/Users/${uid}/Items?IncludeItemTypes=${view === "shows" ? "Series" : "Movie"}&Recursive=true&SortBy=SortName&Limit=${PER}&StartIndex=${page * PER}${F}`);
+    const r = await JF.api(`/Users/${uid}/Items?IncludeItemTypes=${view === "shows" ? "Series" : "Movie"}&Recursive=true&SortBy=SortName&Limit=${PER}&StartIndex=${page * PER}${F}${EX}`);
     section(view === "shows" ? "All shows" : "All films", r.Items); const pg = el("div", "pages"); if (page > 0) pg.append(link(`?view=${view}&page=${page - 1}`, "← Back", "btn")); if ((page + 1) * PER < r.TotalRecordCount) pg.append(link(`?view=${view}&page=${page + 1}`, "More →", "btn")); main.append(pg); return;
   }
   const [resume, next, latest] = await Promise.all([JF.api(`/Users/${uid}/Items/Resume?Limit=12&MediaTypes=Video${F}`), JF.api(`/Shows/NextUp?UserId=${uid}&Limit=12${F}`), JF.api(`/Users/${uid}/Items/Latest?Limit=18&IncludeItemTypes=Series,Movie${F}`)]);
   const seen = new Set(); const uniq = a => a.filter(i => { const k = i.SeriesId || i.Id; if (seen.has(k)) return false; seen.add(k); return true; });
-  section("Continue watching", uniq(resume.Items || []), true); section("Next episode", uniq(next.Items || []), true); section("Recently added", latest || []);
+  section("Continue watching", uniq(vis(resume.Items)), true); section("Next episode", uniq(vis(next.Items)), true); section("Recently added", vis(latest));
   const c = JF.can(); main.append(el("div", "codecs", "This screen's browser can play: " + [c.h264 && "H.264", c.hevc && "HEVC", c.vp9 && "VP9", c.av1 && "AV1", c.aac && "AAC", c.mp3 && "MP3", c.opus && "Opus"].filter(Boolean).join(", ")));
+}
+
+/* Admin: hide titles from everyone who uses this account in the Screen Player. Needs the account's password again. */
+async function adminPage(uid, hidden, F) {
+  $("#nav").replaceChildren(link("./", "← Back", ""));
+  main.append(el("h2", null, "Admin"));
+  const gate = () => {
+    const box = el("form", "box"); box.style.margin = "6vh auto"; box.append(el("h1", null, "Admin"), el("div", "note", "Type this account's password again to hide titles. It unlocks for 10 minutes, in this tab only."));
+    const p = el("input"); p.type = "password"; p.autocomplete = "current-password"; box.append(el("label", null, "Password"), p);
+    const err = el("div", "err", ""), go = el("button", "primary", "Unlock"); go.type = "submit"; go.style.marginTop = "18px"; box.append(go, err);
+    const warn = el("div", "note", "Careful: this is a shared screen, so everything you type is sent to everyone at it. Open this on your MinePad or a normal browser instead."); warn.style.cssText = "margin-top:16px;padding:12px 14px;border-radius:12px;background:#3a2a10;color:#ffd9a0"; warn.hidden = true; box.append(warn);
+    const check = () => { warn.hidden = !JF.onSharedScreen(); go.disabled = JF.onSharedScreen(); p.disabled = JF.onSharedScreen(); }; check(); setTimeout(check, 2500);
+    box.onsubmit = async e => { e.preventDefault(); if (JF.onSharedScreen()) return; err.textContent = "Checking…"; try { await JF.adminUnlock(p.value); location.reload(); } catch (x) { err.textContent = x.message; } };
+    main.append(box);
+  };
+  if (!JF.isAdmin()) return gate();
+  const lock = el("button", null, "Lock admin"); lock.type = "button"; lock.onclick = () => { JF.adminLock(); location.reload(); }; main.append(lock);
+  main.append(el("p", "note", "Hidden titles disappear from the Screen Player for everyone signed in as this account, on every PC. They're still in Jellyfin itself."));
+  const save = async next => { await JF.hiddenSave(next); location.reload(); };
+  main.append(el("h2", null, "Hidden now"));
+  if (hidden.size) {
+    const r = await JF.api(`/Users/${uid}/Items?Ids=${[...hidden].join(",")}&Fields=ProductionYear`); const g = el("div", "grid");
+    for (const it of r.Items || []) { const t = tile(it, "#", false); t.removeAttribute("href"); const b = el("button", "primary", "Unhide"); b.type = "button"; b.style.cssText = "margin:0 12px 12px"; b.onclick = () => save(new Set([...hidden].filter(x => x !== it.Id))); t.append(b); g.append(t); }
+    main.append(g); const known = new Set((r.Items || []).map(i => i.Id)); const gone = [...hidden].filter(x => !known.has(x)); if (gone.length) { const b = el("button", null, `Forget ${gone.length} title(s) no longer in the library`); b.type = "button"; b.onclick = () => save(new Set([...hidden].filter(x => known.has(x)))); main.append(b); }
+  } else main.append(el("p", "note", "Nothing is hidden."));
+  main.append(el("h2", null, "Find a title to hide"));
+  const f = el("form"); f.style.cssText = "display:flex;gap:10px;margin-bottom:20px"; const si = el("input"); si.type = "text"; si.placeholder = "Search shows and films"; si.value = q.get("find") || ""; si.name = "find"; const hid = el("input"); hid.type = "hidden"; hid.name = "admin"; hid.value = "1";
+  const sb = el("button", "primary", "Search"); sb.type = "submit"; f.append(si, hid, sb); main.append(f);
+  const term = q.get("find");
+  if (term) {
+    const r = await JF.api(`/Users/${uid}/Items?searchTerm=${encodeURIComponent(term)}&IncludeItemTypes=Series,Movie&Recursive=true&Limit=40${F}`); const g = el("div", "grid");
+    for (const it of r.Items || []) { const t = tile(it, "#", false); t.removeAttribute("href"); const on = hidden.has(it.Id), b = el("button", on ? null : "primary", on ? "Unhide" : "Hide"); b.type = "button"; b.style.cssText = "margin:0 12px 12px"; b.onclick = () => save(on ? new Set([...hidden].filter(x => x !== it.Id)) : new Set([...hidden, it.Id])); t.append(b); g.append(t); }
+    if (!(r.Items || []).length) main.append(el("p", "note", "Nothing found.")); main.append(g);
+  }
 }
 page().catch(e => { if (e.code === 401) loginBox(e.message); else { $("#head").hidden = true; main.replaceChildren(el("div", "box", "Couldn't reach Jellyfin: " + e.message)); } });
 </script>

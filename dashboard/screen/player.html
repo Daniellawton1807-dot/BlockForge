@@ -72,6 +72,7 @@ async function start() {
   if (!id) return msg("No film chosen.");
   if (!session) { location.href = "./"; return; }
   const item = await JF.api(`/Users/${session.userId}/Items/${id}`);
+  if (JF.isHidden(item, await JF.hiddenSet()) && !JF.isAdmin()) { $("#title").textContent = ""; return msg("This title isn't available."); }
   $("#title").textContent = item.Type === "Episode" ? `${item.SeriesName} · S${item.ParentIndexNumber}E${item.IndexNumber} · ${item.Name}` : item.Name; document.title = item.Name;
   if (item.Type === "Episode") $("#back").href = `./?series=${item.SeriesId}&season=${item.SeasonId}`;
   const resume = (item.UserData && item.UserData.PlaybackPositionTicks || 0) / 1e7;
