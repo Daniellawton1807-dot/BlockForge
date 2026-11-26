@@ -12,7 +12,7 @@ const ALLOWED_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 const SAFE_PATHS = Object.freeze({
   arr: new RegExp("^api/v3/[A-Za-z0-9_./?=&%:+-]+$"),
   // tvbot's remote endpoints, the plain-English command endpoint and its poster proxy
-  tvbot: new RegExp("^(api/(status|foryou|locate|playhere|key|type|seek|watchdata|sessions|feedback|discover|library|mumfilms|sharefilm|minecraft|librarycheck)|cmd|img/[A-Za-z0-9]{1,64})(\\?[A-Za-z0-9_.=&%:+-]*)?$")
+  tvbot: new RegExp("^(api/(status|foryou|locate|playhere|key|type|seek|watchdata|sessions|feedback|discover|library|mumfilms|sharefilm|minecraft|minecraft/(?:mods|mod|modzip)|librarycheck)|cmd|img/[A-Za-z0-9]{1,64})(\\?[A-Za-z0-9_.=&%:+-]*)?$")
 });
 const AUTH_HEADERS = Object.freeze({ arr: "x-api-key", tvbot: "x-tv-token" });
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -205,6 +205,10 @@ export default {
     const upstreamType = upstream.headers.get("content-type");
     if (upstreamType) responseHeaders.set("content-type", upstreamType);
     if (service.kind === "tvbot" && path.startsWith("img/")) responseHeaders.set("cache-control", "private, max-age=86400");
+    if (service.kind === "tvbot" && /^api\/minecraft\/(mod|modzip)$/.test(path)) {
+      // Minecraft mod downloads: keep the file name and size so the browser saves it properly
+      for (const h of ["content-disposition", "content-length"]) { const v = upstream.headers.get(h); if (v) responseHeaders.set(h, v); }
+    }
     return new Response(upstream.status === 204 ? null : upstream.body, {
       status: upstream.status,
       headers: responseHeaders

@@ -4,7 +4,7 @@ import { json, loginConfigured, readJsonBody, validRequestOrigin, validSession }
 // the protected TVBOT_TOKEN Pages secret; the browser only ever sees this same-origin route.
 const ARR_BRIDGE_BINDING = "ARR_BRIDGE";
 const ROUTES = {
-  GET: new Set(["api/status", "api/foryou", "api/locate", "api/minecraft", "api/sessions", "api/feedback", "api/librarycheck", "api/library", "api/discover", "img"]),
+  GET: new Set(["api/status", "api/foryou", "api/locate", "api/minecraft", "api/minecraft/mods", "api/minecraft/mod", "api/minecraft/modzip", "api/sessions", "api/feedback", "api/librarycheck", "api/library", "api/discover", "img"]),
   POST: new Set(["api/key", "api/type", "api/seek", "api/playhere", "api/minecraft", "api/feedback", "cmd"])
 };
 
@@ -35,6 +35,9 @@ export async function onRequest({ request, env, params }) {
   }
 
   const query = new URL(request.url).search;
+  // Minecraft mod files (jar or zip, up to a few hundred MB) are streamed straight through, never read here
+  const fileRoute = route === "api/minecraft/mod" || route === "api/minecraft/modzip";
+  if (fileRoute && !/^\?(id=[a-f0-9]{12}|ids=[a-f0-9]{12}(\.[a-f0-9]{12}){0,499}|all=1)$/.test(query)) return json({ code: "invalid_request", error: "Pick a mod to download." }, 400);
   let response;
   try {
     response = await bridge.fetch(new Request("https://homebase-arr-bridge/" + path + query, {
@@ -42,7 +45,7 @@ export async function onRequest({ request, env, params }) {
       headers: {
         "x-homebase-service": "tvbot",
         "x-tv-token": token,
-        "accept": route === "img" ? "image/*" : "application/json",
+        "accept": route === "img" ? "image/*" : fileRoute ? "*/*" : "application/json",
         ...(body ? { "content-type": "application/json" } : {})
       },
       body
@@ -53,6 +56,11 @@ export async function onRequest({ request, env, params }) {
   if (response.status === 401) return json({ code: "tv_auth_failed", error: "tvbot rejected Homebase's token. Check the TVBOT_TOKEN secret." }, 502);
 
   const headers = new Headers({ "cache-control": route === "img" ? "private, max-age=86400" : "no-store", "x-content-type-options": "nosniff" });
+  if (fileRoute && response.ok && /^application\/(java-archive|zip)$/i.test(response.headers.get("content-type") || "")) {
+    headers.set("content-type", response.headers.get("content-type"));
+    for (const h of ["content-disposition", "content-length"]) { const v = response.headers.get(h); if (v) headers.set(h, v); }
+    return new Response(response.body, { status: 200, headers });
+  }
   const type = response.headers.get("content-type") || "";
   const bodyPreview = route === "img" ? "" : await response.clone().text().catch(() => "");
   const htmlResponse = route !== "img" && (/text\/html/i.test(type) || /^\s*(?:<!doctype\s+html|<html\b)/i.test(bodyPreview));

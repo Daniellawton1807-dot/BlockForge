@@ -83,14 +83,84 @@
     $("mcCmd").disabled = !s.running;
   }
 
+
+  // ---- Mods: newest first, "new since your last download on this device", one-click jar or zip ----
+  const SYNC_KEY = "homebase.mcModsSynced";
+  let mods = null, showAll = false;
+  const mb = b => b >= 1048576 ? (b / 1048576).toFixed(b >= 104857600 ? 0 : 1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
+  function ago(t) {
+    const s = Date.now() / 1000 - t, d = Math.floor(s / 86400);
+    if (s < 3600) return Math.max(1, Math.round(s / 60)) + " min ago";
+    if (s < 86400) return Math.round(s / 3600) + " h ago";
+    if (d < 2) return "yesterday";
+    if (d < 30) return d + " days ago";
+    return new Date(t * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  }
+  function synced() { try { return Number(localStorage.getItem(SYNC_KEY)) || 0; } catch { return 0; } }
+  function markSynced() { try { localStorage.setItem(SYNC_KEY, String(Math.floor(Date.now() / 1000))); } catch {} setTimeout(drawMods, 300); }
+  const fileUrl = q => "/api/tv/api/minecraft/" + q;
+  function link(label, cls, href, iconName, after) {
+    const a = el("a", "hub-btn " + (cls || "")); a.href = href; a.setAttribute("download", "");
+    if (iconName) a.append(icon(iconName)); if (label) a.append(el("span", null, label));
+    if (after) a.addEventListener("click", after); return a;
+  }
+  const pretty = n => n.replace(/\.jar$/i, "");
+
+  async function loadMods() {
+    const r = await api("/api/tv/api/minecraft/mods");
+    if (!r.ok) { $("mcModBar").replaceChildren(el("div", "txt", errorText(r, "Couldn't read the server's mods."))); return; }
+    mods = r.data; drawMods();
+  }
+  function drawMods() {
+    if (!mods) return;
+    const since = synced(), base = since || Date.now() / 1000 - 7 * 86400;
+    const fresh = mods.mods.filter(m => m.added > base);
+    const gone = mods.removed.filter(r => r.at > base);
+    $("mcModCount").textContent = `${mods.count} mods · ${mb(mods.size)}`;
+
+    const txt = el("div", "txt");
+    txt.append(el("b", null, fresh.length ? `${fresh.length} new mod${fresh.length > 1 ? "s" : ""} ${since ? "since your last download" : "this week"}` : since ? "You're up to date" : "No new mods this week"),
+      el("small", null, since ? "Last downloaded on this device " + ago(since) + ". Downloading below marks you up to date." : "First visit on this device: showing mods added in the last 7 days."));
+    const bar = $("mcModBar"); bar.replaceChildren(txt);
+    if (fresh.length) bar.append(link(fresh.length > 1 ? `Download ${fresh.length} new (.zip)` : "Download the new mod", "primary", fresh.length > 1 ? fileUrl("modzip?ids=" + fresh.map(m => m.id).join(".")) : fileUrl("mod?id=" + fresh[0].id), "download", markSynced));
+    bar.append(link(`All mods (${mb(mods.size)})`, "", fileUrl("modzip?all=1"), "download", markSynced));
+    if (since && !fresh.length) { const b = el("button", "hub-btn"); b.type = "button"; b.textContent = "Reset"; b.title = "Forget the last download on this device"; b.onclick = () => { try { localStorage.removeItem(SYNC_KEY); } catch {} drawMods(); }; bar.append(b); }
+
+    const rm = $("mcRemoved"); rm.hidden = !gone.length; rm.replaceChildren();
+    if (gone.length) {
+      const ul = el("ul"); for (const g of gone) ul.append(el("li", null, `${g.name} (removed ${ago(g.at)})`));
+      rm.append(el("b", null, `Taken off the server: delete ${gone.length > 1 ? "these" : "this"} from your mods folder`), ul);
+    }
+
+    const q = $("mcModSearch").value.trim().toLowerCase();
+    const list = q ? mods.mods.filter(m => m.name.toLowerCase().includes(q)) : mods.mods;
+    const shown = q || showAll ? list : list.slice(0, 10);
+    const ul = $("mcModList"); ul.replaceChildren();
+    for (const m of shown) {
+      const li = el("li", "mc-mod"), info = el("div", "info"), nm = el("div", "nm"), meta = el("div", "meta");
+      if (m.added > base) nm.append(el("span", "tag", "NEW"));
+      nm.append(document.createTextNode(pretty(m.name))); nm.title = m.name;
+      meta.textContent = `Added ${ago(m.added)} · ${mb(m.size)}`;
+      info.append(nm, meta);
+      const a = link("", "", fileUrl("mod?id=" + m.id), "download"); a.setAttribute("aria-label", "Download " + m.name); a.title = "Download";
+      li.append(info, a); ul.append(li);
+    }
+    if (!shown.length) ul.append(el("li", "mc-mod", q ? "No mods match that." : "No mods on the server."));
+    const more = $("mcModMore"); more.hidden = !!q || list.length <= 10;
+    more.textContent = showAll ? "Show fewer" : `Show all ${list.length}`;
+  }
+  $("mcModMore").onclick = () => { showAll = !showAll; drawMods(); };
+  $("mcModSearch").addEventListener("input", drawMods);
+
   $("mcCmdForm").addEventListener("submit", async e => {
     e.preventDefault(); const cmd = $("mcCmd").value.trim(); if (!cmd) return;
     if (await act("command", { command: cmd })) $("mcCmd").value = "";
   });
 
   gate({ message: "Sign in to manage the Minecraft server.", onReady() {
-    refresh(); clearInterval(poll);
+    refresh(); loadMods(); clearInterval(poll);
     poll = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
   } });
   setInterval(() => { if (state?.running) draw(); }, 60000);  // keep the uptime ticking
+  setInterval(() => { if (!document.hidden && mods) loadMods(); }, 300000);  // pick up newly added mods
 })();

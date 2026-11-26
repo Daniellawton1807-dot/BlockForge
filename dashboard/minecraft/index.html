@@ -33,6 +33,19 @@
   .mc-cmd { display: flex; gap: 8px; margin-top: 10px; }
   .mc-cmd input { flex: 1; min-width: 0; height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--hub-soft); color: var(--text); font: 13.5px ui-monospace, Menlo, monospace; outline: 0; }
   .mc-cmd input:focus { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+  .mc-modbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 14px 16px; border-radius: 14px; background: var(--hub-soft); border: 1px solid var(--line); }
+  .mc-modbar .txt { flex: 1 1 240px; min-width: 0; } .mc-modbar b { display: block; font-size: 15px; } .mc-modbar small { color: var(--muted); font-size: 12.5px; }
+  .mc-removed { margin-top: 10px; padding: 12px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--hub-amber) 45%, var(--line)); background: color-mix(in srgb, var(--hub-amber) 9%, transparent); font-size: 13.5px; }
+  .mc-removed ul { margin: 6px 0 0; padding-left: 18px; } .mc-removed li { word-break: break-all; }
+  .mc-mods { list-style: none; margin: 12px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .mc-mod { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px; border-top: 1px solid var(--line); }
+  .mc-mod:first-child { border-top: 0; }
+  .mc-mod .info { flex: 1; min-width: 0; } .mc-mod .nm { font-weight: 650; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mc-mod .meta { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .mc-mod .tag { display: inline-block; margin-right: 6px; padding: 1px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 800; color: #fff; background: var(--hub-grad); vertical-align: 1px; }
+  .mc-mod a.hub-btn { flex: none; width: 42px; padding: 0; justify-content: center; }
+  .mc-modtools { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .mc-modtools input { flex: 1 1 200px; min-width: 0; height: 40px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--hub-soft); color: var(--text); font: inherit; outline: 0; }
   @media (max-width: 680px) { .mc-actions .hub-btn { flex: 1 1 45%; } .mc-log { height: 220px; } }
 </style>
 </head>
@@ -88,6 +101,15 @@
       <div id="mcPlayers"></div>
     </section>
 
+    <section class="hub-section" id="mcModsSection">
+      <div class="hub-section-head"><div><div class="kicker">MODS</div><h3>Mods on the server</h3></div><span class="aside" id="mcModCount"></span></div>
+      <div id="mcModBar" class="mc-modbar"><div class="txt"><b>Loading the mods…</b></div></div>
+      <div id="mcRemoved" class="mc-removed" hidden></div>
+      <div class="mc-modtools"><input id="mcModSearch" type="search" placeholder="Search mods" aria-label="Search mods" autocomplete="off"></div>
+      <ul class="mc-mods" id="mcModList"></ul>
+      <div class="mc-modtools"><button class="hub-btn" id="mcModMore" type="button" hidden></button></div>
+    </section>
+
     <section class="hub-section">
       <div class="hub-section-head"><div><div class="kicker">CONSOLE</div><h3>Server log</h3></div><span class="aside">Updates every few seconds</span></div>
       <pre class="mc-log" id="mcLog" aria-live="off"></pre>
@@ -98,6 +120,6 @@
 </main>
 </div>
 <script src="../hub.js?v=homebase-push-1"></script>
-<script src="../minecraft.js?v=homebase-mc-1"></script>
+<script src="../minecraft.js?v=homebase-mc-mods-1"></script>
 </body>
 </html>
