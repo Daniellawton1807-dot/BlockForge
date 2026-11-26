@@ -46,7 +46,17 @@ async function load(startAt) {
   v.removeAttribute("src"); v.load(); msg("Loading…");
   const switched = audioIdx != null && defaultAudio != null && audioIdx !== defaultAudio;   // another sound track: Jellyfin has to convert it for us
   info = await JF.api(`/Items/${id}/PlaybackInfo?UserId=${session.userId}&MaxStreamingBitrate=${bitrate}&AutoOpenLiveStream=true${audioIdx != null ? "&AudioStreamIndex=" + audioIdx : ""}${switched ? "&enableDirectPlay=false&enableDirectStream=false" : ""}`, { method: "POST", body: JSON.stringify({ DeviceProfile: JF.deviceProfile(bitrate) }) });
-  const ms = (info.MediaSources || [])[0]; if (!ms) return msg("Jellyfin has nothing to play for this.");
+  // A film can have several versions (e.g. "1080p" and "WEBDL 4K"). Jellyfin lists the one this account watched
+  // last first, which may be the 4K: decoding that on the server is what made the screens buffer. Prefer a version
+  // this browser plays as it is, then a 1080p-or-smaller H.264 one, and ask for that version explicitly.
+  const srcs = info.MediaSources || [], vid = m => (m.MediaStreams || []).find(x => x.Type === "Video") || {};
+  const pick = srcs.find(m => m.SupportsDirectPlay || m.SupportsDirectStream)
+    || srcs.find(m => (vid(m).Height || 0) <= 1080 && /^(h264|avc)$/i.test(vid(m).Codec || ""))
+    || srcs.find(m => (vid(m).Height || 0) <= 1080) || srcs[0];
+  if (pick && srcs.length > 1 && pick !== srcs[0]) {
+    info = await JF.api(`/Items/${id}/PlaybackInfo?UserId=${session.userId}&MaxStreamingBitrate=${bitrate}&AutoOpenLiveStream=true&MediaSourceId=${pick.Id}${audioIdx != null ? "&AudioStreamIndex=" + audioIdx : ""}${switched ? "&enableDirectPlay=false&enableDirectStream=false" : ""}`, { method: "POST", body: JSON.stringify({ DeviceProfile: JF.deviceProfile(bitrate) }) });
+  }
+  const ms = (info.MediaSources || []).find(m => pick && m.Id === pick.Id) || (info.MediaSources || [])[0]; if (!ms) return msg("Jellyfin has nothing to play for this.");
   const key = `api_key=${encodeURIComponent(session.token)}`; let url, isHls = false;
   if (ms.SupportsDirectPlay || ms.SupportsDirectStream) url = `${JF.BASE}/Videos/${id}/stream?static=true&MediaSourceId=${ms.Id}&Tag=${encodeURIComponent(ms.ETag || "")}&DeviceId=${JF.deviceId()}&PlaySessionId=${info.PlaySessionId}&${key}`;
   else if (ms.TranscodingUrl) { url = JF.BASE + ms.TranscodingUrl; if (!/api_key=/i.test(url)) url += (url.includes("?") ? "&" : "?") + key; isHls = /\.m3u8/i.test(url); }
