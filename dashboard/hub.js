@@ -142,7 +142,9 @@ window.Hub = (() => {
   const errorText = (result, fallback) => result.data?.error || result.data?.reply || result.data?.text || fallback;
 
   // sign-in panel: <section id="hubGate"> with the same form fields as the rest of Homebase
-  function gate({ onReady, message = "Sign in to continue." }) {
+  // `urls` lets a page use its own sign-in (the Minecraft page also takes Minecraft-only friends: /api/mc/*); onReady gets the session answer
+  function gate({ onReady, message = "Sign in to continue.", urls = {} }) {
+    const U = { login: "/api/downloads/login", logout: "/api/downloads/logout", session: "/api/downloads/session", ...urls };
     const panel = $("hubGate"), form = $("hubLoginForm"), note = $("hubGateMessage"), content = $("hubContent");
     const show = text => { panel.hidden = false; content.hidden = true; if (signOut) signOut.hidden = true; note.textContent = text || message; };
     const hide = () => { panel.hidden = true; content.hidden = false; if (signOut) signOut.hidden = false; };
@@ -150,15 +152,15 @@ window.Hub = (() => {
     form.addEventListener("submit", async event => {
       event.preventDefault();
       const button = form.querySelector('button[type="submit"]'); button.disabled = true; note.textContent = "Signing in…";
-      const result = await api("/api/downloads/login", { method: "POST", body: { username: $("hubUsername").value, password: $("hubPassword").value, remember: $("hubRemember").checked } });
+      const result = await api(U.login, { method: "POST", body: { username: $("hubUsername").value, password: $("hubPassword").value, remember: $("hubRemember").checked } });
       button.disabled = false;
       if (!result.ok) { note.textContent = result.status === 401 ? "Username or password is incorrect." : errorText(result, "Could not sign in. Try again."); return; }
-      $("hubPassword").value = ""; hide(); onReady();
+      $("hubPassword").value = ""; hide(); onReady(result.data || {});
     });
-    signOut?.addEventListener("click", async () => { await api("/api/downloads/logout", { method: "POST" }); show("Signed out."); });
-    api("/api/downloads/session").then(result => {
+    signOut?.addEventListener("click", async () => { await api(U.logout, { method: "POST" }); show("Signed out."); });
+    api(U.session).then(result => {
       if (result.status === 503) show("The Homebase sign-in is not configured in Cloudflare Pages yet.");
-      else if (result.data?.authenticated) { hide(); onReady(); }
+      else if (result.data?.authenticated) { hide(); onReady(result.data); }
       else show(message);
     });
   }

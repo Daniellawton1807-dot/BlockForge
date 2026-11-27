@@ -24,6 +24,25 @@ function json(body, status, extraHeaders = {}) {
   });
 }
 
+// Minecraft-only sign-ins (Daniel's friends, for Homebase's Minecraft page): the names and passwords live only in this Worker's
+// secret MC_LOGINS (JSON [{"user":"…","pass":"…"}]), never in the public repo. Wrong guesses are limited per address in KV.
+const MC_FAIL_LIMIT = 8, MC_FAIL_WINDOW = 900;
+async function mcLogin(request, env) {
+  if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
+  let body; try { body = await request.json(); } catch { return json({ error: "Bad request." }, 400); }
+  const ip = String(body?.ip || "unknown").slice(0, 64), key = "mcfail:" + ip;
+  const fails = env.AUTOPILOT ? Number(await env.AUTOPILOT.get(key)) || 0 : 0;
+  if (fails >= MC_FAIL_LIMIT) return json({ ok: false, limited: true }, 429);
+  let logins = []; try { logins = JSON.parse(env.MC_LOGINS || "[]"); } catch {}
+  const same = (a, b) => { const x = new TextEncoder().encode(String(a)), y = new TextEncoder().encode(String(b)); let d = x.length ^ y.length; for (let i = 0; i < Math.max(x.length, y.length); i++) d |= (x[i] || 0) ^ (y[i] || 0); return d === 0; };
+  const hit = logins.find(l => same(l.user, body?.username || "") & same(l.pass, body?.password || ""));
+  if (!hit) {
+    if (env.AUTOPILOT) await env.AUTOPILOT.put(key, String(fails + 1), { expirationTtl: MC_FAIL_WINDOW });
+    return json({ ok: false }, 401);
+  }
+  return json({ ok: true, user: String(hit.user) }, 200);
+}
+
 // Autopilot: the Worker keeps its settings and log in KV and wakes Homebase on a schedule.
 // This Worker has no public route (workers_dev = false), so only the Pages service binding reaches fetch().
 const AUTOPILOT_STATE_KEY = "state";
@@ -147,6 +166,9 @@ export default {
     }
     if (request.headers.get("x-homebase-service") === "pitwall") {
       return pitwall(request, env, new URL(request.url));
+    }
+    if (request.headers.get("x-homebase-service") === "mclogin") {
+      return mcLogin(request, env);
     }
     if (request.headers.get("x-homebase-service") === "autopilot") {
       return autopilot(request, env, new URL(request.url).pathname.replace(/^\/+/, ""));

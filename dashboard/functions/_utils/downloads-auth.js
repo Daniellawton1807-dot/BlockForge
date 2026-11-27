@@ -176,3 +176,34 @@ export async function readJsonBody(request, limit = 4096) {
   return JSON.parse(new TextDecoder().decode(body));
 }
 
+
+// Homebase's Minecraft page for Daniel's friends (Aaron): its own cookie, scope "minecraft", sent to /api but accepted only by the
+// Minecraft routes of /api/tv (validSession refuses any scoped cookie, and every other route checks only the main cookie).
+const MC_COOKIE = "homebase_mc";
+const MC_SECONDS = 90 * 24 * 60 * 60;
+export async function mcCookie(env, user) {
+  const token = await signedPayload({ exp: Math.floor(Date.now() / 1000) + MC_SECONDS, scope: "minecraft", user: String(user).slice(0, 40) }, String(env.HOMEBASE_DOWNLOADS_SESSION_SECRET));
+  return MC_COOKIE + "=" + token + "; Path=/api; Max-Age=" + MC_SECONDS + "; HttpOnly; Secure; SameSite=Strict";
+}
+export function clearMcCookie() {
+  return MC_COOKIE + "=; Path=/api; Max-Age=0; HttpOnly; Secure; SameSite=Strict";
+}
+// null, or { user } for a valid Minecraft-only sign-in
+export async function mcSession(request, env) {
+  if (!loginConfigured(env)) return null;
+  const entry = (request.headers.get("cookie") || "").split(";").map(part => part.trim()).find(part => part.startsWith(MC_COOKIE + "="));
+  const token = entry ? entry.slice(MC_COOKIE.length + 1) : "";
+  if (!token || token.length > 1024) return null;
+  try {
+    const [body, signature, extra] = token.split(".");
+    if (!body || !signature || extra !== undefined) return null;
+    const valid = await crypto.subtle.verify("HMAC", await hmacKey(String(env.HOMEBASE_DOWNLOADS_SESSION_SECRET)), decodeBase64Url(signature), new TextEncoder().encode(body));
+    if (!valid) return null;
+    const payload = JSON.parse(new TextDecoder().decode(decodeBase64Url(body)));
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.scope !== "minecraft" || !Number.isSafeInteger(payload.exp) || payload.exp <= now || payload.exp > now + MC_SECONDS + 60) return null;
+    return { user: String(payload.user || "") };
+  } catch {
+    return null;
+  }
+}

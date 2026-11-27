@@ -157,7 +157,14 @@
     if (await act("command", { command: cmd })) $("mcCmd").value = "";
   });
 
-  gate({ message: "Sign in to manage the Minecraft server.", onReady() {
+  // A Minecraft-only friend sees just this page: the rest of the menu goes (those pages wouldn't open for them anyway)
+  function friendMode(who) {
+    document.querySelectorAll(".sidebar a.nav").forEach(a => { if (!a.classList.contains("active")) a.hidden = true; });
+    const brand = document.querySelector(".sidebar .brand"); if (brand) brand.href = "/minecraft/";
+    const k = document.querySelector(".topbar .kicker"); if (k) k.textContent = who ? "SIGNED IN AS " + who.toUpperCase() : "YOUR GAME SERVER";
+  }
+  gate({ message: "Sign in to manage the Minecraft server.", urls: { login: "/api/mc/login", logout: "/api/mc/logout", session: "/api/mc/session" }, onReady(s) {
+    if (s && s.role === "minecraft") friendMode(s.user);
     refresh(); loadMods(); clearInterval(poll);
     poll = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
   } });

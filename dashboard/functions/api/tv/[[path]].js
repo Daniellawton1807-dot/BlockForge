@@ -1,4 +1,4 @@
-import { json, loginConfigured, readJsonBody, validRequestOrigin, validSession } from "../../_utils/downloads-auth.js";
+import { json, loginConfigured, mcSession, readJsonBody, validRequestOrigin, validSession } from "../../_utils/downloads-auth.js";
 
 // The TV remote, through the private bridge to tvbot on the server. The bot token stays in
 // the protected TVBOT_TOKEN Pages secret; the browser only ever sees this same-origin route.
@@ -8,16 +8,23 @@ const ROUTES = {
   POST: new Set(["api/key", "api/type", "api/seek", "api/playhere", "api/minecraft", "api/feedback", "cmd"])
 };
 
+const MINECRAFT_ONLY = {
+  GET: new Set(["api/minecraft", "api/minecraft/mods", "api/minecraft/mod", "api/minecraft/modzip"]),
+  POST: new Set(["api/minecraft"])
+};
+
 export async function onRequest({ request, env, params }) {
   const method = request.method.toUpperCase();
   if (!ROUTES[method]) return json({ code: "method_not_allowed", error: "Method not allowed." }, 405, { allow: "GET, POST" });
   if (method === "POST" && !validRequestOrigin(request)) return json({ code: "invalid_origin", error: "Request origin could not be verified." }, 403);
   if (!loginConfigured(env)) return json({ code: "login_setup_required", error: "Dashboard login has not been configured." }, 503);
-  if (!await validSession(request, env)) return json({ code: "login_required", error: "Sign in to use the remote." }, 401);
-
   const segments = Array.isArray(params.path) ? params.path : [String(params.path || "")];
   const path = segments.join("/");
   const route = path.startsWith("img/") ? "img" : path;
+  // Daniel's full session opens everything here; a Minecraft-only sign-in (a friend) opens just the Minecraft page's routes
+  if (!await validSession(request, env) && !(MINECRAFT_ONLY[method]?.has(route) && await mcSession(request, env))) {
+    return json({ code: "login_required", error: "Sign in to use the remote." }, 401);
+  }
   if (!ROUTES[method].has(route) || (route === "img" && !/^img\/[A-Za-z0-9]{1,64}$/.test(path))) {
     return json({ code: "not_found", error: "That remote action is not available." }, 404);
   }
