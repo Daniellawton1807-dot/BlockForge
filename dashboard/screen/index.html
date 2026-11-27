@@ -4,17 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Screen Player</title>
-<link rel="stylesheet" href="screen.css?v=3">
+<link rel="stylesheet" href="screen.css?v=5">
 </head>
 <body>
 <header id="head" hidden>
   <span class="brand">SCREEN PLAYER</span>
   <nav id="nav"></nav>
   <form class="search" method="get" action="./"><input type="text" name="q" placeholder="Search shows and films" autocomplete="off"><button class="primary" type="submit">Search</button></form>
-  <span class="note" id="who"></span> <a class="btn" id="adm" href="?admin=1" title="Hide titles from this account's Screen Player">Admin</a> <button id="out" type="button">Sign out</button>
+  <span class="acct"><button type="button" id="who" title="Account">Account ▾</button><span class="acctmenu" id="acctmenu" hidden><a class="btn" id="adm" href="?admin=1" title="Hide titles from this account's Screen Player">Admin</a><button id="out" type="button">Sign out</button></span></span>
 </header>
 <main id="main"></main>
-<script src="jf.js?v=3"></script>
+<script src="jf.js?v=4"></script>
 <script>
 /* One address per place (home, a list, a show, a search), so the screen's sync carries everyone to the same page.
    Nothing about who is signed in is in the address. */
@@ -34,27 +34,38 @@ function loginBox(msg) {
   box.onsubmit = async e => { e.preventDefault(); if (JF.onSharedScreen() && !box.dataset.ok) { box.dataset.ok = "1"; err.textContent = "Press Sign in again if you really want to type your password on this shared screen."; return; } err.textContent = "Signing in…"; try { await JF.login(u.value.trim(), p.value); location.reload(); } catch (x) { err.textContent = x.message; } };
   main.append(box); u.focus();
 }
+// posters load as they come near the view, so "See all" can show the whole library on one page
+const artSeen = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.style.backgroundImage = `url("${e.target.dataset.src}")`; artSeen.unobserve(e.target); } }), { rootMargin: "600px" }) : null;
+const lazyArt = art => { if (artSeen) artSeen.observe(art); else art.style.backgroundImage = `url("${art.dataset.src}")`; };
+// Rows are only ever full: a section shows whole rows of posters for this screen's width (up to `rows` of them); if there
+// aren't enough titles for one full row, it shows what there is. Worked out again when the screen changes size.
+const fitGrid = g => { const n = g.children.length, rows = +g.dataset.rows || 0; if (!rows) return;
+  const cols = getComputedStyle(g).gridTemplateColumns.split(" ").filter(Boolean).length || 1;
+  const keep = n < cols ? n : Math.min(Math.floor(n / cols), rows) * cols; [...g.children].forEach((c, i) => { c.hidden = i >= keep; }); };
+window.addEventListener("resize", () => document.querySelectorAll(".grid[data-rows]").forEach(fitGrid));
 const tile = (item, href, wide) => {
   const a = link(href, "", "tile"), art = el("div", "art" + (wide ? " wide" : "")); const pic = wide && item.ParentThumbItemId ? [item.ParentThumbItemId, "Thumb"] : [item.Type === "Episode" ? (item.SeriesId || item.Id) : item.Id, "Primary"];
-  art.style.backgroundImage = `url("${JF.img(pic[0], wide ? 300 : 420, pic[1])}")`;
+  art.dataset.src = JF.img(pic[0], wide ? 300 : 420, pic[1]); lazyArt(art);
   const ud = item.UserData || {}; if (ud.PlayedPercentage > 1 && ud.PlayedPercentage < 99) { const b = el("div", "bar"); b.style.width = ud.PlayedPercentage + "%"; art.append(b); }
   const ep = item.Type === "Episode"; a.append(art, el("div", "t", ep ? item.SeriesName : item.Name), el("div", "s", ep ? `S${item.ParentIndexNumber} · E${item.IndexNumber} · ${item.Name}` : [item.ProductionYear, item.Type === "Series" ? "Show" : "Film"].filter(Boolean).join(" · ")));
   return a;
 };
 const target = it => it.Type === "Series" ? `?series=${it.Id}` : it.Type === "Movie" ? `?film=${it.Id}` : `player.html?id=${it.Id}`;
-const section = (title, items, wide, more) => { if (!items.length) return; const hd = el("div", "sechead"); hd.append(el("h2", null, title)); if (more) hd.append(link(more[0], more[1], "more")); main.append(hd); const g = el("div", "grid"); items.forEach(it => g.append(tile(it, target(it), wide))); main.append(g); };
+const section = (title, items, wide, more, rows) => { if (!items.length) return; const hd = el("div", "sechead"); hd.append(el("h2", null, title)); if (more) hd.append(link(more[0], more[1], "more")); main.append(hd); const g = el("div", "grid" + (wide ? " wide" : "")); if (rows) g.dataset.rows = rows; items.forEach(it => g.append(tile(it, target(it), wide))); main.append(g); fitGrid(g); };
 const mins = t => { const m = JF.ticksToMin(t); return m >= 60 ? Math.floor(m / 60) + "h " + (m % 60) + "m" : m + " min"; };
-const backdrop = it => JF.img(it.Type === "Episode" ? (it.SeriesId || it.Id) : it.Id, 720, "Backdrop");
+const backdrop = it => JF.img(it.Type === "Episode" ? (it.SeriesId || it.Id) : it.Id, 1280, "Backdrop");
 const meta = it => [it.ProductionYear, it.OfficialRating, it.RunTimeTicks && it.Type !== "Series" ? mins(it.RunTimeTicks) : null, it.CommunityRating ? "★ " + it.CommunityRating.toFixed(1) : null, (it.Genres || []).slice(0, 3).join(", ")].filter(Boolean).join("  ·  ");
 /* A big picture across the top with what to do next. */
 function hero(it, label, href) {
-  const h = el("section", "hero"); h.style.backgroundImage = `linear-gradient(90deg, #0b0b10f0 15%, #0b0b1099 55%, #0b0b1033), url("${backdrop(it)}")`;
+  const h = el("section", "hero"); h.style.backgroundImage = `linear-gradient(0deg, #0b0b10 0%, #0b0b1000 45%), linear-gradient(90deg, #0b0b10f2 10%, #0b0b10aa 45%, #0b0b1022 80%), url("${backdrop(it)}")`;
   const ep = it.Type === "Episode", ud = it.UserData || {}, left = it.RunTimeTicks && ud.PlaybackPositionTicks ? JF.ticksToMin(it.RunTimeTicks - ud.PlaybackPositionTicks) : 0;
-  const inner = el("div", "in"); inner.append(el("div", "kicker", label), el("h1", null, ep ? it.SeriesName : it.Name), el("div", "sub", ep ? `S${it.ParentIndexNumber} · E${it.IndexNumber} · ${it.Name}` : meta(it)));
-  if (left > 0) inner.append(el("div", "sub", left + " min left"));
+  const inner = el("div", "in"), txt = el("div", "txt"); inner.append(txt);
+  txt.append(el("div", "kicker", label), el("h1", null, ep ? it.SeriesName : it.Name), el("div", "sub", ep ? `S${it.ParentIndexNumber} · E${it.IndexNumber} · ${it.Name}` : meta(it)));
+  if (it.Overview) txt.append(el("div", "overview clamp3", it.Overview));
+  if (ud.PlayedPercentage > 1 && ud.PlayedPercentage < 99) { const pr = el("div", "heroprog"), f = el("i"); f.style.width = ud.PlayedPercentage + "%"; pr.append(f); const row = el("div", "progrow"); row.append(pr, el("span", null, left > 0 ? (left >= 60 ? Math.floor(left / 60) + " h " + (left % 60) + " min left" : left + " min left") : "")); txt.append(row); }
   const bar = el("div", "actions"); bar.append(link(href, ud.PlaybackPositionTicks > 0 ? "▶  Resume" : "▶  Play", "btn primary big"));
   if (ud.PlaybackPositionTicks > 0) bar.append(link(href + (href.includes("?") ? "&" : "?") + "t=0", "From the start", "btn big"));
-  inner.append(bar); h.append(inner); main.append(h);
+  txt.append(bar); h.append(inner); main.append(h);
 }
 const nextOf = async (uid, series) => { const n = await JF.api(`/Shows/NextUp?UserId=${uid}&SeriesId=${series}&Limit=1&EnableUserData=true`); return (n.Items || [])[0]; };
 const detail = (it, buttons) => {
@@ -68,8 +79,8 @@ const detail = (it, buttons) => {
 
 async function page() {
   const s = JF.session(); if (!s) return loginBox();
-  $("#head").hidden = false; $("#who").textContent = s.name; $("#out").onclick = () => { JF.logout(); location.href = "./"; };
-  const view = q.get("view"), term = q.get("q"), series = q.get("series"), film = q.get("film"), page = +q.get("page") || 0, uid = s.userId, F = "&Fields=ProductionYear,CommunityRating,OfficialRating,Genres&EnableUserData=true";
+  $("#head").hidden = false; $("#who").textContent = s.name + "  ▾"; $("#who").onclick = e => { e.stopPropagation(); $("#acctmenu").hidden = !$("#acctmenu").hidden; }; document.addEventListener("click", () => { $("#acctmenu").hidden = true; }); $("#out").onclick = () => { JF.logout(); location.href = "./"; };
+  const view = q.get("view"), term = q.get("q"), series = q.get("series"), film = q.get("film"), page = +q.get("page") || 0, uid = s.userId, F = "&Fields=ProductionYear,CommunityRating,OfficialRating,Genres,Overview&EnableUserData=true";
   const pf = await JF.prefs(), hidden = pf.hidden, filmsOnly = pf.hideShows && !JF.isAdmin();
   const EX = hidden.size ? "&ExcludeItemIds=" + [...hidden].slice(0, 120).join(",") : "", vis = a => (a || []).filter(i => !JF.isHidden(i, hidden) && !(filmsOnly && JF.isShow(i)));
   if (q.has("admin")) return adminPage(uid, pf, F);
@@ -98,17 +109,17 @@ async function page() {
   }
   if (term) { const r = await JF.api(`/Users/${uid}/Items?searchTerm=${encodeURIComponent(term)}&IncludeItemTypes=${types}&Recursive=true&Limit=60${F}${EX}`); main.append(el("h2", null, `Results for “${term}”`)); if (!r.Items.length) main.append(el("p", "note", "Nothing found.")); section("", r.Items); return; }
   if (view === "shows" || view === "films") {
-    const r = await JF.api(`/Users/${uid}/Items?IncludeItemTypes=${view === "shows" ? "Series" : "Movie"}&Recursive=true&SortBy=SortName&Limit=${PER}&StartIndex=${page * PER}${F}${EX}`);
-    section(view === "shows" ? "All shows" : "All films", r.Items); const pg = el("div", "pages"); if (page > 0) pg.append(link(`?view=${view}&page=${page - 1}`, "← Back", "btn")); if ((page + 1) * PER < r.TotalRecordCount) pg.append(link(`?view=${view}&page=${page + 1}`, "More →", "btn")); main.append(pg); return;
+    const r = await JF.api(`/Users/${uid}/Items?IncludeItemTypes=${view === "shows" ? "Series" : "Movie"}&Recursive=true&SortBy=SortName${F}${EX}`);
+    section((view === "shows" ? "All shows" : "All films") + ` (${vis(r.Items).length})`, vis(r.Items)); return;
   }
   // home
   const list = (type, sort, n) => JF.api(`/Users/${uid}/Items?IncludeItemTypes=${type}&Recursive=true&SortBy=${sort}&SortOrder=Descending&Limit=${n}${F}${EX}`);
-  const [resume, next, films, shows, top] = await Promise.all([JF.api(`/Users/${uid}/Items/Resume?Limit=12&MediaTypes=Video${F}`), filmsOnly ? { Items: [] } : JF.api(`/Shows/NextUp?UserId=${uid}&Limit=12${F}`), list("Movie", "DateCreated", 14), filmsOnly ? { Items: [] } : list("Series", "DateCreated", 14), list("Movie", "CommunityRating", 14)]);
+  const [resume, next, films, shows, top] = await Promise.all([JF.api(`/Users/${uid}/Items/Resume?Limit=12&MediaTypes=Video${F}`), filmsOnly ? { Items: [] } : JF.api(`/Shows/NextUp?UserId=${uid}&Limit=12${F}`), list("Movie", "DateCreated", 30), filmsOnly ? { Items: [] } : list("Series", "DateCreated", 30), list("Movie", "CommunityRating", 30)]);
   const seen = new Set(), uniq = a => a.filter(i => { const k = i.SeriesId || i.Id; if (seen.has(k)) return false; seen.add(k); return true; });
   const cont = uniq(vis(resume.Items)), nxt = uniq(vis(next.Items)), lead = cont[0] || nxt[0] || vis(films.Items)[0];
   if (lead) { const isResume = lead === cont[0]; hero(lead, isResume ? "Continue watching" : lead === nxt[0] ? "Up next" : "Featured film", target(lead).startsWith("?") ? `player.html?id=${lead.Id}` : target(lead)); }
-  section("Continue watching", cont.slice(lead === cont[0] ? 1 : 0), true); section("New episodes", nxt.slice(lead === nxt[0] ? 1 : 0), true);
-  section("Films", vis(films.Items), false, ["?view=films", "See all films →"]); if (!filmsOnly) section("Shows", vis(shows.Items), false, ["?view=shows", "See all shows →"]); section("Top rated films", vis(top.Items).slice(0, 12));
+  section("Continue watching", cont.slice(lead === cont[0] ? 1 : 0), true, null, 1); section("New episodes", nxt.slice(lead === nxt[0] ? 1 : 0), true, null, 1);
+  section("Films", vis(films.Items), false, ["?view=films", "See all films →"], 2); if (!filmsOnly) section("Shows", vis(shows.Items), false, ["?view=shows", "See all shows →"], 2); section("Top rated films", vis(top.Items), false, null, 1);
   const c = JF.can(); main.append(el("div", "codecs", "This screen's browser can play: " + [c.h264 && "H.264", c.hevc && "HEVC", c.vp9 && "VP9", c.av1 && "AV1", c.aac && "AAC", c.mp3 && "MP3", c.opus && "Opus"].filter(Boolean).join(", ")));
 }
 

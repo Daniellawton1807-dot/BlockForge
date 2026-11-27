@@ -11,6 +11,7 @@ const JF = (() => {
     const r = await fetch(BASE + path, { ...opt, headers: { "Authorization": header(s && s.token), "Content-Type": "application/json", ...(opt.headers || {}) } });
     if (r.status === 401) { store.del(SK); const e = new Error("You've been signed out."); e.code = 401; throw e; }
     if (!r.ok) throw new Error("Jellyfin answered " + r.status);
+    if (opt.raw) return r;   // images and other non-JSON answers (the trickplay previews)
     return r.status === 204 ? null : r.json().catch(() => null);
   }
   async function login(name, pw) {

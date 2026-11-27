@@ -8,6 +8,7 @@ a { color: inherit; text-decoration: none; }
 header { display: flex; align-items: center; gap: 14px; padding: 16px 28px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
 header .brand { font-weight: 700; letter-spacing: .04em; color: var(--accent); margin-right: 8px; }
 nav a, .btn, button { display: inline-block; padding: 12px 22px; border-radius: 14px; background: #222230; border: 1px solid var(--line); color: var(--text); font: inherit; cursor: pointer; }
+nav { display: flex; gap: 12px; flex-wrap: wrap; }
 nav a.on, .btn.primary, button.primary { background: var(--accent); color: #1a1205; border-color: var(--accent); font-weight: 600; }
 nav a:hover, .btn:hover, button:hover { filter: brightness(1.2); }
 form.search { display: flex; gap: 10px; margin-left: auto; }
@@ -15,6 +16,7 @@ input[type=text], input[type=password] { padding: 12px 16px; border-radius: 14px
 main { padding: 24px 28px 60px; }
 h2 { margin: 30px 0 14px; font-size: 1.15em; color: var(--muted); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 20px; }
+.grid.wide { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 .tile { display: block; border-radius: 16px; overflow: hidden; background: var(--panel); border: 1px solid var(--line); }
 .tile:hover { border-color: var(--accent); transform: translateY(-2px); }
 .tile .art { aspect-ratio: 2/3; background: #1d1d28 center/cover no-repeat; position: relative; }
@@ -80,3 +82,23 @@ body.player { background: #000; overflow: hidden; }
 #big { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 2; cursor: pointer; }
 #big svg { background: #000a; border-radius: 50%; padding: 26px; width: 150px; height: 150px; }
 #top { z-index: 4; }
+
+/* 2.6.1 polish: header on one line with an account menu, a stacked home banner with description and progress */
+header { flex-wrap: nowrap; }
+form.search input { min-width: 10em; width: 18vw; }
+.acct { position: relative; }
+.acct > button { white-space: nowrap; }
+.acctmenu { position: absolute; right: 0; top: calc(100% + 8px); display: flex; flex-direction: column; gap: 8px; padding: 12px; background: #101018f5; border: 1px solid var(--line); border-radius: 16px; z-index: 6; min-width: 9em; box-shadow: 0 10px 30px #000a; }
+.hero .in { align-items: flex-end; }
+.hero .txt { max-width: 52em; }
+.hero h1 { font-size: 2.6em; }
+.clamp3 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.progrow { display: flex; align-items: center; gap: 14px; margin: 14px 0 2px; color: #d6d6e0; font-size: .85em; }
+.heroprog { flex: none; width: 260px; height: 8px; border-radius: 8px; background: #ffffff33; overflow: hidden; }
+.heroprog i { display: block; height: 100%; background: var(--accent); }
+#peek { position: fixed; bottom: 150px; z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+#peekimg { border-radius: 10px; border: 2px solid #fff6; background-color: #111; box-shadow: 0 8px 30px #000c; }
+#peekt { padding: 4px 12px; border-radius: 10px; background: #000c; font-variant-numeric: tabular-nums; }
+#volwrap { display: inline-flex; align-items: center; gap: 8px; padding: 0 6px; font-size: 1.1em; }
+#vol { width: 150px; accent-color: var(--accent); height: 28px; }
+.acctmenu > * { text-align: left; }

@@ -4,14 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Screen Player</title>
-<link rel="stylesheet" href="screen.css?v=3">
+<link rel="stylesheet" href="screen.css?v=5">
 </head>
 <body class="player">
 <video id="v" playsinline></video>
-<div id="top"><a class="btn" id="back" href="./">← Back</a><span class="title" id="title"></span><span style="margin-left:auto;display:flex;gap:10px"><button type="button" id="fix" title="Pause and jump to the same second: re-locks sound and picture">Fix sound</button><button type="button" id="low" title="Ask for a lighter stream if it keeps buffering">Lighter</button><button type="button" id="info">Info</button></span></div>
+<div id="top"><a class="btn" id="back" href="./">← Back</a><span class="title" id="title"></span><span style="margin-left:auto;display:flex;gap:10px"><button type="button" id="fix" title="Pause and jump to the same second: re-locks sound and picture">Fix sound</button><button type="button" id="info">Info</button></span></div>
 <div id="big" hidden><svg viewBox="0 0 24 24" width="84" height="84"><path d="M8 5v14l11-7z" fill="#fff"/></svg></div>
 <div id="msg">Loading…</div>
 <div id="bar">
+  <div id="peek" hidden><div id="peekimg"></div><span id="peekt"></span></div>
   <div id="seek"><div id="buf"></div><div id="fill"></div></div>
   <div class="ctl">
     <button type="button" id="pp" class="round" title="Play / pause"><svg viewBox="0 0 24 24" width="34" height="34"><path id="ppi" d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="#fff"/></svg></button>
@@ -19,6 +20,8 @@
     <button type="button" id="f10" title="Forward 10 seconds">+10 s</button>
     <span id="time">0:00 / 0:00</span>
     <span style="flex:1"></span>
+    <label id="volwrap" title="Volume for everyone at this screen">🔊<input type="range" id="vol" min="0" max="100" step="5" value="100"></label>
+    <button type="button" id="qBtn" title="Picture quality: lower it if the film keeps buffering">Quality</button>
     <button type="button" id="audioBtn">Audio</button>
     <button type="button" id="subBtn">Subtitles</button>
     <button type="button" id="nextBtn" class="primary" hidden>Next episode ▶</button>
@@ -26,7 +29,7 @@
   <div id="menu" hidden></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
-<script src="jf.js?v=3"></script>
+<script src="jf.js?v=4"></script>
 <script>
 /* The address is only ?id=<film or episode>, so the screen's sync opens the same one for everyone and keeps the
    <video> at the same second, paused or playing, for all of them. Playback always starts from 0 (the resume point is
@@ -39,7 +42,9 @@ const STEPS = [20000000, 8000000, 5000000, 3000000, 2000000];   // bits per seco
 // The old "wd.br" key held those automatic values, so it's no longer read.
 const MANUAL_KEY = "wd.br.manual", MANUAL_HOURS = 12;
 const saved = (() => { try { const m = JSON.parse(JF.store.get(MANUAL_KEY) || "null"); return m && m.until > Date.now() ? +m.br || 0 : 0; } catch { return 0; } })();
-let bitrate = +q.get("br") || saved || 8000000, hls = null, play = null, stalls = [], lastWait = 0, info = null, audioIdx = null, defaultAudio = null, subIdx = -1, nextEp = null;
+const AUTO_START = 8000000, QUALITY = [[20000000, "Best"], [8000000, "High"], [5000000, "Medium"], [3000000, "Low"], [2000000, "Lowest"]];
+let auto = !q.get("br") && !saved;   // Auto: start at 8 Mbit/s and step down for this film if it keeps buffering
+let bitrate = +q.get("br") || saved || AUTO_START, hls = null, play = null, stalls = [], lastWait = 0, info = null, audioIdx = null, defaultAudio = null, subIdx = -1, nextEp = null;
 let hideTimer = null; document.addEventListener("mousemove", () => { $("#top").classList.remove("hide"); clearTimeout(hideTimer); hideTimer = setTimeout(() => $("#top").classList.add("hide"), 3500); }); hideTimer = setTimeout(() => $("#top").classList.add("hide"), 5000);
 const tick = x => Math.round(x * 1e7);
 const mbps = b => (b / 1e6).toFixed(b % 1e6 ? 1 : 0) + " Mbit/s";
@@ -80,7 +85,11 @@ function resync() { const t = v.currentTime, was = !v.paused; v.pause(); v.curre
 function stallEnded() {
   const now = Date.now(); stalls = stalls.filter(t => now - t < 90000); stalls.push(now);
   setTimeout(resync, 150);
-  if (stalls.length >= 3) { const next = STEPS.find(s => s < bitrate); if (next) { bitrate = next; stalls = []; msg("Connection is slow: switching to " + mbps(next) + " for this film"); load(v.currentTime).catch(() => {}); } }
+  if (stalls.length >= 3) {
+    stalls = [];
+    if (!auto) { msg("Buffering a lot: try a lower Quality"); setTimeout(() => msg(""), 4000); return; }   // a quality the viewer chose stays put
+    const next = STEPS.find(s => s < bitrate); if (next) { bitrate = next; qLabel(); msg("Connection is slow: switching to " + mbps(next) + " for this film"); load(v.currentTime).catch(() => {}); }
+  }
 }
 v.addEventListener("waiting", () => { lastWait = Date.now(); msg("Buffering…"); });
 v.addEventListener("playing", () => { msg(""); if (lastWait && Date.now() - lastWait > 800) stallEnded(); lastWait = 0; });
@@ -97,7 +106,18 @@ function stats() {
   return [`Stream: ${play ? play.method : "?"} at up to ${mbps(bitrate)}`, `This browser decodes: ${["h264", "hevc", "hevc10", "vp9", "av1"].filter(k => JF.can()[k]).join(", ") || "?"}`, `Buffered ahead: ${ahead.toFixed(1)} s`, `Stalls in the last 90 s: ${stalls.filter(t => Date.now() - t < 90000).length}`, `Dropped frames: ${q.droppedVideoFrames || 0} of ${q.totalVideoFrames || 0}`, `Position: ${v.currentTime.toFixed(1)} s, speed ${v.playbackRate.toFixed(2)}`].join("\n");
 }
 $("#fix").onclick = () => { resync(); msg("Sound and picture re-synced"); setTimeout(() => msg(""), 1200); };
-$("#low").onclick = () => { const next = STEPS.find(s => s < bitrate) || STEPS[STEPS.length - 1]; bitrate = next; JF.store.set(MANUAL_KEY, JSON.stringify({ br: next, until: Date.now() + MANUAL_HOURS * 3600000 })); msg("Switching to " + mbps(next) + " (remembered for " + MANUAL_HOURS + " hours)"); load(v.currentTime).catch(() => {}); };
+function qLabel() {
+  const h = v.videoHeight, how = !play ? "" : play.method === "Transcode" ? "converted" : "original";
+  $("#qBtn").textContent = "Quality: " + (auto ? "Auto" : mbps(bitrate)) + (h ? "  ·  " + h + "p" + (how ? " " + how : "") : "");
+  $("#qBtn").title = (play ? (play.method === "Transcode" ? "The server is converting this film to fit " : "Playing the file as it is, within ") + mbps(bitrate) + ". " : "") + "Lower it if the film keeps buffering.";
+}
+v.addEventListener("loadedmetadata", qLabel); v.addEventListener("resize", qLabel);
+function setQuality(br) {   // null = Auto
+  auto = br == null; const next = auto ? AUTO_START : br;
+  if (auto) JF.store.set(MANUAL_KEY, ""); else JF.store.set(MANUAL_KEY, JSON.stringify({ br: next, until: Date.now() + MANUAL_HOURS * 3600000 }));
+  stalls = []; qLabel();
+  if (next !== bitrate) { bitrate = next; msg("Switching to " + (auto ? "Auto" : mbps(next))); load(v.currentTime).catch(() => {}); }
+}
 $("#info").onclick = () => { if (panel) { panel.remove(); panel = null; return; } panel = document.createElement("pre"); panel.style.cssText = "position:fixed;left:24px;bottom:90px;z-index:4;background:#000b;padding:14px 18px;border-radius:12px;font:16px/1.4 monospace;color:#fff;margin:0"; document.body.append(panel); const f = () => { if (panel) { panel.textContent = stats(); setTimeout(f, 1000); } }; f(); };
 
 /* Subtitles: Jellyfin hands text subtitles over as WebVTT, shown as a track on the video. (Picture subtitles can't be shown this way.) */
@@ -126,6 +146,32 @@ const fmt = t => { t = Math.max(0, Math.floor(t || 0)); const h = Math.floor(t /
 const toggle = () => { if (v.paused) v.play().catch(() => {}); else v.pause(); };
 const skip = d => { v.currentTime = Math.max(0, Math.min((isFinite(v.duration) ? v.duration : 1e9) - 1, v.currentTime + d)); };
 $("#pp").onclick = toggle; $("#b10").onclick = () => skip(-10); $("#f10").onclick = () => skip(10); v.onclick = toggle; $("#big").onclick = toggle;
+/* Preview pictures over the progress bar, from Jellyfin's trickplay sheets (100 small frames per picture, one every 10 s). */
+let tp = null; const tiles = {};
+function tileUrl(width, n) {
+  const k = width + "/" + n; if (tiles[k]) return tiles[k];
+  tiles[k] = JF.api(`/Videos/${id}/Trickplay/${width}/${n}.jpg?MediaSourceId=${play.ms.Id}`, { raw: true }).then(r => r.blob()).then(b => URL.createObjectURL(b)).catch(() => null);
+  return tiles[k];
+}
+$("#seek").addEventListener("mousemove", async e => {
+  const r = $("#seek").getBoundingClientRect(), f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); if (!isFinite(v.duration) || !v.duration) return;
+  const t = f * v.duration, pk = $("#peek"); $("#peekt").textContent = fmt(t); pk.hidden = false;
+  pk.style.left = Math.max(8, Math.min(window.innerWidth - pk.offsetWidth - 8, e.clientX - pk.offsetWidth / 2)) + "px";
+  const sets = tp && play && tp[play.ms.Id], width = sets && Object.keys(sets).map(Number).sort((a, b) => a - b).pop(), d = sets && sets[width], img = $("#peekimg");
+  if (!d) { img.hidden = true; return; }
+  const per = d.TileWidth * d.TileHeight, i = Math.min(d.ThumbnailCount - 1, Math.floor(t * 1000 / d.Interval)), n = Math.floor(i / per), w = i % per;
+  img.hidden = false; img.style.width = d.Width + "px"; img.style.height = d.Height + "px";
+  img.style.backgroundSize = d.TileWidth * d.Width + "px " + d.TileHeight * d.Height + "px";
+  img.style.backgroundPosition = -(w % d.TileWidth) * d.Width + "px " + -Math.floor(w / d.TileWidth) * d.Height + "px";
+  const u = await tileUrl(width, n); if (u && !$("#peek").hidden) img.style.backgroundImage = `url("${u}")`;
+});
+$("#seek").addEventListener("mouseleave", () => { $("#peek").hidden = true; });
+
+/* Volume for everyone at the screen: it rides in the page address (#vol=60), which the screen sync already shares. */
+const volFromHash = () => { const m = /(?:^|[#&])vol=(\d+)/.exec(location.hash); return m ? Math.max(0, Math.min(100, +m[1])) : null; };
+function applyVol() { const n = volFromHash(); if (n != null) { v.volume = n / 100; $("#vol").value = n; } }
+$("#vol").addEventListener("input", () => { const n = +$("#vol").value; v.volume = n / 100; history.replaceState(null, "", location.pathname + location.search + (n === 100 ? "" : "#vol=" + n)); });
+addEventListener("hashchange", applyVol); applyVol();
 $("#seek").onclick = e => { const r = $("#seek").getBoundingClientRect(); if (isFinite(v.duration) && v.duration) v.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * v.duration; };
 function paint() {
   const d = isFinite(v.duration) ? v.duration : 0; $("#fill").style.width = d ? (v.currentTime / d * 100) + "%" : "0%"; const b = v.buffered; $("#buf").style.width = d && b.length ? (b.end(b.length - 1) / d * 100) + "%" : "0%";
@@ -144,17 +190,21 @@ const menu = $("#menu"); let menuFor = "";
 function openMenu(kind) {
   if (menuFor === kind && !menu.hidden) { menu.hidden = true; return; }
   menuFor = kind; menu.replaceChildren(); const ms = play && play.ms, entry = (label, on, fn) => { const b = document.createElement("button"); b.type = "button"; b.textContent = (on ? "✓  " : "      ") + label; if (on) b.className = "primary"; b.onclick = () => { menu.hidden = true; fn(); }; menu.append(b); };
-  if (kind === "audio") { const a = ((ms && ms.MediaStreams) || []).filter(s => s.Type === "Audio"); if (!a.length) entry("No other sound tracks", false, () => {}); const cur = audioIdx != null ? audioIdx : defaultAudio; a.forEach(s => entry(s.DisplayTitle || s.Language || "Track " + s.Index, s.Index === cur, () => { audioIdx = s.Index; msg("Switching sound track…"); load(v.currentTime).catch(() => {}); })); }
+  if (kind === "quality") {
+    entry("Auto (starts at " + mbps(AUTO_START) + ", lowers itself if it buffers)", auto, () => setQuality(null));
+    QUALITY.forEach(([br, name]) => entry(name + "  ·  " + mbps(br) + (br === 20000000 ? "  (original, if the connection allows)" : ""), !auto && bitrate === br, () => setQuality(br)));
+  }
+  else if (kind === "audio") { const a = ((ms && ms.MediaStreams) || []).filter(s => s.Type === "Audio"); if (!a.length) entry("No other sound tracks", false, () => {}); const cur = audioIdx != null ? audioIdx : defaultAudio; a.forEach(s => entry(s.DisplayTitle || s.Language || "Track " + s.Index, s.Index === cur, () => { audioIdx = s.Index; msg("Switching sound track…"); load(v.currentTime).catch(() => {}); })); }
   else { entry("Off", subIdx < 0, () => { subIdx = -1; addTracks(ms); }); const t = textSubs(ms); if (!t.length) entry("No subtitles for this", false, () => {}); t.forEach(s => entry(s.DisplayTitle || s.Language || "Subtitles " + s.Index, subIdx === s.Index, () => { subIdx = s.Index; JF.store.set("wd.subLang", s.Language || ""); addTracks(ms); })); }
   menu.hidden = false;
 }
-$("#audioBtn").onclick = () => openMenu("audio"); $("#subBtn").onclick = () => openMenu("sub");
+$("#qBtn").onclick = () => openMenu("quality"); qLabel(); $("#audioBtn").onclick = () => openMenu("audio"); $("#subBtn").onclick = () => openMenu("sub");
 document.addEventListener("mousemove", () => { $("#bar").classList.remove("hide"); clearTimeout(barTimer); barTimer = setTimeout(() => { if (v.paused === false) $("#bar").classList.add("hide"); menu.hidden = true; }, 3500); }); let barTimer = null;
 
 async function start() {
   if (!id) return msg("No film chosen.");
   if (!session) { location.href = "./"; return; }
-  const item = await JF.api(`/Users/${session.userId}/Items/${id}`);
+  const item = await JF.api(`/Users/${session.userId}/Items/${id}?Fields=Trickplay`); tp = item.Trickplay || null;
   const pf = await JF.prefs();
   if ((JF.isHidden(item, pf.hidden) || (pf.hideShows && JF.isShow(item))) && !JF.isAdmin()) { $("#title").textContent = ""; return msg("This title isn't available."); }
   $("#title").textContent = item.Type === "Episode" ? `${item.SeriesName} · S${item.ParentIndexNumber}E${item.IndexNumber} · ${item.Name}` : item.Name; document.title = item.Name;
