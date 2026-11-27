@@ -50,6 +50,18 @@ const tick = x => Math.round(x * 1e7);
 const mbps = b => (b / 1e6).toFixed(b % 1e6 ? 1 : 0) + " Mbit/s";
 
 /* Starting (and restarting) the stream. startAt is where to carry on from: the film's own clock, so everyone's video clock stays the film's clock. */
+/* A piece of the stream that arrives late (fragLoadTimeOut and the like) used to stop playback with "Playback error". It usually
+   happens while Jellyfin restarts its conversion (after a skip, or when it had paused converting because it was far ahead), so
+   it's worth asking again: first just reload the piece, then reopen the stream at the same second; only after that say so. */
+let netFails = 0, lastFail = 0;
+function hlsError(d) {
+  if (!d.fatal || !hls) return;
+  const now = Date.now(); if (now - lastFail > 60000) netFails = 0; lastFail = now; netFails++;
+  if (d.type === Hls.ErrorTypes.MEDIA_ERROR && netFails <= 2) { hls.recoverMediaError(); return; }
+  if (d.type === Hls.ErrorTypes.NETWORK_ERROR && netFails <= 2) { msg("Waiting for the stream…"); hls.startLoad(); return; }
+  if (netFails <= 4) { msg("Reconnecting…"); load(v.currentTime).catch(() => {}); return; }
+  msg("Playback error: " + d.details + ". Try a lower Quality, or press play again.");
+}
 async function load(startAt) {
   if (hls) { try { hls.destroy(); } catch {} hls = null; }
   v.removeAttribute("src"); v.load(); msg("Loading…");
@@ -72,7 +84,7 @@ async function load(startAt) {
   else return msg("This browser can't play that format, and Jellyfin couldn't convert it.");
   play = { ms, method: ms.SupportsDirectPlay ? "DirectPlay" : ms.SupportsDirectStream ? "DirectStream" : "Transcode", hls: isHls };
   if (isHls && !(window.Hls && Hls.isSupported())) { if (v.canPlayType("application/vnd.apple.mpegurl")) v.src = url; else return msg("This browser can't play streamed video."); }
-  else if (isHls) { hls = new Hls({ maxBufferLength: 40, enableWorker: true }); hls.on(Hls.Events.ERROR, (e, d) => { if (d.fatal) msg("Playback error: " + d.details); }); hls.loadSource(url); hls.attachMedia(v); }
+  else if (isHls) { hls = new Hls({ maxBufferLength: 40, enableWorker: true }); hls.on(Hls.Events.ERROR, (e, d) => hlsError(d)); hls.loadSource(url); hls.attachMedia(v); }
   else v.src = url;
   if (defaultAudio == null) defaultAudio = ms.DefaultAudioStreamIndex != null ? ms.DefaultAudioStreamIndex : null;
   addTracks(ms);
