@@ -46,6 +46,13 @@
   .mc-mod a.hub-btn { flex: none; width: 42px; padding: 0; justify-content: center; }
   .mc-modtools { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
   .mc-modtools input { flex: 1 1 200px; min-width: 0; height: 40px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--hub-soft); color: var(--text); font: inherit; outline: 0; }
+  .mc-drop { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 10px; padding: 14px 16px; border-radius: 14px; border: 2px dashed var(--line); transition: border-color .15s, background .15s; }
+  .mc-drop .txt { flex: 1 1 240px; min-width: 0; } .mc-drop b { display: block; font-size: 15px; } .mc-drop small { color: var(--muted); font-size: 12.5px; }
+  .mc-drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .mc-uploads { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .mc-up { display: flex; align-items: center; gap: 10px; font-size: 13px; } .mc-up .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mc-up .bar { flex: none; width: 140px; height: 6px; border-radius: 6px; background: var(--hub-soft-2); overflow: hidden; } .mc-up .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .mc-up .st { flex: none; color: var(--muted); max-width: 45%; } .mc-up.ok .st { color: var(--green); } .mc-up.bad .st { color: var(--red, #ff6b6b); }
   @media (max-width: 680px) { .mc-actions .hub-btn { flex: 1 1 45%; } .mc-log { height: 220px; } }
 </style>
 </head>
@@ -104,6 +111,10 @@
     <section class="hub-section" id="mcModsSection">
       <div class="hub-section-head"><div><div class="kicker">MODS</div><h3>Mods on the server</h3></div><span class="aside" id="mcModCount"></span></div>
       <div id="mcModBar" class="mc-modbar"><div class="txt"><b>Loading the mods…</b></div></div>
+      <div id="mcDrop" class="mc-drop"><input id="mcFiles" type="file" accept=".jar" multiple hidden>
+        <div class="txt"><b>Add mods to the server</b><small>Drop .jar files here, or choose them. They load the next time the server restarts.</small></div>
+        <button class="hub-btn" id="mcChoose" type="button">Choose files</button></div>
+      <div id="mcUploads" class="mc-uploads"></div>
       <div id="mcRemoved" class="mc-removed" hidden></div>
       <div class="mc-modtools"><input id="mcModSearch" type="search" placeholder="Search mods" aria-label="Search mods" autocomplete="off"></div>
       <ul class="mc-mods" id="mcModList"></ul>
@@ -120,6 +131,6 @@
 </main>
 </div>
 <script src="../hub.js?v=homebase-mc-login-1"></script>
-<script src="../minecraft.js?v=homebase-mc-login-1"></script>
+<script src="../minecraft.js?v=homebase-mc-upload-1"></script>
 </body>
 </html>

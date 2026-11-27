@@ -5,12 +5,35 @@ import { json, loginConfigured, mcSession, readJsonBody, validRequestOrigin, val
 const ARR_BRIDGE_BINDING = "ARR_BRIDGE";
 const ROUTES = {
   GET: new Set(["api/status", "api/foryou", "api/locate", "api/minecraft", "api/minecraft/mods", "api/minecraft/mod", "api/minecraft/modzip", "api/sessions", "api/feedback", "api/librarycheck", "api/library", "api/discover", "img"]),
-  POST: new Set(["api/key", "api/type", "api/seek", "api/playhere", "api/minecraft", "api/feedback", "cmd"])
+  POST: new Set(["api/key", "api/type", "api/seek", "api/playhere", "api/minecraft", "api/minecraft/upload", "api/feedback", "cmd"])
 };
+
+// A mod file from the Minecraft page, streamed through to tvbot (which checks it and puts it in the server's mods folder)
+async function uploadMod(request, env, who) {
+  const len = Number(request.headers.get("content-length"));
+  if (!Number.isSafeInteger(len) || len <= 0) return json({ error: "Choose a mod file to add." }, 411);
+  if (len > 100 * 1024 * 1024) return json({ error: "That file is too big (the limit is 100 MB)." }, 413);
+  const name = String(request.headers.get("x-mod-name") || "").slice(0, 400);
+  let plain = ""; try { plain = decodeURIComponent(name); } catch {}
+  if (!/\.jar$/i.test(plain)) return json({ error: "Only .jar mod files can be added." }, 400);
+  const token = String(env.TVBOT_TOKEN || "").trim(), bridge = env.ARR_BRIDGE;
+  if (!token || !bridge) return json({ error: "The Minecraft service isn't connected." }, 503);
+  const { readable, writable } = new FixedLengthStream(len);
+  request.body.pipeTo(writable).catch(() => {});
+  const replace = new URL(request.url).searchParams.get("replace") === "1" ? "?replace=1" : "";
+  let r;
+  try {
+    r = await bridge.fetch(new Request("https://homebase-arr-bridge/api/minecraft/upload" + replace, { method: "POST", body: readable,
+      headers: { "x-homebase-service": "tvbot", "x-tv-token": token, "content-length": String(len), "x-mod-name": name, "x-homebase-user": encodeURIComponent(who || "someone") } }));
+  } catch {
+    return json({ error: "The server couldn't be reached. Try again shortly." }, 502);
+  }
+  return new Response(r.body, { status: r.status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+}
 
 const MINECRAFT_ONLY = {
   GET: new Set(["api/minecraft", "api/minecraft/mods", "api/minecraft/mod", "api/minecraft/modzip"]),
-  POST: new Set(["api/minecraft"])
+  POST: new Set(["api/minecraft", "api/minecraft/upload"])
 };
 
 export async function onRequest({ request, env, params }) {
@@ -22,9 +45,11 @@ export async function onRequest({ request, env, params }) {
   const path = segments.join("/");
   const route = path.startsWith("img/") ? "img" : path;
   // Daniel's full session opens everything here; a Minecraft-only sign-in (a friend) opens just the Minecraft page's routes
-  if (!await validSession(request, env) && !(MINECRAFT_ONLY[method]?.has(route) && await mcSession(request, env))) {
+  const owner = await validSession(request, env), friend = owner ? null : MINECRAFT_ONLY[method]?.has(route) ? await mcSession(request, env) : null;
+  if (!owner && !friend) {
     return json({ code: "login_required", error: "Sign in to use the remote." }, 401);
   }
+  if (method === "POST" && route === "api/minecraft/upload") return uploadMod(request, env, owner ? "Daniel" : friend.user);
   if (!ROUTES[method].has(route) || (route === "img" && !/^img\/[A-Za-z0-9]{1,64}$/.test(path))) {
     return json({ code: "not_found", error: "That remote action is not available." }, 404);
   }

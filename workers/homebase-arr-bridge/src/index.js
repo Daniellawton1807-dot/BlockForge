@@ -12,7 +12,7 @@ const ALLOWED_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 const SAFE_PATHS = Object.freeze({
   arr: new RegExp("^api/v3/[A-Za-z0-9_./?=&%:+-]+$"),
   // tvbot's remote endpoints, the plain-English command endpoint and its poster proxy
-  tvbot: new RegExp("^(api/(status|foryou|locate|playhere|key|type|seek|watchdata|sessions|feedback|discover|library|mumfilms|sharefilm|minecraft|minecraft/(?:mods|mod|modzip)|librarycheck)|cmd|img/[A-Za-z0-9]{1,64})(\\?[A-Za-z0-9_.=&%:+-]*)?$")
+  tvbot: new RegExp("^(api/(status|foryou|locate|playhere|key|type|seek|watchdata|sessions|feedback|discover|library|mumfilms|sharefilm|minecraft|minecraft/(?:mods|mod|modzip|upload)|librarycheck)|cmd|img/[A-Za-z0-9]{1,64})(\\?[A-Za-z0-9_.=&%:+-]*)?$")
 });
 const AUTH_HEADERS = Object.freeze({ arr: "x-api-key", tvbot: "x-tv-token" });
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -194,6 +194,22 @@ export default {
 
     const binding = env[service.binding];
     if (!binding || typeof binding.fetch !== "function") return json({ error: "Private service binding is unavailable." }, 503);
+
+    // A mod file for the Minecraft server (up to 100 MB): streamed straight through with its length, never held in memory
+    if (service.kind === "tvbot" && method === "POST" && path === "api/minecraft/upload") {
+      const len = Number(request.headers.get("content-length"));
+      if (!Number.isSafeInteger(len) || len <= 0 || len > 100 * 1024 * 1024) return json({ error: "That file is too big." }, 413);
+      const secret = request.headers.get(AUTH_HEADERS.tvbot) || "";
+      if (!secret || secret.length > 512) return json({ error: "API key is missing." }, 401);
+      const { readable, writable } = new FixedLengthStream(len);
+      request.body.pipeTo(writable).catch(() => {});
+      const h = new Headers({ "x-tv-token": secret, "content-type": "application/java-archive", "content-length": String(len) });
+      for (const k of ["x-mod-name", "x-homebase-user"]) { const v = request.headers.get(k); if (v) h.set(k, v.slice(0, 400)); }
+      let up;
+      try { up = await env[service.binding].fetch(new Request("http://192.168.8.150:" + service.port + "/" + pathAndQuery, { method: "POST", headers: h, body: readable })); }
+      catch { return json({ error: "Private media service is unavailable." }, 503); }
+      return new Response(up.body, { status: up.status, headers: { "content-type": up.headers.get("content-type") || "application/json", "cache-control": "no-store" } });
+    }
 
     let body;
     if (method !== "GET") {

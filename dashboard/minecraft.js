@@ -152,6 +152,44 @@
   $("mcModMore").onclick = () => { showAll = !showAll; drawMods(); };
   $("mcModSearch").addEventListener("input", drawMods);
 
+
+  // ---- Adding mods: drop or choose .jar files; each goes to the server's mods folder (tvbot checks it's a real mod file) ----
+  function sendMod(file, replace, row) {
+    return new Promise(done => {
+      const x = new XMLHttpRequest(), bar = row.querySelector("i"), st = row.querySelector(".st");
+      x.open("POST", "/api/tv/api/minecraft/upload" + (replace ? "?replace=1" : ""));
+      x.setRequestHeader("X-Mod-Name", encodeURIComponent(file.name));
+      x.upload.onprogress = e => { if (e.lengthComputable) { bar.style.width = Math.round(e.loaded / e.total * 100) + "%"; st.textContent = Math.round(e.loaded / e.total * 100) + "%"; } };
+      x.onload = () => { let d = {}; try { d = JSON.parse(x.responseText); } catch {} done({ status: x.status, data: d }); };
+      x.onerror = () => done({ status: 0, data: { error: "The upload was interrupted." } });
+      x.send(file);
+    });
+  }
+  async function addMods(files) {
+    const list = [...files]; if (!list.length) return;
+    let added = 0;
+    for (const file of list) {
+      const row = el("div", "mc-up"), bar = el("div", "bar"); bar.append(el("i")); row.append(el("span", "nm", file.name), bar, el("span", "st", "Waiting…")); $("mcUploads").append(row);
+      if (!/\.jar$/i.test(file.name)) { row.classList.add("bad"); row.querySelector(".st").textContent = "Not a .jar file, skipped"; continue; }
+      if (file.size > 100 * 1048576) { row.classList.add("bad"); row.querySelector(".st").textContent = "Too big (over 100 MB)"; continue; }
+      let r = await sendMod(file, false, row);
+      if (r.status === 409 && confirm(`${file.name} is already on the server. Replace it?`)) r = await sendMod(file, true, row);
+      const st = row.querySelector(".st");
+      if (r.status === 200 && r.data.ok) { added++; row.classList.add("ok"); st.textContent = r.data.neoforge ? (r.data.replaced ? "Replaced" : "Added") : "Added, but it may not be a NeoForge mod"; st.title = r.data.reply || ""; }
+      else { row.classList.add("bad"); st.textContent = r.status === 409 ? "Already there, kept the old one" : (r.data.error || "Couldn't add it (" + r.status + ")"); }
+    }
+    if (added) { toast(`${added} mod${added > 1 ? "s" : ""} added. Restart the server to load ${added > 1 ? "them" : "it"}.`); loadMods(); }
+    setTimeout(() => { [...$("mcUploads").children].forEach(c => { if (c.classList.contains("ok")) c.remove(); }); }, 15000);
+  }
+  $("mcChoose").onclick = () => $("mcFiles").click();
+  $("mcFiles").addEventListener("change", e => { addMods(e.target.files); e.target.value = ""; });
+  const drop = $("mcDrop");
+  ["dragenter", "dragover"].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", e => addMods(e.dataTransfer.files));
+  // dropping anywhere else on the page shouldn't open the file in the browser
+  ["dragover", "drop"].forEach(n => window.addEventListener(n, e => { if (!drop.contains(e.target)) e.preventDefault(); }));
+
   $("mcCmdForm").addEventListener("submit", async e => {
     e.preventDefault(); const cmd = $("mcCmd").value.trim(); if (!cmd) return;
     if (await act("command", { command: cmd })) $("mcCmd").value = "";
